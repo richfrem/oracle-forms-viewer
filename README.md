@@ -6,6 +6,25 @@ Zero JVM, zero Node.js, and zero Oracle runtime software required for day-to-day
 
 ---
 
+## Screenshots
+
+### Interactive Form Preview
+
+Preview a claims form alongside the object navigator
+and property inspector. Interactive Preview supports local edits without database
+connections or PL/SQL execution.
+
+![Interactive claims form preview with the runtime frame and property inspector](docs/screenshots/claims-preview.png)
+
+### XML and Property Inspection
+
+Select a form item to inspect its source XML, layout coordinates, data type, and
+database-related properties.
+
+![Raw XML slice and property inspector for the selected claim ID field](docs/screenshots/xml-property-inspector.png)
+
+---
+
 ## Repository Structure
 
 ```text
