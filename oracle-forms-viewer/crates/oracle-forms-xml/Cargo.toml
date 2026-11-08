@@ -1,0 +1,13 @@
+[package]
+name = "oracle-forms-xml"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+oracle-forms-core = { workspace = true }
+quick-xml = { workspace = true }
+regex = { workspace = true }
+thiserror = { workspace = true }

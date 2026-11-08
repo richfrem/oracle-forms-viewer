@@ -1,0 +1,115 @@
+flowchart TB
+    classDef input fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a;
+    classDef crate fill:#eff6ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a;
+    classDef core fill:#ede9fe,stroke:#7c3aed,stroke-width:2.5px,color:#4c1d95;
+    classDef ui fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d;
+    classDef storage fill:#fff1f2,stroke:#e11d48,stroke-width:1.5px,color:#881337;
+    classDef delivery fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f;
+    classDef note fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,stroke-dasharray:4 3,color:#92400e;
+
+    %% ------------------- ANNOTATION -------------------
+    Annotation["⭐ <b>Pure-Native Rust Architecture</b><br/>• <b>Zero JVM &amp; Zero Node:</b> Pure Rust multi-crate workspace with embedded vanilla web assets<br/>• <b>Zero Oracle Dependencies:</b> Operates without Oracle Forms Builder, client DLLs, or Windows VMs<br/>• <b>Sibling XML Linking:</b> Automatically pairs binary .fmb with certified companion XML for ground-truth layout<br/>• <b>Masonry Layout Engine:</b> Multi-column dynamic cursor layout eliminates block and item collisions"]:::note
+
+    %% ------------------- INPUT LAYER -------------------
+    subgraph Inputs["📂 Supported Input Artifacts"]
+        direction LR
+        InXML["<b>Forms2XML Export</b><br/>*.xml (_fmb.xml, _mmb.xml)"]:::input
+        InPLD["<b>PL/SQL Text Script</b><br/>*.pld (Procedure Builder)"]:::input
+        InFMB["<b>Binary Forms Module</b><br/>*.fmb (ROS 60050)"]:::input
+        InMMB["<b>Binary Menu / Object Lib</b><br/>*.mmb / *.olb"]:::input
+    end
+
+    %% ------------------- PARSING CRATES -------------------
+    subgraph IngestionEngines["⚡ Ingestion &amp; Parsing Layer"]
+        direction TB
+
+        subgraph XmlCrate["crate: oracle-forms-xml"]
+            direction TB
+            QXmlReader["<b>Streaming XML Event Reader</b><br/>quick-xml StAX-like reader<br/>Byte-offset to line-range index"]:::crate
+            EntityDecoder["<b>PL/SQL Entity Decoder</b><br/>Conditional XML entity unescaping"]:::crate
+            PldLexer["<b>PLD Text Parser</b><br/>Package Specs, Bodies, Procedures"]:::crate
+        end
+
+        subgraph BinaryCrate["crate: oracle-forms-binary"]
+            direction TB
+            RosParser["<b>ROS 60050 Stream Reader</b><br/>Direct byte parser (0 JVM / 0 DLLs)<br/>String table &amp; trigger bounds"]:::crate
+            BindDetector["<b>Bind Variable Scanner</b><br/>:BLOCK.ITEM pattern discovery"]:::crate
+            MasonryEngine["<b>Dynamic Masonry Layout</b><br/>Multi-column height cursors<br/>Collision-free coordinate synthesis"]:::crate
+        end
+    end
+
+    %% ------------------- CORE AST & DOMAIN -------------------
+    subgraph CoreLayer["🏛️ crate: oracle-forms-core (Canonical Domain Layer)"]
+        direction TB
+
+        subgraph AST["Canonical AST Models"]
+            ModuleIdx["<b>ModuleIndex</b><br/>Name, Type, Version, Counts"]:::core
+            BlocksItems["<b>FormBlock &amp; FormItem</b><br/>Prompts, Types, Coordinates, Visual Attributes"]:::core
+            TriggersPU["<b>FormTrigger &amp; ProgramUnit</b><br/>Triggers, Packages, Functions, SQL queries"]:::core
+            CanvasesWin["<b>FormCanvas &amp; FormWindow</b><br/>Viewports, Visual Attributes, Tab Pages"]:::core
+        end
+
+        subgraph CoreServices["Domain Utilities"]
+            CoordMath["<b>Coordinate Scaling Engine</b><br/>Physical-to-pixel matrix (cm, pt, pixel)"]:::core
+            SqlExtractor["<b>SQL &amp; PL/SQL Extractor</b><br/>Query boundary isolation"]:::core
+            SidecarCache["<b>PlsqlSidecars Filesystem Cache</b><br/>Collision deduplication (~2, ~3)<br/>Clean .sql / .pls extraction"]:::storage
+        end
+    end
+
+    %% ------------------- PRESENTATION & DELIVERY -------------------
+    subgraph DeliveryLayer["🚀 Presentation &amp; Delivery Layer"]
+        direction TB
+
+        subgraph CliApp["crate: oracle-forms-cli"]
+            CliInspect["<b>inspect command</b><br/>Summary, hierarchy, JSON AST"]:::delivery
+            CliDumpSql["<b>dump-sql command</b><br/>Batch export embedded PL/SQL &amp; SQL"]:::delivery
+        end
+
+        subgraph ServerApp["crate: oracle-forms-server (Port 7070)"]
+            AxumService["<b>Axum HTTP Service</b><br/>REST API (/api/samples, /api/modules)"]:::delivery
+            SiblingResolver["<b>Sibling XML Resolver</b><br/>Matches .fmb with &lt;stem&gt;_fmb.xml"]:::delivery
+            EmbeddedAssets["<b>rust-embed Engine</b><br/>Single binary with zero external file deps"]:::delivery
+        end
+
+        subgraph BrowserUI["🌐 Embedded Web UI (ui/)"]
+            SvgCanvas["<b>Interactive 2D SVG Canvas</b><br/>Pan, Zoom, Layout rendering"]:::ui
+            ObjNavigator["<b>Object Navigator</b><br/>Canvases, Blocks, Items, Triggers"]:::ui
+            CodeEditor["<b>PL/SQL Syntax Viewer</b><br/>Package &amp; trigger code view"]:::ui
+            PropInspector["<b>Property Inspector</b><br/>Dimensions, Database flags, Classes"]:::ui
+        end
+    end
+
+    %% ------------------- DATA CONNECTIONS -------------------
+    InXML --> QXmlReader
+    InPLD --> PldLexer
+    QXmlReader --> EntityDecoder
+
+    InFMB --> RosParser
+    InMMB --> RosParser
+    RosParser --> BindDetector
+    RosParser --> MasonryEngine
+
+    EntityDecoder ==>|Builds AST| AST
+    PldLexer ==>|Builds AST| AST
+    BindDetector ==>|Infers objects| AST
+    MasonryEngine ==>|Synthesizes layout| CoordMath
+
+    AST --> CoordMath
+    AST --> SqlExtractor
+    SqlExtractor --> SidecarCache
+
+    AST ==>|Query / Traversal| CliInspect
+    SidecarCache ==>|Dump to disk| CliDumpSql
+
+    AST ==>|Serialized View Payload| AxumService
+    SiblingResolver -.->|Prefer certified XML| InXML
+    AxumService --- EmbeddedAssets
+    EmbeddedAssets ==>|Serves directly| BrowserUI
+
+    BrowserUI --- SvgCanvas
+    BrowserUI --- ObjNavigator
+    BrowserUI --- CodeEditor
+    BrowserUI --- PropInspector
+
+    Annotation -.- CoreLayer
+    Annotation -.- SiblingResolver

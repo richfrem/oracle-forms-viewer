@@ -1,0 +1,12 @@
+[package]
+name = "oracle-forms-binary"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+oracle-forms-core = { workspace = true }
+regex = { workspace = true }
+thiserror = { workspace = true }

@@ -1,0 +1,71 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Database-free preview regression tests</title>
+<script src="../ui/preview.js"></script>
+<pre id="results"></pre>
+<script>
+const failures = [];
+function test(name, fn) {
+  try { fn(); } catch (error) { failures.push(name + ': ' + error.message); }
+}
+function assert(value, message) { if (!value) throw new Error(message); }
+const module = { propertyClassDetails: [] };
+const field = { name: 'NAME', itemType: 'Text Item', enabled: true, dml: { initialValue: 'Alice' } };
+const block = { name: 'PEOPLE' };
+test('local edits survive redraw and remain isolated by record and block', () => {
+  const preview = new FormsPreview();
+  preview.load(module);
+  const widget = preview.control(block, field, 0);
+  const input = widget.querySelector('input');
+  assert(input.value === 'Alice', 'initial value absent');
+  input.value = 'Bob';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  assert(preview.control(block, field, 0).querySelector('input').value === 'Bob', 'edit lost');
+  assert(preview.control(block, field, 1).querySelector('input').value === 'Alice', 'record collision');
+  assert(preview.control({ name: 'OTHER' }, field, 0).querySelector('input').value === 'Alice', 'block collision');
+  preview.reset();
+  assert(preview.control(block, field, 0).querySelector('input').value === 'Alice', 'reset failed');
+});
+test('checkboxes toggle and survive redraw', () => {
+  const preview = new FormsPreview();
+  preview.load(module);
+  const item = { name: 'ACTIVE', itemType: 'Check Box' };
+  const input = preview.control(block, item, 0).querySelector('input');
+  assert(!input.checked, 'invented checked value');
+  input.checked = true;
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  assert(preview.control(block, item, 0).querySelector('input').checked, 'checkbox edit lost');
+});
+test('disabled and inherited non-navigable fields cannot be edited', () => {
+  const preview = new FormsPreview();
+  preview.load({ propertyClassDetails: [{ name: 'LOCKED', item: { keyboardNavigable: false } }] });
+  assert(preview.control(block, { ...field, enabled: false }, 0).querySelector('input').disabled, 'disabled item editable');
+  assert(preview.control(block, { ...field, propertyClass: 'LOCKED', dml: null }, 0).querySelector('input').readOnly, 'inherited readonly ignored');
+});
+test('buttons notify without executing source and new modules clear local values', () => {
+  let clicked = null;
+  const preview = new FormsPreview((b, i) => { clicked = b.name + '.' + i.name; });
+  preview.load(module);
+  preview.control(block, { name: 'SAVE', itemType: 'Push Button' }, 0).querySelector('button').click();
+  assert(clicked === 'PEOPLE.SAVE', 'button action absent');
+  const input = preview.control(block, field, 0).querySelector('input');
+  input.value = 'changed';
+  input.dispatchEvent(new Event('input'));
+  preview.load(module);
+  assert(preview.control(block, field, 0).querySelector('input').value === 'Alice', 'values leak across modules');
+});
+test('lists without exported options explicitly identify missing data', () => {
+  const preview = new FormsPreview();
+  preview.load(module);
+  const select = preview.control(block, { name: 'STATUS', itemType: 'List Item' }, 0).querySelector('select');
+  assert(select.disabled && select.options[0].text.includes('not exported'), 'missing options silently fabricated');
+});
+test('preview button labels decode XML entities without treating them as markup', () => {
+  const preview = new FormsPreview();
+  preview.load(module);
+  const button = preview.control(block, { name: 'BTN_PREV', itemType: 'Push Button', label: '&lt; Prev Dept' }, 0).querySelector('button');
+  assert(button.textContent === '< Prev Dept', 'XML entity shown literally');
+});
+document.getElementById('results').textContent = failures.length ? failures.join('\n') : 'PASS';
+window.testFailures = failures;
+</script>

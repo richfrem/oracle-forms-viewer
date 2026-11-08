@@ -1,0 +1,13 @@
+services:
+  oracle-install:
+    image: forms-converter:latest
+    platform: linux/amd64
+    volumes:
+      - ./installer:/installer:Z
+      - ./oracle_home:/oracle_home:Z
+    command: >
+      /installer/fmw_12.2.1.4.0_fr_linux64.bin
+      -silent
+      -ignoreSysPrereqs
+      -responseFile /installer/forms_silent.rsp
+      -invPtrLoc /installer/oraInst.loc

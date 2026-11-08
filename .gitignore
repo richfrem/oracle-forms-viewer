@@ -1,0 +1,13 @@
+example-fmb/
+temp/
+temp/example-fmb/
+tasks/
+.fmb
+tools/podman-converter/installer/
+tools/podman-converter/oracle_home/
+context/
+*.zip
+*.bin
+.DS_Store
+__pycache__/
+*.pyc

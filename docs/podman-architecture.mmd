@@ -1,0 +1,66 @@
+flowchart LR
+    classDef host fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a;
+    classDef vm fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d;
+    classDef storage fill:#eff6ff,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a;
+    classDef container fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f;
+    classDef mount fill:#ffffff,stroke:#94a3b8,stroke-dasharray:4 2,color:#334155;
+    classDef oracleStorage fill:#fff1f2,stroke:#e11d48,stroke-width:2.5px,color:#881337;
+    classDef execution fill:#ede9fe,stroke:#7c3aed,stroke-width:2.5px,color:#4c1d95;
+    classDef note fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,stroke-dasharray:4 3,color:#92400e;
+
+    %% ------------------- ANNOTATION -------------------
+    Annotation["📌 <b>Which Container Hosts the Installation?</b><br/>• <b>Installer Runner:</b> Ephemeral <code>oracle-install</code> container executed OUI via <code>compose.yaml</code><br/>• <b>Storage Location:</b> The 2.8 GB install is <b>NOT</b> trapped inside a container layer;<br/>  it is written through <code>/oracle_home:Z</code> to the <b>Host Filesystem</b> for permanent zero-copy access<br/>• <b>Conversion Runner:</b> On-demand ephemeral container mounts <code>oracle_home/</code> to run <code>frmf2xml</code>"]:::note
+
+    %% ------------------- HOST SYSTEM -------------------
+    subgraph Host["🖥️ macOS Host (Apple Silicon ARM64)"]
+        direction TB
+        
+        CLI["<b>CLI Orchestrators</b><br/>• convert_fmb.py<br/>• compose.yaml<br/>• podman CLI"]:::host
+
+        subgraph HostFS["Host Filesystem (oracle-forms-fmb-research)"]
+            direction TB
+            InstallerDir["📁 <b>tools/.../installer/</b><br/>• fmw_12.2.1.4.0_fr_linux64.bin<br/>• fmw_12.2.1.4.0_fr_linux64-2.zip<br/>• oraInst.loc &amp; forms_silent.rsp"]:::storage
+            OracleHomeDir["⭐ <b>tools/.../oracle_home/ [HOSTS TOOLS ON DISK]</b><br/>• forms/templates/scripts/frmf2xml.sh<br/>• jlib/frmxmltools.jar &amp; frmjdapi.jar<br/>• bin/frmbld &amp; bin/frmcmp<br/><i>(3+ GB Persistent Binaries on Host)</i>"]:::oracleStorage
+            WorkDir["📁 <b>example-fmb/</b><br/>• Input: module.fmb<br/>• Output: module_fmb.xml"]:::storage
+        end
+    end
+
+    %% ------------------- PODMAN VM -------------------
+    subgraph PodmanVM["🐧 Podman Machine (Linux VM / Rosetta 2 x86_64)"]
+        direction TB
+
+        subgraph ImageRegistry["Local Image Store"]
+            direction TB
+            BaseImg["<b>Base Image</b><br/>oraclelinux:8-slim (119 MB)"]:::storage
+            AppImg["<b>Built Image: forms-converter:latest</b> (495 MB)<br/>• OpenJDK 8 Headless<br/>• X11 &amp; Motif (libX11, libXt, libXp, motif)<br/>• libnsl, glibc-devel | User: oracle (UID 1000)"]:::storage
+            BaseImg -->|FROM| AppImg
+        end
+
+        subgraph Pod["Pod: pod_podman-converter"]
+            direction TB
+            InfraContainer["<b>Infra Container</b><br/><i>(Pod Network &amp; Namespace Anchor)</i>"]:::container
+
+            subgraph ActiveContainer["Ephemeral Workload Container (oracle-install / converter)"]
+                direction TB
+                RuntimeEnv["⚡ <b>Runtime Context [RUNS UTILITIES IN MEMORY]</b><br/>Executes Java 8 Forms2XML via Rosetta 2<br/>User: oracle (UID 1000) | WORKDIR: /work"]:::execution
+                
+                subgraph MountPoints["Volume Mount Points"]
+                    MountInstaller["/installer:Z (ro)"]:::mount
+                    MountHome["/oracle_home:Z (rw)"]:::mount
+                    MountWork["/work:Z (rw)"]:::mount
+                end
+            end
+        end
+    end
+
+    %% ------------------- CONNECTIONS -------------------
+    CLI ==>|Dispatches commands| InfraContainer
+    AppImg -.->|Instantiates| RuntimeEnv
+    InfraContainer ---|Shares netns| RuntimeEnv
+
+    InstallerDir ===>|ro bind mount| MountInstaller
+    OracleHomeDir ===>|rw bind mount| MountHome
+    WorkDir ===>|rw bind mount| MountWork
+
+    Annotation -...->|Explains Storage| OracleHomeDir
+    Annotation -...->|Explains Lifecycle| ActiveContainer

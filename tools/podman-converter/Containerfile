@@ -1,0 +1,26 @@
+FROM --platform=linux/amd64 container-registry.oracle.com/os/oraclelinux:8-slim
+
+RUN microdnf install -y \
+    java-1.8.0-openjdk-headless \
+    tar \
+    gzip \
+    libX11 \
+    libXext \
+    libXrender \
+    libXtst \
+    libXt \
+    libXp \
+    libnsl \
+    motif \
+    glibc-devel \
+    shadow-utils \
+    && microdnf clean all
+
+# Create official non-root Oracle user and group
+RUN groupadd -g 1000 oinstall && \
+    useradd -u 1000 -g oinstall -m -s /bin/bash oracle && \
+    mkdir -p /oracle_home /work && \
+    chown -R oracle:oinstall /oracle_home /work
+
+USER oracle
+WORKDIR /work

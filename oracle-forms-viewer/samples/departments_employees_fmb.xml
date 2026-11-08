@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Module version="12.2.1.19.0" xmlns="http://xmlns.oracle.com/Forms">
+  <FormModule Name="DEPARTMENTS_EMPLOYEES" Title="Master-Detail Department &amp; Staff Management">
+    <Coordinate CharacterCellWidth="8" CharacterCellHeight="16" CoordinateSystem="Real" RealUnit="Pixel" DefaultFontScaling="false"/>
+
+    <!-- ==================== WINDOW DEFINITION ==================== -->
+    <Window Name="WIN_DEPT_EMP" Title="Oracle Forms 10g/12c Tutorial - Departments &amp; Employees" Width="820" Height="580" PrimaryCanvas="CV_MAIN"/>
+
+    <!-- ==================== MAIN CONTENT CANVAS ==================== -->
+    <Canvas Name="CV_MAIN" CanvasType="Content" Width="800" Height="540" WindowName="WIN_DEPT_EMP">
+      <!-- Master Block Frame -->
+      <Graphics Name="FRAME_DEPT" GraphicsType="Frame" FrameTitle="Department Information (Master)" CanvasName="CV_MAIN" XPosition="25" YPosition="25" Width="750" Height="140" Bevel="Inset"/>
+
+      <!-- Detail Block Frame -->
+      <Graphics Name="FRAME_EMP" GraphicsType="Frame" FrameTitle="Department Staff Directory (Detail Grid)" CanvasName="CV_MAIN" XPosition="25" YPosition="185" Width="750" Height="280" Bevel="Inset"/>
+    </Canvas>
+
+    <!-- ==================== MASTER BLOCK: DEPARTMENTS ==================== -->
+    <Block Name="DEPARTMENTS" QueryDataSourceName="DEPARTMENTS" OrderByClause="department_id">
+      <Item Name="DEPARTMENT_ID" ItemType="Text Item" DataType="Number" CanvasName="CV_MAIN" Prompt="Department ID:" XPosition="160" YPosition="55" Width="90" Height="22" PrimaryKey="true" Required="true"/>
+      <Item Name="DEPARTMENT_NAME" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="Department Name:" XPosition="160" YPosition="95" Width="220" Height="22" Required="true"/>
+      <Item Name="MANAGER_ID" ItemType="Text Item" DataType="Number" CanvasName="CV_MAIN" Prompt="Manager ID:" XPosition="480" YPosition="55" Width="90" Height="22"/>
+      <Item Name="LOCATION_ID" ItemType="Text Item" DataType="Number" CanvasName="CV_MAIN" Prompt="Location Code:" XPosition="480" YPosition="95" Width="90" Height="22"/>
+
+      <Relation Name="DEPT_EMP" DetailBlock="EMPLOYEES" JoinCondition="DEPARTMENTS.DEPARTMENT_ID = EMPLOYEES.DEPARTMENT_ID" Deferred="false" AutoQuery="true"/>
+
+      <Trigger Name="POST-QUERY" TriggerText="-- Refresh details when master record changes&#10;NULL;"/>
+    </Block>
+
+    <!-- ==================== DETAIL BLOCK: EMPLOYEES (TABULAR MULTI-RECORD) ==================== -->
+    <Block Name="EMPLOYEES" QueryDataSourceName="EMPLOYEES" RecordsDisplayCount="6" OrderByClause="last_name, first_name">
+      <Item Name="EMPLOYEE_ID" ItemType="Text Item" DataType="Number" CanvasName="CV_MAIN" Prompt="Emp ID" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="45" YPosition="225" Width="65" Height="22" PrimaryKey="true" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+      <Item Name="FIRST_NAME" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="First Name" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="120" YPosition="225" Width="105" Height="22" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+      <Item Name="LAST_NAME" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="Last Name" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="235" YPosition="225" Width="115" Height="22" Required="true" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+      <Item Name="EMAIL" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="Email" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="360" YPosition="225" Width="110" Height="22" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+      <Item Name="JOB_ID" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="Job ID" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="480" YPosition="225" Width="85" Height="22" Required="true" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+      <Item Name="SALARY" ItemType="Text Item" DataType="Number" CanvasName="CV_MAIN" Prompt="Salary ($)" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="575" YPosition="225" Width="85" Height="22" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+      <Item Name="COMMISSION_PCT" ItemType="Text Item" DataType="Number" CanvasName="CV_MAIN" Prompt="Comm %" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="670" YPosition="225" Width="75" Height="22" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+
+      <Trigger Name="WHEN-VALIDATE-RECORD" TriggerText="IF :EMPLOYEES.SALARY &lt; 0 THEN&#10;  MESSAGE('Error: Salary cannot be negative.');&#10;  RAISE FORM_TRIGGER_FAILURE;&#10;END IF;"/>
+    </Block>
+
+    <!-- ==================== CONTROL TOOLBAR BLOCK ==================== -->
+    <Block Name="CONTROL">
+      <Item Name="BTN_PREV_DEPT" ItemType="Push Button" CanvasName="CV_MAIN" Label="&lt; Prev Dept" XPosition="25" YPosition="485" Width="100" Height="26">
+        <Trigger Name="WHEN-BUTTON-PRESSED" TriggerText="PREVIOUS_RECORD;"/>
+      </Item>
+      <Item Name="BTN_NEXT_DEPT" ItemType="Push Button" CanvasName="CV_MAIN" Label="Next Dept &gt;" XPosition="135" YPosition="485" Width="100" Height="26">
+        <Trigger Name="WHEN-BUTTON-PRESSED" TriggerText="NEXT_RECORD;"/>
+      </Item>
+      <Item Name="BTN_QUERY" ItemType="Push Button" CanvasName="CV_MAIN" Label="Query Dept" XPosition="245" YPosition="485" Width="95" Height="26">
+        <Trigger Name="WHEN-BUTTON-PRESSED" TriggerText="EXECUTE_QUERY;"/>
+      </Item>
+      <Item Name="BTN_SAVE" ItemType="Push Button" CanvasName="CV_MAIN" Label="Save Changes" XPosition="545" YPosition="485" Width="110" Height="26">
+        <Trigger Name="WHEN-BUTTON-PRESSED" TriggerText="COMMIT_FORM;"/>
+      </Item>
+      <Item Name="BTN_EXIT" ItemType="Push Button" CanvasName="CV_MAIN" Label="Exit" XPosition="665" YPosition="485" Width="85" Height="26">
+        <Trigger Name="WHEN-BUTTON-PRESSED" TriggerText="EXIT_FORM;"/>
+      </Item>
+    </Block>
+
+    <!-- ==================== PL/SQL PROGRAM UNITS ==================== -->
+    <ProgramUnit Name="CALC_DEPT_PAYROLL" ProgramUnitType="Function">
+      <ProgramUnitText>FUNCTION CALC_DEPT_PAYROLL(p_dept_id IN NUMBER) RETURN NUMBER IS
+  v_total NUMBER := 0;
+BEGIN
+  SELECT NVL(SUM(salary), 0) INTO v_total
+    FROM employees
+   WHERE department_id = p_dept_id;
+  RETURN v_total;
+END;</ProgramUnitText>
+    </ProgramUnit>
+
+    <Trigger Name="WHEN-NEW-FORM-INSTANCE" TriggerText="BEGIN&#10;  GO_BLOCK('DEPARTMENTS');&#10;  EXECUTE_QUERY;&#10;END;"/>
+  </FormModule>
+</Module>

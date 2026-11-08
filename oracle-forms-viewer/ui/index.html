@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oracle Forms Viewer POC</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="app-container">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="brand">
+        <span class="brand-icon">📐</span>
+        <strong>Forms Viewer</strong>
+        <span id="moduleBadge" class="badge module-badge">NO MODULE</span>
+      </div>
+
+      <div class="toolbar-controls">
+        <label class="btn btn-primary" title="Open local FMB or XML file">
+          📂 Open File...
+          <input type="file" id="fileInput" accept=".fmb,.xml,.mmb,.olb,.pld,.rdf,.rpt" style="display:none;">
+        </label>
+
+        <div class="input-with-button">
+          <input type="text" id="filePathInput" placeholder="/path/to/module.fmb or _fmb.xml">
+          <button id="openPathBtn" class="btn btn-secondary" title="Load path from disk">Load</button>
+        </div>
+
+        <div class="sample-picker">
+          <label for="sampleSelect">Sample:</label>
+          <select id="sampleSelect">
+            <option value="">(Loading samples...)</option>
+          </select>
+          <button id="loadSampleBtn" class="btn btn-outline">Load</button>
+        </div>
+
+        <div class="separator"></div>
+
+        <div class="canvas-controls" id="canvasControls">
+          <label for="canvasSelect">Canvas:</label>
+          <select id="canvasSelect"></select>
+
+          <div id="tabPagePills" class="tab-page-pills"></div>
+
+          <label for="zoomSlider" class="zoom-label">Zoom:</label>
+          <button id="zoomOutBtn" class="btn btn-sm btn-icon" title="Zoom out">−</button>
+          <input type="range" id="zoomSlider" min="20" max="250" value="100" step="5">
+          <button id="zoomInBtn" class="btn btn-sm btn-icon" title="Zoom in">+</button>
+          <span id="zoomValue">100%</span>
+          <button id="zoomFitBtn" class="btn btn-sm btn-secondary" title="Fit canvas to screen">Fit</button>
+
+          <label class="toggle-label" title="Show items without canvas or hidden items in auto-layout flow">
+            <input type="checkbox" id="showNullCanvasToggle">
+            <span>Show Off-Canvas</span>
+          </label>
+
+          <label class="toggle-label" title="Wrap canvas inside classic Oracle Forms runtime window frame (menus, toolbar, status bar)">
+            <input type="checkbox" id="runtimeFrameToggle">
+            <span>Runtime Frame</span>
+          </label>
+          <label class="toggle-label" title="Local UI simulation only: no database or PL/SQL execution">
+            <input type="checkbox" id="previewToggle">
+            <span>Interactive Preview</span>
+          </label>
+          <button id="previewResetBtn" class="btn btn-sm btn-secondary" disabled>Reset Preview</button>
+          <select id="previewAlertSelect" aria-label="Preview declared alert" disabled>
+            <option value="">Preview Alert...</option>
+          </select>
+          <button id="loadMenuBtn" class="btn btn-sm btn-secondary">Load Menu XML</button>
+          <input type="file" id="menuFileInput" accept=".xml" hidden>
+        </div>
+      </div>
+    </header>
+
+    <!-- Banner for conversion warnings -->
+    <div id="conversionBanner" class="conversion-banner hidden">
+      <div class="banner-content">
+        <span class="banner-icon">⚠️</span>
+        <div class="banner-text" id="bannerMessage"></div>
+        <div class="banner-actions">
+          <button id="bannerDismissBtn" class="btn btn-sm btn-secondary">Dismiss</button>
+          <button id="bannerSampleBtn" class="btn btn-sm btn-primary">Open Sample (ORDERS.fmb)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div class="workspace">
+      <!-- Left Pane: Object Navigator -->
+      <aside class="left-pane" id="leftPane">
+        <div class="pane-header">
+          <h3>Object Navigator</h3>
+          <div class="tree-filter">
+            <input type="text" id="treeFilterInput" placeholder="Filter objects...">
+          </div>
+        </div>
+        <div class="pane-content tree-content" id="navigatorTree">
+          <div class="empty-state">No form loaded. Open a file or pick a sample.</div>
+        </div>
+      </aside>
+
+      <!-- Center Pane: Tabbed Views -->
+      <main class="center-pane">
+        <nav class="center-tabs">
+          <button class="tab-btn active" data-tab="canvasTab">🎨 Visual Canvas Preview</button>
+          <button class="tab-btn" data-tab="codeTab">📜 PL/SQL Viewer <span id="codeTabBadge" class="pill-badge">0</span></button>
+          <button class="tab-btn" data-tab="xmlTab">📄 Raw XML Slice</button>
+        </nav>
+
+        <div class="tab-views">
+          <!-- Canvas Tab -->
+          <div id="canvasTab" class="tab-view active">
+            <div class="canvas-viewport" id="canvasViewport">
+              <div id="oracleWindowShell" class="oracle-window-shell hidden-frame">
+                <!-- Menu Bar -->
+                <div class="oracle-menu-bar">
+                  <div id="oracleMenuItems" class="oracle-menu-items">
+                    <div class="menu-item dropdown">
+                      <span>Action</span>
+                      <div class="dropdown-menu">
+                        <div class="dropdown-item"><span>Save</span><kbd>Ctrl+S</kbd></div>
+                        <div class="dropdown-item"><span>Print...</span><kbd>Ctrl+P</kbd></div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item"><span>Exit</span><kbd>Ctrl+Q</kbd></div>
+                      </div>
+                    </div>
+                    <div class="menu-item dropdown">
+                      <span>Edit</span>
+                      <div class="dropdown-menu">
+                        <div class="dropdown-item"><span>Cut</span><kbd>Ctrl+X</kbd></div>
+                        <div class="dropdown-item"><span>Copy</span><kbd>Ctrl+C</kbd></div>
+                        <div class="dropdown-item"><span>Paste</span><kbd>Ctrl+V</kbd></div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item"><span>Clear All</span></div>
+                      </div>
+                    </div>
+                    <div class="menu-item dropdown">
+                      <span>Query</span>
+                      <div class="dropdown-menu">
+                        <div class="dropdown-item"><span>Enter</span><kbd>F7</kbd></div>
+                        <div class="dropdown-item"><span>Execute</span><kbd>Ctrl+F11</kbd></div>
+                        <div class="dropdown-item"><span>Cancel</span><kbd>Ctrl+Q</kbd></div>
+                      </div>
+                    </div>
+                    <div class="menu-item dropdown">
+                      <span>Block</span>
+                      <div class="dropdown-menu">
+                        <div class="dropdown-item"><span>Previous</span><kbd>Shift+F5</kbd></div>
+                        <div class="dropdown-item"><span>Next</span><kbd>Shift+F6</kbd></div>
+                        <div class="dropdown-item"><span>Clear</span></div>
+                      </div>
+                    </div>
+                    <div class="menu-item dropdown">
+                      <span>Record</span>
+                      <div class="dropdown-menu">
+                        <div class="dropdown-item"><span>Previous</span><kbd>Up</kbd></div>
+                        <div class="dropdown-item"><span>Next</span><kbd>Down</kbd></div>
+                        <div class="dropdown-item"><span>Insert</span><kbd>F6</kbd></div>
+                        <div class="dropdown-item"><span>Remove</span><kbd>Shift+F6</kbd></div>
+                      </div>
+                    </div>
+                    <div class="menu-item dropdown">
+                      <span>Field</span>
+                      <div class="dropdown-menu">
+                        <div class="dropdown-item"><span>Clear</span></div>
+                        <div class="dropdown-item"><span>Duplicate</span><kbd>F3</kbd></div>
+                        <div class="dropdown-item"><span>List of Values...</span><kbd>F9</kbd></div>
+                      </div>
+                    </div>
+                    <div class="menu-item dropdown">
+                      <span>Help</span>
+                      <div class="dropdown-menu">
+                        <div class="dropdown-item"><span>Keys...</span><kbd>Ctrl+K</kbd></div>
+                        <div class="dropdown-item"><span>About Forms...</span></div>
+                      </div>
+                    </div>
+                    <div class="menu-item dropdown">
+                      <span>Window</span>
+                      <div class="dropdown-menu">
+                        <div class="dropdown-item"><span>Cascade</span></div>
+                        <div class="dropdown-item"><span>Tile</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="oracle-header-logo">ORACLE</div>
+                </div>
+
+                <!-- Action Toolbar -->
+                <div class="oracle-action-toolbar">
+                  <button class="tool-btn" title="Save (Ctrl+S)">💾</button>
+                  <button class="tool-btn" title="Print (Ctrl+P)">🖨️</button>
+                  <button class="tool-btn" title="Exit (Ctrl+Q)">🚪</button>
+                  <span class="tool-sep"></span>
+                  <button class="tool-btn" title="Cut">✂️</button>
+                  <button class="tool-btn" title="Copy">📋</button>
+                  <button class="tool-btn" title="Paste">📄</button>
+                  <span class="tool-sep"></span>
+                  <button class="tool-btn" title="Clear Block">🧹</button>
+                  <button class="tool-btn" title="Previous Block">⏮️</button>
+                  <button class="tool-btn" title="Next Block">⏭️</button>
+                  <span class="tool-sep"></span>
+                  <button class="tool-btn" title="Previous Record">🔼</button>
+                  <button class="tool-btn" title="Next Record">🔽</button>
+                  <span class="tool-sep"></span>
+                  <button class="tool-btn" title="Enter Query (F7)">❓</button>
+                  <button class="tool-btn" title="Execute Query (Ctrl+F11)">⚡</button>
+                  <button class="tool-btn" title="Cancel Query">🚫</button>
+                </div>
+
+                <!-- Title Bar (MDI Child Window Title) -->
+                <div class="oracle-title-bar">
+                  <div class="oracle-title-left">
+                    <span class="oracle-title-icon">📐</span>
+                    <span id="oracleWindowTitle" class="oracle-title-text">WINDOW1</span>
+                  </div>
+                  <div class="oracle-title-controls">
+                    <button class="win-btn win-min" title="Minimize">−</button>
+                    <button class="win-btn win-max" title="Maximize">□</button>
+                    <button class="win-btn win-close" title="Close">✕</button>
+                  </div>
+                </div>
+
+                <!-- Canvas Body -->
+                <div id="svgContainer" class="svg-container">
+                  <svg id="formsSvg" xmlns="http://www.w3.org/2000/svg"></svg>
+                </div>
+
+                <!-- Status Bar -->
+                <div class="oracle-status-bar">
+                  <div id="oracleStatusMsg" class="status-msg">Record: 1/1</div>
+                  <div class="status-lamps">
+                    <span class="lamp active">&lt;Replace&gt;</span>
+                    <span class="lamp">&lt;List&gt;</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="canvas-footer">
+              <span id="canvasStats">Dimensions: -</span>
+              <span id="selectedItemStats">No item selected</span>
+            </div>
+          </div>
+
+          <!-- PL/SQL Code Tab -->
+          <div id="codeTab" class="tab-view">
+            <div class="code-toolbar">
+              <span id="codeTitle" class="code-title">Select a trigger or program unit</span>
+              <span id="codeScopeBadge" class="badge"></span>
+            </div>
+            <div class="code-editor-container">
+              <pre id="plsqlCodeDisplay" class="code-pre"><code class="language-sql">-- Click a trigger in the navigator or on an item to inspect PL/SQL code</code></pre>
+            </div>
+          </div>
+
+          <!-- XML Slice Tab -->
+          <div id="xmlTab" class="tab-view">
+            <div class="xml-toolbar">
+              <span id="xmlTitle" class="xml-title">Source XML slice</span>
+              <span id="xmlLinesBadge" class="badge"></span>
+            </div>
+            <div class="xml-editor-container">
+              <pre id="xmlSliceDisplay" class="code-pre"><code>&lt;!-- Select an object in the tree to inspect its XML source --&gt;</code></pre>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- Right Pane: Property Inspector -->
+      <aside class="right-pane" id="rightPane">
+        <div class="pane-header">
+          <h3>Property Inspector</h3>
+          <span id="inspectorTargetName" class="inspector-target">None</span>
+        </div>
+        <div class="pane-content" id="propertyInspector">
+          <div class="empty-state">Select an object to inspect properties.</div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <dialog id="previewDialog" class="preview-dialog">
+    <h3 id="previewDialogTitle"></h3>
+    <p id="previewDialogMessage"></p>
+    <p class="preview-disclaimer">UI simulation only. No PL/SQL, database queries, or application actions are executed.</p>
+    <button id="previewSourceBtn" class="btn btn-secondary" hidden>View Associated Source</button>
+    <button id="previewCloseBtn" class="btn btn-primary">Close</button>
+  </dialog>
+  <script src="preview.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
