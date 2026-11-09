@@ -1,5 +1,5 @@
 use crate::driver::DatabaseDriver;
-use crate::model::{DbBackend, DbError, QueryRecord, QueryResult};
+use crate::model::{BoundSql, DbBackend, DbError, QueryRecord, QueryResult};
 use crate::sqlite::SqliteDriver;
 use oracle_forms_core::model::BlockInfo;
 use std::collections::HashMap;
@@ -21,8 +21,8 @@ impl DatabaseDriver for MockDriver {
         self.sqlite.test_connection().await
     }
 
-    async fn query(&self, sql: &str) -> Result<QueryResult, DbError> {
-        self.sqlite.query(sql).await
+    async fn query(&self, stmt: &BoundSql) -> Result<QueryResult, DbError> {
+        self.sqlite.query(stmt).await
     }
 
     async fn query_block(
@@ -32,7 +32,7 @@ impl DatabaseDriver for MockDriver {
     ) -> Result<QueryResult, DbError> {
         // Special case for our sample test_db (BLOCK5 with TEXT_ITEM4 and TEXT_ITEM284)
         if block.name.eq_ignore_ascii_case("BLOCK5") || block.name.eq_ignore_ascii_case("TEST_BLOCK") {
-            let mut result = self.sqlite.query("SELECT item_id, item_name, amount FROM test_items ORDER BY item_id").await?;
+            let mut result = self.sqlite.query(&BoundSql::new("SELECT item_id, item_name, amount FROM test_items ORDER BY item_id")).await?;
             result.block_name = block.name.clone();
             result.table_name = "TEST_ITEMS".to_string();
 

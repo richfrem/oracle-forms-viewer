@@ -31,34 +31,33 @@ You are pairing with me on **Oracle Forms Workbench** (`oracle-forms-fmb-researc
 
 ### 2. Current Project State
 - **Phase A (Completed)**: Read-only block query engine (`crates/oracle-forms-db`), SQL generator, live container execution against Oracle 23ai (`oracle23ai-lite`), CLI `query` command, and REST API (`/api/forms/query-block`).
-- **UI Viewer (Completed)**: Multi-block auto-flow layout, native SVG Tab Canvas notebook rendering, interactive tab switching, dynamic bounds expansion, and record navigation at `http://127.0.0.1:7070`.
+- **Phase A.1 (Completed)**: Hardened `TestbedSqlplusDriver` (`testbed_sqlplus.rs`), `/nolog` stdin authentication (zero passwords in `ps`), `BoundSql` trait parameter mapping, `ROWID` selection, and complete removal of hardcoded passwords in Rust crates.
+- **Phase B (Completed)**: Runtime spine & navigation engine (`crates/oracle-forms-runtime`), `FormSession`, `BlockBuffer`, `FormsRecordStatus` (`NEW`, `INSERT`, `QUERY`, `CHANGED`), `ValidationStatus`, `:SYSTEM.*` variables, trigger resolution hierarchy (`Override`, `Before`, `After`), master-detail coordination (`ORDERS` -> `ORDER_LINES`), and verified conformance suites (`conf_01_startup`, `conf_02_nav_valid`).
 - **Database Testbed**: Podman container `oracle23ai-lite` is running with seeded schema tables (`ORDERS`, `CUSTOMERS`, `DEPARTMENTS`, `EMPLOYEES`, `CLAIMS`, `STOCK`, etc.).
 
-### 3. Immediate Mission: Milestone A.1 & B Selection
+### 3. Immediate Mission: Milestone C & Runtime UI Integration Selection
 Please inspect `docs/plans/06-IMPLEMENTATION-ROADMAP-AND-MILESTONES.md` and help me execute the next milestone:
 
-- **Milestone A.1 (Driver Trait Hardening & Security Fix-Forward)**:
-  1. Rename `OracleDriver` -> `TestbedSqlplusDriver` in `crates/oracle-forms-db/src/testbed_sqlplus.rs`.
-  2. Relabel UI backend selector to `Oracle (testbed sqlplus)`, `SQLite`, `Mock`.
-  3. Remove hardcoded credentials (`Welcome123#`); support `OFW_DB_USER` / `OFW_DB_PASSWORD` env vars and `/nolog` stdin authentication.
-  4. Introduce `BoundSql` to `DatabaseDriver::query` to prepare for parameter binding.
-  5. Select `ROWID` and rewrite binds in `WhereClause`.
+- **Milestone C (PL/SQL Front-End & Code Intelligence)**:
+  1. Scaffold `crates/oracle-forms-plsql/`.
+  2. Implement hand-written recursive-descent lexer and parser for PL/SQL expressions, statements, blocks, declarations (`%TYPE`, `%ROWTYPE`).
+  3. Resilient statement-boundary error synchronization.
+  4. Symbol table resolving across Form Program Units, attached `.pll` libraries, and `.mmb` menus.
+  5. Generate call graph, event map, item cross-reference, and executability coverage report.
 
-- **Milestone B (Runtime Spine & Navigation State Machine)**:
-  1. Scaffold `crates/oracle-forms-runtime/`.
-  2. Implement `FormSession` and `BlockBuffer` managing records with `FormsRecordStatus` (`NEW`, `INSERT`, `QUERY`, `CHANGED`).
-  3. Implement navigation state machine (Form -> Block -> Record -> Item).
-  4. Implement system variables (`:SYSTEM.CURSOR_ITEM`, `CURSOR_BLOCK`, `CURSOR_RECORD`, `MODE`).
-  5. Implement master-detail coordination for `ORDERS` -> `ORDER_LINES`.
+- **Alternative Track / Integration: Runtime UI Engine (`/api/forms/session`)**:
+  1. Wire `FormSession` into `oracle-forms-server`.
+  2. Expose session REST / WebSocket endpoints for active form instances.
+  3. Enable interactive keyboard navigation (Tab, Shift+Tab, Up/Down, Enter), real-time field validation, and master-detail synchronization on the web canvas.
 
-Let's review where we are, confirm git status, and start executing Milestone A.1!
+Let's review where we are, confirm git status, and proceed with the next milestone!
 ```
 
 ---
 
 ## Reference Architecture Documents
 - [06-IMPLEMENTATION-ROADMAP-AND-MILESTONES.md](file:///Users/richardfremmerlid/Projects/oracle-forms-fmb-research/docs/plans/06-IMPLEMENTATION-ROADMAP-AND-MILESTONES.md)
-- [02-CORE-ARCHITECTURE-AND-CRATES.md](file:///Users/richardfremmerlid/Projects/oracle-forms-fmb-research/docs/plans/02-CORE-ARCHITECTURE-AND-CRATES.md)
+- [08-PLSQL-AND-EVENT-EXECUTION.md](file:///Users/richardfremmerlid/Projects/oracle-forms-fmb-research/docs/plans/08-PLSQL-AND-EVENT-EXECUTION.md)
 - [03-RUNTIME-STATE-MACHINE-AND-TRIGGERS.md](file:///Users/richardfremmerlid/Projects/oracle-forms-fmb-research/docs/plans/03-RUNTIME-STATE-MACHINE-AND-TRIGGERS.md)
 - [04-DATABASE-INTEGRATION-AND-CRUD.md](file:///Users/richardfremmerlid/Projects/oracle-forms-fmb-research/docs/plans/04-DATABASE-INTEGRATION-AND-CRUD.md)
 - [AGENTS.md](file:///Users/richardfremmerlid/Projects/oracle-forms-fmb-research/AGENTS.md)

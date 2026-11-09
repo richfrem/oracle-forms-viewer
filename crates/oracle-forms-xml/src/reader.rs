@@ -1051,8 +1051,7 @@ fn inheritance_of(
             parent_type,
             sub_object: false,
         })
-    } else if sub_object && owner_ref.is_some() {
-        let o = owner_ref.unwrap();
+    } else if let (true, Some(o)) = (sub_object, owner_ref) {
         Some(InheritanceRef {
             module: o.module.clone(),
             file: o.file.clone(),

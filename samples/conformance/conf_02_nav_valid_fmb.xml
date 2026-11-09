@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Module version="12.2.1.19.0" xmlns="http://xmlns.oracle.com/Forms">
+  <FormModule Name="CONF_02_NAV_VALID" Title="Navigation and Validation Conformance">
+    <Block Name="BLOCK1" QueryDataSourceName="DUAL">
+      <Item Name="ITEM1" ItemType="Text Item" DataType="Char">
+        <Trigger Name="WHEN-VALIDATE-ITEM" TriggerText="IF :BLOCK1.ITEM1 = 'INVALID' THEN RAISE FORM_TRIGGER_FAILURE; END IF;"/>
+      </Item>
+      <Item Name="ITEM2" ItemType="Text Item" DataType="Char"/>
+    </Block>
+  </FormModule>
+</Module>

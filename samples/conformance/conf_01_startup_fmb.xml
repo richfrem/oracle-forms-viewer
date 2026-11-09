@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Module version="12.2.1.19.0" xmlns="http://xmlns.oracle.com/Forms">
+  <FormModule Name="CONF_01_STARTUP" Title="Startup Cascade Conformance">
+    <Block Name="BLOCK1" QueryDataSourceName="DUAL">
+      <Item Name="ITEM1" ItemType="Text Item" DataType="Char"/>
+      <Item Name="ITEM2" ItemType="Text Item" DataType="Char"/>
+    </Block>
+  </FormModule>
+</Module>

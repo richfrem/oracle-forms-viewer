@@ -2,15 +2,15 @@ pub mod driver;
 pub mod generator;
 pub mod mock;
 pub mod model;
-pub mod oracle;
 pub mod sqlite;
+pub mod testbed_sqlplus;
 
 pub use driver::DatabaseDriver;
 pub use generator::{GeneratedQuery, SqlGenerator};
 pub use mock::MockDriver;
-pub use model::{DbBackend, DbConfig, DbError, QueryRecord, QueryResult};
-pub use oracle::OracleDriver;
+pub use model::{BoundSql, DbBackend, DbConfig, DbError, QueryRecord, QueryResult, SqlValue};
 pub use sqlite::SqliteDriver;
+pub use testbed_sqlplus::{OracleDriver, TestbedSqlplusDriver};
 
 /// Factory function to create a DatabaseDriver for the requested configuration.
 pub fn create_driver(config: &DbConfig) -> Result<Box<dyn DatabaseDriver>, DbError> {
@@ -27,7 +27,7 @@ pub fn create_driver(config: &DbConfig) -> Result<Box<dyn DatabaseDriver>, DbErr
                 Ok(Box::new(SqliteDriver::in_memory()?))
             }
         }
-        DbBackend::Oracle => Ok(Box::new(OracleDriver::new(config.clone()))),
+        DbBackend::Oracle => Ok(Box::new(TestbedSqlplusDriver::new(config.clone()))),
         DbBackend::Postgres => Err(DbError::UnsupportedBackend(DbBackend::Postgres)),
     }
 }

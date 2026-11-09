@@ -1,19 +1,87 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum SqlValue {
+    Null,
+    Text(String),
+    Number(String), // Preserves full decimal precision
+    Date(String),   // ISO-8601 representation
+    Boolean(bool),
+}
+
+impl From<&str> for SqlValue {
+    fn from(s: &str) -> Self {
+        SqlValue::Text(s.to_string())
+    }
+}
+
+impl From<String> for SqlValue {
+    fn from(s: String) -> Self {
+        SqlValue::Text(s)
+    }
+}
+
+impl From<i64> for SqlValue {
+    fn from(n: i64) -> Self {
+        SqlValue::Number(n.to_string())
+    }
+}
+
+impl From<f64> for SqlValue {
+    fn from(n: f64) -> Self {
+        SqlValue::Number(n.to_string())
+    }
+}
+
+impl From<bool> for SqlValue {
+    fn from(b: bool) -> Self {
+        SqlValue::Boolean(b)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BoundSql {
+    pub sql: String,
+    pub binds: Vec<(String, SqlValue)>,
+}
+
+impl BoundSql {
+    pub fn new(sql: impl Into<String>) -> Self {
+        Self {
+            sql: sql.into(),
+            binds: Vec::new(),
+        }
+    }
+
+    pub fn with_binds(sql: impl Into<String>, binds: Vec<(String, SqlValue)>) -> Self {
+        Self {
+            sql: sql.into(),
+            binds,
+        }
+    }
+}
+
+impl From<&str> for BoundSql {
+    fn from(s: &str) -> Self {
+        Self::new(s)
+    }
+}
+
+impl From<String> for BoundSql {
+    fn from(s: String) -> Self {
+        Self::new(s)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum DbBackend {
+    #[default]
     Mock,
     Sqlite,
     Oracle,
     Postgres,
-}
-
-impl Default for DbBackend {
-    fn default() -> Self {
-        DbBackend::Mock
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -36,8 +104,8 @@ impl Default for DbConfig {
             host: Some("localhost".to_string()),
             port: Some(1521),
             service_name: Some("FREEPDB1".to_string()),
-            username: Some("forms_user".to_string()),
-            password: Some("Welcome123#".to_string()),
+            username: std::env::var("OFW_DB_USER").ok().or_else(|| Some("forms_user".to_string())),
+            password: std::env::var("OFW_DB_PASSWORD").ok(),
             database_path: None,
         }
     }
@@ -50,8 +118,8 @@ impl DbConfig {
             host: Some("localhost".to_string()),
             port: Some(1521),
             service_name: Some("FREEPDB1".to_string()),
-            username: Some("forms_user".to_string()),
-            password: Some("Welcome123#".to_string()),
+            username: std::env::var("OFW_DB_USER").ok().or_else(|| Some("forms_user".to_string())),
+            password: std::env::var("OFW_DB_PASSWORD").ok(),
             database_path: None,
         }
     }
@@ -106,6 +174,9 @@ pub enum DbError {
 
     #[error("Block has no valid query data source")]
     MissingDataSource,
+
+    #[error("No database columns found for block '{0}'")]
+    NoDatabaseColumns(String),
 
     #[error("Unsupported database backend: {0:?}")]
     UnsupportedBackend(DbBackend),

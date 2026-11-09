@@ -289,7 +289,7 @@ impl FormsService {
     }
 
     pub fn read_source(&self, module_name: &str, relative_path: &str) -> Option<String> {
-        let clean_path = relative_path.trim_start_matches(|c| c == '/' || c == '\\');
+        let clean_path = relative_path.trim_start_matches(['/', '\\']);
         let key = module_name.to_ascii_uppercase();
         let st = self.state.read().unwrap();
 

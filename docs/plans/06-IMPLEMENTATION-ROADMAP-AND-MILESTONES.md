@@ -12,10 +12,10 @@
 │ Phase A: Read-Only Block Query [DONE - PR #3]                               │
 │ Direct testbed database query; dynamic SELECT synthesis; UI record nav.     │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Phase A.1: Phase A Fix-Forward & Driver Trait Hardening                     │
+│ Phase A.1: Phase A Fix-Forward & Driver Trait Hardening [DONE]              │
 │ Relabel testbed driver; BoundSql trait; remove hardcoded passwords.         │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Phase B: Runtime Spine (Read-Only) & Event Dispatcher                       │
+│ Phase B: Runtime Spine (Read-Only) & Event Dispatcher [DONE]                │
 │ FormSession; multi-record buffers; navigation; :SYSTEM.*; master-detail.    │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Phase C: PL/SQL Front-End & Code Intelligence                               │
@@ -50,7 +50,7 @@
 
 ---
 
-### Milestone A.1: Phase A Fix-Forward & Driver Trait Hardening
+### Milestone A.1: Phase A Fix-Forward & Driver Trait Hardening ✅
 - **Objective**: Fix technical debt in Phase A before building Phase B runtime dependencies.
 - **Tasks**:
   1. Rename `OracleDriver` $\to$ `TestbedSqlplusDriver` (`testbed_sqlplus.rs`).
@@ -67,7 +67,7 @@
 
 ---
 
-### Milestone B: Runtime Spine (Read-Only) & Event Dispatcher
+### Milestone B: Runtime Spine (Read-Only) & Event Dispatcher ✅
 - **Objective**: Establish the in-memory `FormSession`, multi-record buffer, and navigation state machine.
 - **Tasks**:
   1. Scaffold `crates/oracle-forms-runtime/`.

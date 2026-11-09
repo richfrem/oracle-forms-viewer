@@ -1,6 +1,6 @@
 use crate::driver::DatabaseDriver;
-use crate::model::{DbBackend, DbError, QueryRecord, QueryResult};
-use rusqlite::{types::ValueRef, Connection};
+use crate::model::{BoundSql, DbBackend, DbError, QueryRecord, QueryResult, SqlValue};
+use rusqlite::{types::ValueRef, Connection, ToSql};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -91,25 +91,48 @@ impl DatabaseDriver for SqliteDriver {
         .map_err(|e| DbError::Internal(e.to_string()))?
     }
 
-    async fn query(&self, sql: &str) -> Result<QueryResult, DbError> {
-        let sql_owned = sql.to_string();
+    async fn query(&self, stmt: &BoundSql) -> Result<QueryResult, DbError> {
+        let sql_owned = stmt.sql.clone();
+        let binds_owned = stmt.binds.clone();
         let conn = self.conn.clone();
 
         tokio::task::spawn_blocking(move || {
             let start = Instant::now();
             let locked = conn.lock().unwrap();
-            let mut stmt = locked
+            let mut statement = locked
                 .prepare(&sql_owned)
                 .map_err(|e| DbError::QueryError(format!("Prepare error: {}", e)))?;
 
-            let column_names: Vec<String> = stmt
+            let column_names: Vec<String> = statement
                 .column_names()
                 .iter()
                 .map(|s| s.to_string())
                 .collect();
 
-            let mut rows = stmt
-                .query([])
+            // Convert binds into rusqlite ToSql trait objects
+            let mut rusqlite_params: Vec<Box<dyn ToSql>> = Vec::new();
+            for (_name, val) in &binds_owned {
+                match val {
+                    SqlValue::Null => rusqlite_params.push(Box::new(rusqlite::types::Null)),
+                    SqlValue::Text(t) => rusqlite_params.push(Box::new(t.clone())),
+                    SqlValue::Number(n) => {
+                        if let Ok(i) = n.parse::<i64>() {
+                            rusqlite_params.push(Box::new(i));
+                        } else if let Ok(f) = n.parse::<f64>() {
+                            rusqlite_params.push(Box::new(f));
+                        } else {
+                            rusqlite_params.push(Box::new(n.clone()));
+                        }
+                    }
+                    SqlValue::Date(d) => rusqlite_params.push(Box::new(d.clone())),
+                    SqlValue::Boolean(b) => rusqlite_params.push(Box::new(*b)),
+                }
+            }
+
+            let param_refs: Vec<&dyn ToSql> = rusqlite_params.iter().map(|b| b.as_ref()).collect();
+
+            let mut rows = statement
+                .query(rusqlite::params_from_iter(param_refs))
                 .map_err(|e| DbError::QueryError(format!("Query execution error: {}", e)))?;
 
             let mut records = Vec::new();
@@ -118,6 +141,8 @@ impl DatabaseDriver for SqliteDriver {
                 .map_err(|e| DbError::QueryError(format!("Row fetch error: {}", e)))?
             {
                 let mut values = HashMap::new();
+                let mut row_id_val = None;
+
                 for (idx, col_name) in column_names.iter().enumerate() {
                     let val_ref = row.get_ref(idx).map_err(|e| {
                         DbError::QueryError(format!("Column read error: {}", e))
@@ -136,12 +161,16 @@ impl DatabaseDriver for SqliteDriver {
                         }
                     };
 
-                    values.insert(col_name.to_ascii_uppercase(), json_val);
+                    let col_upper = col_name.to_ascii_uppercase();
+                    if col_upper == "ROWID" {
+                        row_id_val = Some(json_val.to_string().trim_matches('"').to_string());
+                    }
+                    values.insert(col_upper, json_val);
                 }
 
                 records.push(QueryRecord {
                     values,
-                    row_id: None,
+                    row_id: row_id_val,
                 });
             }
 
