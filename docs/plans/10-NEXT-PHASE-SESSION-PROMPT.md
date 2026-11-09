@@ -34,25 +34,25 @@ You are pairing with me on **Oracle Forms Workbench** (`oracle-forms-fmb-researc
 - **Phase A.1 (Completed)**: Hardened `TestbedSqlplusDriver` (`testbed_sqlplus.rs`), `/nolog` stdin authentication (zero passwords in `ps`), `BoundSql` trait parameter mapping, `ROWID` selection, and complete removal of hardcoded passwords in Rust crates.
 - **Phase B (Completed)**: Runtime spine & navigation engine (`crates/oracle-forms-runtime`), `FormSession`, `BlockBuffer`, `FormsRecordStatus` (`NEW`, `INSERT`, `QUERY`, `CHANGED`), `ValidationStatus`, `:SYSTEM.*` variables, trigger resolution hierarchy (`Override`, `Before`, `After`), master-detail coordination (`ORDERS` -> `ORDER_LINES`), and verified conformance suites (`conf_01_startup`, `conf_02_nav_valid`).
 - **Phase C (Completed)**: PL/SQL front-end & static code intelligence (`crates/oracle-forms-plsql`), recursive-descent lexer with XML unescaping, AST models, statement-boundary error synchronization, symbol resolution across blocks/items/PUs/libraries, call graph, cross references, executability reporting, and 100% corpus verification across all XML and PLD samples.
+- **Phase D (Completed)**: Resumable PL/SQL tree-walking interpreter inside `FormSession` (`crates/oracle-forms-runtime`), Oracle value semantics (3-valued logic, `NULL` equality, empty string is `NULL`, numeric/string conversions), Tier-1 built-ins (`GO_ITEM`, `GO_BLOCK`, `EXECUTE_QUERY`, `FIRST/NEXT/PREV/LAST_RECORD`, `SHOW_ALERT`, `MESSAGE`, `SET_ITEM_PROPERTY`, `NAME_IN`, `COPY`, `DEFAULT_VALUE`, `ERASE`), interactive async suspension during `SHOW_ALERT` with continuation on resume, step budget and recursion guardrails, and verified conformance scenario `conf_03_query_cascade`.
 - **Database Testbed**: Podman container `oracle23ai-lite` is running with seeded schema tables (`ORDERS`, `CUSTOMERS`, `DEPARTMENTS`, `EMPLOYEES`, `CLAIMS`, `STOCK`, etc.).
 
-### 3. Immediate Mission: Milestone D & Runtime Integration
+### 3. Immediate Mission: Milestone E & Runtime UI Integration Selection
 Please inspect `docs/plans/06-IMPLEMENTATION-ROADMAP-AND-MILESTONES.md` and help me execute the next milestone:
 
-- **Milestone D: Resumable PL/SQL Interpreter & Tier-1 Built-ins**:
-  1. Tree-walking AST interpreter inside `FormSession` evaluating PL/SQL statements from parsed AST.
-  2. Oracle value semantics (3-valued logic, `NULL` equality, empty string is `NULL`, 38-digit decimals, `DATE`).
-  3. SQL statement delegation to `DatabaseDriver` with bound variables (`SELECT ... INTO :BLOCK.ITEM`).
-  4. Tier-1 built-ins: `GO_ITEM`, `EXECUTE_QUERY`, `FIRST/NEXT/PREV/LAST_RECORD`, `SHOW_ALERT`, `MESSAGE`, `SET_ITEM_PROPERTY`, `NAME_IN`, `COPY`.
-  5. Interactive async suspension during `SHOW_ALERT` resuming upon user response.
-  6. Conformance scenario `conf_03_query_cascade` matching native Forms 14c golden trace.
+- **Milestone E: Transactions & Full CRUD Commit Event Pipeline**:
+  1. Implement `SELECT ... FOR UPDATE NOWAIT` locking upon first edit of a record.
+  2. Implement optimistic concurrency re-check comparing database row against `initial_values`.
+  3. Execute commit event pipeline (`KEY-COMMIT` -> `PRE-COMMIT` -> `PRE/ON/POST-INSERT/UPDATE/DELETE` -> `POST-FORMS-COMMIT`).
+  4. Support primary key assignment in `PRE-INSERT` triggers via `:SEQUENCE.X.NEXTVAL`.
+  5. Conformance scenario `conf_08_commit_pipeline` matching native Forms 14c golden trace.
 
 - **Parallel / Alternative Track: Runtime UI Engine (`/api/forms/session`)**:
   1. Wire `FormSession` into `oracle-forms-server`.
   2. Expose session REST / WebSocket endpoints for active form instances.
   3. Enable interactive keyboard navigation (Tab, Shift+Tab, Up/Down, Enter), real-time field validation, and master-detail synchronization on the web canvas.
 
-Let's review where we are, confirm git status, and proceed with Milestone D!
+Let's review where we are, confirm git status, and proceed with the next milestone!
 ```
 
 ---

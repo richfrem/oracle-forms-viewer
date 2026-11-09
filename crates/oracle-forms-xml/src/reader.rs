@@ -685,7 +685,7 @@ impl FormsXmlParser {
             "Alert" => {
                 alerts.push(AlertInfo {
                     name: name.clone().unwrap_or_default(),
-                    message: get_attr(e, "AlertMessage"),
+                    message: get_attr(e, "AlertMessage").or_else(|| get_attr(e, "Message")),
                 });
             }
             "ModuleParameter" => {

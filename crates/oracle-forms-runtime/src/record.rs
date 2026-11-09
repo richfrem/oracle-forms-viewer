@@ -165,6 +165,12 @@ impl BlockBuffer {
         self.records.len()
     }
 
+    pub fn set_cursor(&mut self, idx: usize) {
+        if idx < self.records.len() {
+            self.current_record_index = idx;
+        }
+    }
+
     pub fn create_record(&mut self) -> usize {
         let new_rec = FormRecord::new();
         if self.records.is_empty() {

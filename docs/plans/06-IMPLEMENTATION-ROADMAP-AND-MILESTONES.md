@@ -95,7 +95,7 @@
 
 ---
 
-### Milestone D: Resumable PL/SQL Interpreter & Tier-1 Built-ins
+### Milestone D: Resumable PL/SQL Interpreter & Tier-1 Built-ins ✅
 - **Objective**: Execute client-side triggers and built-ins with interactive async suspension.
 - **Tasks**:
   1. Implement tree-walking AST interpreter inside `FormSession`.
@@ -106,6 +106,7 @@
   6. Step budget and recursion guardrails.
 - **Verification Gate**:
   - Conformance scenario `conf_03_query_cascade` matches native Forms 14c golden trace.
+  - All unit and integration tests compile and pass with zero warnings.
 
 ---
 
