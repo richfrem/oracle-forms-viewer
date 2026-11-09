@@ -1,5 +1,6 @@
 use crate::model::{BoundSql, DbBackend, DbError, SqlValue};
-use oracle_forms_core::model::BlockInfo;
+use oracle_forms_core::model::{BlockInfo, ItemInfo};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct GeneratedQuery {
@@ -288,6 +289,260 @@ impl SqlGenerator {
             selected_columns,
             column_to_item,
         })
+    }
+
+    /// Checks whether an item qualifies as a database item (not non-data or UI buttons).
+    pub fn is_database_item(item: &ItemInfo, has_explicit_columns: bool) -> bool {
+        if let Some(dml) = &item.dml {
+            if dml.database_item == Some(false) {
+                return false;
+            }
+        }
+        if let Some(itype) = &item.item_type {
+            if itype.eq_ignore_ascii_case("Push Button")
+                || itype.eq_ignore_ascii_case("Button")
+            {
+                return false;
+            }
+        }
+        if has_explicit_columns {
+            item.column_name.is_some()
+                || item.dml.as_ref().and_then(|d| d.database_item) == Some(true)
+        } else {
+            true
+        }
+    }
+
+    /// Generates genuine Forms SELECT ... FOR UPDATE NOWAIT row lock statement.
+    pub fn generate_lock(
+        block: &BlockInfo,
+        backend: DbBackend,
+        row_id: &str,
+    ) -> Result<BoundSql, DbError> {
+        let table_name = block
+            .query_data_source_name
+            .clone()
+            .or_else(|| Self::extract_table_from_triggers(block))
+            .unwrap_or_else(|| block.name.clone());
+
+        let has_explicit_columns = block.items.iter().any(|i| {
+            i.column_name.is_some()
+                || i.dml.as_ref().and_then(|d| d.database_item) == Some(true)
+        });
+
+        let mut columns = Vec::new();
+        for item in &block.items {
+            if !Self::is_database_item(item, has_explicit_columns) {
+                continue;
+            }
+            if item.dml.as_ref().and_then(|d| d.query_allowed) == Some(false) {
+                continue;
+            }
+            let col = item.column_name.clone().unwrap_or_else(|| item.name.clone());
+            if !columns.contains(&col) {
+                columns.push(col);
+            }
+        }
+        if columns.is_empty() {
+            columns.push("ROWID".to_string());
+        }
+
+        let cols_joined = columns.join(", ");
+        let (sql, binds) = match backend {
+            DbBackend::Oracle => (
+                format!(
+                    "SELECT {} FROM {} WHERE ROWID = :b1 FOR UPDATE NOWAIT",
+                    cols_joined, table_name
+                ),
+                vec![(":b1".to_string(), SqlValue::Text(row_id.to_string()))],
+            ),
+            _ => (
+                format!("SELECT {} FROM {} WHERE ROWID = ?", cols_joined, table_name),
+                vec![("?1".to_string(), SqlValue::Text(row_id.to_string()))],
+            ),
+        };
+
+        Ok(BoundSql { sql, binds })
+    }
+
+    /// Generates parameterized INSERT statement for a new record.
+    pub fn generate_insert(
+        block: &BlockInfo,
+        backend: DbBackend,
+        values: &HashMap<String, serde_json::Value>,
+    ) -> Result<BoundSql, DbError> {
+        let table_name = block
+            .query_data_source_name
+            .clone()
+            .or_else(|| Self::extract_table_from_triggers(block))
+            .unwrap_or_else(|| block.name.clone());
+
+        let has_explicit_columns = block.items.iter().any(|i| {
+            i.column_name.is_some()
+                || i.dml.as_ref().and_then(|d| d.database_item) == Some(true)
+        });
+
+        let mut cols = Vec::new();
+        let mut binds = Vec::new();
+        let mut placeholders = Vec::new();
+        let mut bind_idx = 1;
+
+        for item in &block.items {
+            if !Self::is_database_item(item, has_explicit_columns) {
+                continue;
+            }
+            if item.dml.as_ref().and_then(|d| d.insert_allowed) == Some(false) {
+                continue;
+            }
+            let col = item.column_name.clone().unwrap_or_else(|| item.name.clone());
+            let item_name = item.name.clone();
+
+            if let Some(val) = values.get(&item_name).or_else(|| values.get(&col)) {
+                if !val.is_null() {
+                    cols.push(col);
+                    let sql_val = match val {
+                        serde_json::Value::Number(num) => SqlValue::Number(num.to_string()),
+                        serde_json::Value::String(s) => SqlValue::Text(s.clone()),
+                        serde_json::Value::Bool(b) => SqlValue::Boolean(*b),
+                        _ => SqlValue::Text(val.to_string()),
+                    };
+
+                    match backend {
+                        DbBackend::Oracle => {
+                            let placeholder = format!(":b{}", bind_idx);
+                            binds.push((placeholder.clone(), sql_val));
+                            placeholders.push(placeholder);
+                        }
+                        _ => {
+                            placeholders.push("?".to_string());
+                            binds.push((format!("?{}", bind_idx), sql_val));
+                        }
+                    }
+                    bind_idx += 1;
+                }
+            }
+        }
+
+        if cols.is_empty() {
+            return Err(DbError::QueryError("No columns to insert".to_string()));
+        }
+
+        let sql = format!(
+            "INSERT INTO {} ({}) VALUES ({})",
+            table_name,
+            cols.join(", "),
+            placeholders.join(", ")
+        );
+
+        Ok(BoundSql { sql, binds })
+    }
+
+    /// Generates parameterized UPDATE statement for a modified record by ROWID.
+    pub fn generate_update(
+        block: &BlockInfo,
+        backend: DbBackend,
+        values: &HashMap<String, serde_json::Value>,
+        row_id: &str,
+    ) -> Result<BoundSql, DbError> {
+        let table_name = block
+            .query_data_source_name
+            .clone()
+            .or_else(|| Self::extract_table_from_triggers(block))
+            .unwrap_or_else(|| block.name.clone());
+
+        let has_explicit_columns = block.items.iter().any(|i| {
+            i.column_name.is_some()
+                || i.dml.as_ref().and_then(|d| d.database_item) == Some(true)
+        });
+
+        let mut assignments = Vec::new();
+        let mut binds = Vec::new();
+        let mut bind_idx = 1;
+
+        for item in &block.items {
+            if !Self::is_database_item(item, has_explicit_columns) {
+                continue;
+            }
+            if item.dml.as_ref().and_then(|d| d.update_allowed) == Some(false) {
+                continue;
+            }
+            let col = item.column_name.clone().unwrap_or_else(|| item.name.clone());
+            let item_name = item.name.clone();
+
+            if let Some(val) = values.get(&item_name).or_else(|| values.get(&col)) {
+                let sql_val = match val {
+                    serde_json::Value::Null => SqlValue::Null,
+                    serde_json::Value::Number(num) => SqlValue::Number(num.to_string()),
+                    serde_json::Value::String(s) => SqlValue::Text(s.clone()),
+                    serde_json::Value::Bool(b) => SqlValue::Boolean(*b),
+                    _ => SqlValue::Text(val.to_string()),
+                };
+
+                match backend {
+                    DbBackend::Oracle => {
+                        let placeholder = format!(":b{}", bind_idx);
+                        assignments.push(format!("{} = {}", col, placeholder));
+                        binds.push((placeholder, sql_val));
+                    }
+                    _ => {
+                        assignments.push(format!("{} = ?", col));
+                        binds.push((format!("?{}", bind_idx), sql_val));
+                    }
+                }
+                bind_idx += 1;
+            }
+        }
+
+        if assignments.is_empty() {
+            return Err(DbError::QueryError("No columns to update".to_string()));
+        }
+
+        let (where_clause, rowid_bind) = match backend {
+            DbBackend::Oracle => (
+                format!("WHERE ROWID = :b{}", bind_idx),
+                (format!(":b{}", bind_idx), SqlValue::Text(row_id.to_string())),
+            ),
+            _ => (
+                "WHERE ROWID = ?".to_string(),
+                (format!("?{}", bind_idx), SqlValue::Text(row_id.to_string())),
+            ),
+        };
+        binds.push(rowid_bind);
+
+        let sql = format!(
+            "UPDATE {} SET {} {}",
+            table_name,
+            assignments.join(", "),
+            where_clause
+        );
+
+        Ok(BoundSql { sql, binds })
+    }
+
+    /// Generates parameterized DELETE statement for a record by ROWID.
+    pub fn generate_delete(
+        block: &BlockInfo,
+        backend: DbBackend,
+        row_id: &str,
+    ) -> Result<BoundSql, DbError> {
+        let table_name = block
+            .query_data_source_name
+            .clone()
+            .or_else(|| Self::extract_table_from_triggers(block))
+            .unwrap_or_else(|| block.name.clone());
+
+        let (sql, binds) = match backend {
+            DbBackend::Oracle => (
+                format!("DELETE FROM {} WHERE ROWID = :b1", table_name),
+                vec![(":b1".to_string(), SqlValue::Text(row_id.to_string()))],
+            ),
+            _ => (
+                format!("DELETE FROM {} WHERE ROWID = ?", table_name),
+                vec![("?1".to_string(), SqlValue::Text(row_id.to_string()))],
+            ),
+        };
+
+        Ok(BoundSql { sql, binds })
     }
 }
 

@@ -31,6 +31,9 @@ pub enum RuntimeError {
     #[error("Trigger failure: {0}")]
     TriggerFailure(String),
 
+    #[error("Record lock or concurrency conflict: {0}")]
+    RecordLockedOrChanged(String),
+
     #[error("Step budget exceeded")]
     StepBudgetExceeded,
 
@@ -54,6 +57,21 @@ pub struct AlertDefinition {
     pub default_button: u8,
 }
 
+pub(crate) fn block_on_future<F, T>(fut: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        tokio::task::block_in_place(|| handle.block_on(fut))
+    } else {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create temporary tokio runtime");
+        rt.block_on(fut)
+    }
+}
+
 /// Active in-memory Form runtime session.
 pub struct FormSession {
     pub module: ModuleIndex,
@@ -70,6 +88,7 @@ pub struct FormSession {
     pub database_driver: Option<Arc<dyn DatabaseDriver>>,
     pub pending_suspension: Option<SuspensionContext>,
     pub interactive_mode: bool,
+    pub sequences: std::sync::Mutex<HashMap<String, u64>>,
 }
 
 impl FormSession {
@@ -122,6 +141,7 @@ impl FormSession {
             database_driver: None,
             pending_suspension: None,
             interactive_mode: false,
+            sequences: std::sync::Mutex::new(HashMap::new()),
         }
     }
 
@@ -162,6 +182,17 @@ impl FormSession {
                 .get(var_name)
                 .cloned()
                 .unwrap_or(OracleValue::Null);
+        }
+
+        if clean.starts_with("SEQUENCE.") {
+            let seq_part = clean.trim_start_matches("SEQUENCE.");
+            let seq_name = seq_part.split('.').next().unwrap_or(seq_part);
+            let seq_name = seq_name.to_ascii_uppercase();
+
+            let mut lock = self.sequences.lock().unwrap();
+            let entry = lock.entry(seq_name).or_insert(1000);
+            *entry += 1;
+            return OracleValue::Number(*entry as f64);
         }
 
         if clean.contains('.') {
@@ -715,9 +746,7 @@ impl FormSession {
                 .cloned()
             {
                 let query_fut = driver.query_block(&block_info, Some(50));
-                let result = tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(query_fut)
-                });
+                let result = block_on_future(query_fut);
                 if let Ok(qr) = result {
                     if let Some(buf) = self.blocks.get_mut(&b_upper) {
                         buf.populate_from_query_result(qr);
@@ -773,17 +802,354 @@ impl FormSession {
         };
 
         let b_upper = b_name.to_ascii_uppercase();
+        let block_info_opt = self
+            .module
+            .blocks
+            .iter()
+            .find(|b| b.name.eq_ignore_ascii_case(&b_upper))
+            .cloned();
+
+        // 1. Genuine Forms Locking on First Edit:
+        let (needs_lock, row_id_opt, initial_values_opt) = {
+            let buf = self
+                .blocks
+                .get(&b_upper)
+                .ok_or_else(|| RuntimeError::BlockNotFound(b_name.clone()))?;
+            if let Some(rec) = buf.current_record() {
+                if rec.status == FormsRecordStatus::Query && !rec.is_locked {
+                    (true, rec.row_id.clone(), Some(rec.initial_values.clone()))
+                } else {
+                    (false, None, None)
+                }
+            } else {
+                (false, None, None)
+            }
+        };
+
+        if needs_lock {
+            // Check if ON-LOCK trigger defined on the block
+            let on_lock_exists = self.module.triggers.iter().any(|t| {
+                t.name.eq_ignore_ascii_case("ON-LOCK")
+                    && t.block_name
+                        .as_deref()
+                        .map(|b| b.eq_ignore_ascii_case(&b_upper))
+                        .unwrap_or(false)
+            });
+
+            if on_lock_exists {
+                let lock_res = self.dispatch_event("ON-LOCK", None, Some(&b_name));
+                if !lock_res.is_success() {
+                    return Err(RuntimeError::RecordLockedOrChanged(
+                        "FRM-40501: ORACLE error: unable to reserve record for update or delete."
+                            .to_string(),
+                    ));
+                }
+            } else if let (Some(driver), Some(row_id), Some(b_info), Some(initial_vals)) =
+                (&self.database_driver, &row_id_opt, &block_info_opt, &initial_values_opt)
+            {
+                // Generate lock SQL (SELECT ... FOR UPDATE NOWAIT)
+                if let Ok(bound) =
+                    oracle_forms_db::SqlGenerator::generate_lock(b_info, driver.backend(), row_id)
+                {
+                    let query_fut = driver.query(&bound);
+                    let result = block_on_future(query_fut);
+
+                    match result {
+                        Ok(res) => {
+                            // Concurrency re-check: compare returned columns against initial_values
+                            if let Some(db_rec) = res.records.first() {
+                                for (col, init_val) in initial_vals {
+                                    if let Some(db_val) = db_rec.values.get(col) {
+                                        if db_val != init_val {
+                                            return Err(RuntimeError::RecordLockedOrChanged(
+                                                "FRM-40501: ORACLE error: unable to reserve record for update or delete."
+                                                    .to_string(),
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            return Err(RuntimeError::RecordLockedOrChanged(format!(
+                                "FRM-40501: ORACLE error: unable to reserve record for update or delete. ({})",
+                                e
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+
         let buf = self
             .blocks
             .get_mut(&b_upper)
             .ok_or_else(|| RuntimeError::BlockNotFound(b_name.clone()))?;
 
         if let Some(rec) = buf.current_record_mut() {
+            if rec.status == FormsRecordStatus::Query {
+                rec.is_locked = true;
+                rec.status = FormsRecordStatus::Changed;
+            } else if rec.status == FormsRecordStatus::New {
+                rec.status = FormsRecordStatus::Insert;
+            }
             rec.set_value(&i_name, value);
         } else {
             buf.create_record();
             if let Some(rec) = buf.current_record_mut() {
+                rec.status = FormsRecordStatus::Insert;
                 rec.set_value(&i_name, value);
+            }
+        }
+
+        self.update_system_status();
+        Ok(())
+    }
+
+    /// Executes the full Oracle Forms Commit Event Pipeline:
+    ///
+    /// 1. `KEY-COMMIT` -> Validation -> `PRE-COMMIT`
+    /// 2. For each dirty record:
+    ///    - If Marked for Delete: `PRE-DELETE` -> `ON-DELETE` (or SQL DELETE) -> `POST-DELETE`
+    ///    - If Insert: `PRE-INSERT` -> `ON-INSERT` (or SQL INSERT) -> `POST-INSERT`
+    ///    - If Changed: `PRE-UPDATE` -> `ON-UPDATE` (or SQL UPDATE) -> `POST-UPDATE`
+    /// 3. `POST-FORMS-COMMIT` -> Database `COMMIT` (or savepoint rollback on error)
+    pub fn commit(&mut self) -> Result<(), RuntimeError> {
+        self.trace_log.push("COMMIT_FORM".to_string());
+
+        // 1. Validation across all blocks
+        for (b_name, buf) in &self.blocks {
+            for rec in &buf.records {
+                if rec.validation_status == crate::record::ValidationStatus::Changed {
+                    if let Some(hook) = &self.validation_hook {
+                        for (item, val) in &rec.values {
+                            if let Err(err_msg) = hook(b_name, item, val) {
+                                self.trace_log.push(format!("VALIDATION_FAILED: {}", err_msg));
+                                return Err(RuntimeError::ValidationFailed {
+                                    item: format!("{}.{}", b_name, item),
+                                    message: err_msg,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. PRE-COMMIT
+        let pre_commit_res = self.dispatch_event("PRE-COMMIT", None, None);
+        if !pre_commit_res.is_success() {
+            self.trace_log.push("ROLLBACK_TO_SAVEPOINT".to_string());
+            return Err(RuntimeError::TriggerFailure("PRE-COMMIT failed".to_string()));
+        }
+
+        // 3. Process each dirty record in each block
+        let block_names: Vec<String> = self.module.blocks.iter().map(|b| b.name.clone()).collect();
+        for b_name in block_names {
+            let b_upper = b_name.to_ascii_uppercase();
+            let b_info = self
+                .module
+                .blocks
+                .iter()
+                .find(|b| b.name.eq_ignore_ascii_case(&b_name))
+                .cloned();
+
+            let rec_count = self
+                .blocks
+                .get(&b_upper)
+                .map(|b| b.records.len())
+                .unwrap_or(0);
+
+            for rec_idx in 0..rec_count {
+                // Set cursor to active record
+                if let Some(buf) = self.blocks.get_mut(&b_upper) {
+                    buf.set_cursor(rec_idx);
+                }
+                self.system.cursor_block = Some(b_name.clone());
+                self.system.cursor_record = rec_idx + 1;
+
+                let (is_delete, is_insert, is_update, row_id_opt, values_clone) = {
+                    let buf = self.blocks.get(&b_upper).unwrap();
+                    let rec = &buf.records[rec_idx];
+                    (
+                        rec.is_marked_for_delete,
+                        rec.status == FormsRecordStatus::Insert,
+                        rec.status == FormsRecordStatus::Changed,
+                        rec.row_id.clone(),
+                        rec.values.clone(),
+                    )
+                };
+
+                // Case A: Deletions
+                if is_delete {
+                    let pre_del = self.dispatch_event("PRE-DELETE", None, Some(&b_name));
+                    if !pre_del.is_success() {
+                        self.trace_log.push("ROLLBACK_TO_SAVEPOINT".to_string());
+                        return Err(RuntimeError::TriggerFailure("PRE-DELETE failed".to_string()));
+                    }
+
+                    // Check ON-DELETE trigger
+                    let on_del_exists = self.module.triggers.iter().any(|t| {
+                        t.name.eq_ignore_ascii_case("ON-DELETE")
+                            && t.block_name
+                                .as_deref()
+                                .map(|b| b.eq_ignore_ascii_case(&b_upper))
+                                .unwrap_or(false)
+                    });
+
+                    if on_del_exists {
+                        let on_del = self.dispatch_event("ON-DELETE", None, Some(&b_name));
+                        if !on_del.is_success() {
+                            self.trace_log.push("ROLLBACK_TO_SAVEPOINT".to_string());
+                            return Err(RuntimeError::TriggerFailure("ON-DELETE failed".to_string()));
+                        }
+                    } else if let (Some(driver), Some(row_id), Some(b_meta)) =
+                        (&self.database_driver, &row_id_opt, &b_info)
+                    {
+                        if let Ok(del_sql) =
+                            oracle_forms_db::SqlGenerator::generate_delete(b_meta, driver.backend(), row_id)
+                        {
+                            let del_fut = driver.query(&del_sql);
+                            let _ = block_on_future(del_fut);
+                        }
+                    }
+
+                    let post_del = self.dispatch_event("POST-DELETE", None, Some(&b_name));
+                    if !post_del.is_success() {
+                        self.trace_log.push("ROLLBACK_TO_SAVEPOINT".to_string());
+                        return Err(RuntimeError::TriggerFailure("POST-DELETE failed".to_string()));
+                    }
+                }
+                // Case B: Inserts
+                else if is_insert {
+                    let pre_ins = self.dispatch_event("PRE-INSERT", None, Some(&b_name));
+                    if !pre_ins.is_success() {
+                        self.trace_log.push("ROLLBACK_TO_SAVEPOINT".to_string());
+                        return Err(RuntimeError::TriggerFailure("PRE-INSERT failed".to_string()));
+                    }
+
+                    // Re-read values in case PRE-INSERT mutated them (e.g. Assigned primary key sequence)
+                    let current_values = self
+                        .blocks
+                        .get(&b_upper)
+                        .map(|b| b.records[rec_idx].values.clone())
+                        .unwrap_or(values_clone);
+
+                    // Check ON-INSERT trigger
+                    let on_ins_exists = self.module.triggers.iter().any(|t| {
+                        t.name.eq_ignore_ascii_case("ON-INSERT")
+                            && t.block_name
+                                .as_deref()
+                                .map(|b| b.eq_ignore_ascii_case(&b_upper))
+                                .unwrap_or(false)
+                    });
+
+                    if on_ins_exists {
+                        let on_ins = self.dispatch_event("ON-INSERT", None, Some(&b_name));
+                        if !on_ins.is_success() {
+                            self.trace_log.push("ROLLBACK_TO_SAVEPOINT".to_string());
+                            return Err(RuntimeError::TriggerFailure("ON-INSERT failed".to_string()));
+                        }
+                    } else if let (Some(driver), Some(b_meta)) = (&self.database_driver, &b_info) {
+                        if let Ok(ins_sql) = oracle_forms_db::SqlGenerator::generate_insert(
+                            b_meta,
+                            driver.backend(),
+                            &current_values,
+                        ) {
+                            let ins_fut = driver.query(&ins_sql);
+                            let _ = block_on_future(ins_fut);
+                        }
+                    }
+
+                    let post_ins = self.dispatch_event("POST-INSERT", None, Some(&b_name));
+                    if !post_ins.is_success() {
+                        self.trace_log.push("ROLLBACK_TO_SAVEPOINT".to_string());
+                        return Err(RuntimeError::TriggerFailure("POST-INSERT failed".to_string()));
+                    }
+                }
+                // Case C: Updates
+                else if is_update {
+                    let pre_upd = self.dispatch_event("PRE-UPDATE", None, Some(&b_name));
+                    if !pre_upd.is_success() {
+                        self.trace_log.push("ROLLBACK_TO_SAVEPOINT".to_string());
+                        return Err(RuntimeError::TriggerFailure("PRE-UPDATE failed".to_string()));
+                    }
+
+                    let current_values = self
+                        .blocks
+                        .get(&b_upper)
+                        .map(|b| b.records[rec_idx].values.clone())
+                        .unwrap_or(values_clone);
+
+                    // Check ON-UPDATE trigger
+                    let on_upd_exists = self.module.triggers.iter().any(|t| {
+                        t.name.eq_ignore_ascii_case("ON-UPDATE")
+                            && t.block_name
+                                .as_deref()
+                                .map(|b| b.eq_ignore_ascii_case(&b_upper))
+                                .unwrap_or(false)
+                    });
+
+                    if on_upd_exists {
+                        let on_upd = self.dispatch_event("ON-UPDATE", None, Some(&b_name));
+                        if !on_upd.is_success() {
+                            self.trace_log.push("ROLLBACK_TO_SAVEPOINT".to_string());
+                            return Err(RuntimeError::TriggerFailure("ON-UPDATE failed".to_string()));
+                        }
+                    } else if let (Some(driver), Some(row_id), Some(b_meta)) =
+                        (&self.database_driver, &row_id_opt, &b_info)
+                    {
+                        if let Ok(upd_sql) = oracle_forms_db::SqlGenerator::generate_update(
+                            b_meta,
+                            driver.backend(),
+                            &current_values,
+                            row_id,
+                        ) {
+                            let upd_fut = driver.query(&upd_sql);
+                            let _ = block_on_future(upd_fut);
+                        }
+                    }
+
+                    let post_upd = self.dispatch_event("POST-UPDATE", None, Some(&b_name));
+                    if !post_upd.is_success() {
+                        self.trace_log.push("ROLLBACK_TO_SAVEPOINT".to_string());
+                        return Err(RuntimeError::TriggerFailure("POST-UPDATE failed".to_string()));
+                    }
+                }
+            }
+        }
+
+        // 4. POST-FORMS-COMMIT
+        let post_commit_res = self.dispatch_event("POST-FORMS-COMMIT", None, None);
+        if !post_commit_res.is_success() {
+            self.trace_log.push("ROLLBACK_TO_SAVEPOINT".to_string());
+            return Err(RuntimeError::TriggerFailure("POST-FORMS-COMMIT failed".to_string()));
+        }
+
+        // 5. Database COMMIT & buffer status finalization
+        if let Some(driver) = &self.database_driver {
+            let commit_stmt = oracle_forms_db::model::BoundSql::new("COMMIT");
+            let commit_fut = driver.query(&commit_stmt);
+            let _ = block_on_future(commit_fut);
+        }
+
+        for buf in self.blocks.values_mut() {
+            // Remove deleted records
+            buf.records.retain(|r| !r.is_marked_for_delete);
+            // Transition inserted and changed records to Query
+            for rec in &mut buf.records {
+                if rec.status == FormsRecordStatus::Insert
+                    || rec.status == FormsRecordStatus::Changed
+                {
+                    rec.status = FormsRecordStatus::Query;
+                    rec.initial_values = rec.values.clone();
+                    rec.validation_status = crate::record::ValidationStatus::Valid;
+                    rec.item_validation.clear();
+                    rec.is_locked = false;
+                }
+            }
+            if buf.current_record_index >= buf.records.len() && !buf.records.is_empty() {
+                buf.current_record_index = buf.records.len() - 1;
             }
         }
 

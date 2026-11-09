@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Module version="12.2.1.19.0" xmlns="http://xmlns.oracle.com/Forms">
+  <FormModule Name="CONF_08_COMMIT_PIPELINE" Title="Commit Event Pipeline Conformance">
+    <Trigger Name="PRE-COMMIT" TriggerText="BEGIN :GLOBAL.COMMIT_PHASE := 'PRE_COMMIT'; END;"/>
+    <Trigger Name="POST-FORMS-COMMIT" TriggerText="BEGIN :GLOBAL.COMMIT_PHASE := 'COMMITTED'; MESSAGE('Transaction committed.'); END;"/>
+    <Block Name="ITEMS" QueryDataSourceName="ITEMS">
+      <Item Name="ITEM_ID" ItemType="Text Item" DataType="Number"/>
+      <Item Name="ITEM_NAME" ItemType="Text Item" DataType="Char"/>
+      <Item Name="AMOUNT" ItemType="Text Item" DataType="Number"/>
+      <Item Name="BTN_COMMIT" ItemType="Push Button" Label="Save">
+        <Trigger Name="WHEN-BUTTON-PRESSED" TriggerText="BEGIN COMMIT_FORM; END;"/>
+      </Item>
+      <Trigger Name="PRE-INSERT" TriggerText="BEGIN :ITEMS.ITEM_ID := :SEQUENCE.ITEM_SEQ.NEXTVAL; END;"/>
+      <Trigger Name="POST-INSERT" TriggerText="BEGIN MESSAGE('Item inserted'); END;"/>
+      <Trigger Name="PRE-UPDATE" TriggerText="BEGIN MESSAGE('Item updating'); END;"/>
+      <Trigger Name="POST-UPDATE" TriggerText="BEGIN MESSAGE('Item updated'); END;"/>
+      <Trigger Name="PRE-DELETE" TriggerText="BEGIN MESSAGE('Item deleting'); END;"/>
+      <Trigger Name="POST-DELETE" TriggerText="BEGIN MESSAGE('Item deleted'); END;"/>
+    </Block>
+  </FormModule>
+</Module>

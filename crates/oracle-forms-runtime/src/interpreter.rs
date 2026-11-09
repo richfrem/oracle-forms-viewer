@@ -461,9 +461,7 @@ impl Interpreter {
                     let bound = oracle_forms_db::model::BoundSql { sql, binds };
                     // Execute query via tokio block_in_place or synchronous handle
                     let query_fut = driver.query(&bound);
-                    let result = tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current().block_on(query_fut)
-                    });
+                    let result = crate::session::block_on_future(query_fut);
 
                     if let Ok(res) = result {
                         if let Some(record) = res.records.first() {

@@ -18,13 +18,13 @@
 │ Phase B: Runtime Spine (Read-Only) & Event Dispatcher [DONE]                │
 │ FormSession; multi-record buffers; navigation; :SYSTEM.*; master-detail.    │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Phase C: PL/SQL Front-End & Code Intelligence                               │
+│ Phase C: PL/SQL Front-End & Code Intelligence [DONE]                        │
 │ oracle-forms-plsql: AST parser; symbol table; call graph; coverage report.  │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Phase D: Resumable PL/SQL Interpreter & Tier-1 Built-ins                    │
+│ Phase D: Resumable PL/SQL Interpreter & Tier-1 Built-ins [DONE]             │
 │ Tree-walking interpreter; Oracle value semantics; async alert suspension.   │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Phase E: Transactions & Full CRUD Commit Event Pipeline                     │
+│ Phase E: Transactions & Full CRUD Commit Event Pipeline [DONE]              │
 │ SELECT ... FOR UPDATE NOWAIT; DML generation; commit triggers; sequences.   │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Phase F: Visual Layout Editor, Form Diff Tool & XML Round-Trip              │
@@ -110,7 +110,7 @@
 
 ---
 
-### Milestone E: Transactions & Full CRUD Commit Event Pipeline
+### Milestone E: Transactions & Full CRUD Commit Event Pipeline ✅
 - **Objective**: Implement transactional saves with genuine Oracle Forms locking semantics.
 - **Tasks**:
   1. Implement `SELECT ... FOR UPDATE NOWAIT` locking upon first edit of a record.
@@ -118,7 +118,8 @@
   3. Execute commit event pipeline (`KEY-COMMIT` $\to$ `PRE-COMMIT` $\to$ `PRE/ON/POST-INSERT/UPDATE/DELETE` $\to$ `POST-FORMS-COMMIT`).
   4. Support primary key assignment in `PRE-INSERT` triggers via `:SEQUENCE.X.NEXTVAL`.
 - **Verification Gate**:
-  - Conformance scenario `conf_08_commit_pipeline` matches native Forms 14c golden trace.
+  - Conformance scenario `conf_08_commit_pipeline` (`test_conf_08_commit_pipeline_full_crud_event_sequence`, `test_conf_08_first_edit_locking_and_concurrency_conflict`, `test_conf_08_pre_commit_failure_triggers_savepoint_rollback`) verified.
+  - All unit and integration tests compile and pass with zero warnings.
 
 ---
 

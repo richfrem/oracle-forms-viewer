@@ -68,6 +68,17 @@ impl SqliteDriver {
                 (1002, 'Globex Corporation', '2026-02-01', 'ACTIVE', 4300.50),
                 (1003, 'Soylent Corp', '2026-02-18', 'CLOSED', 890.00),
                 (1004, 'Initech LLC', '2026-03-05', 'ACTIVE', 620.25);
+
+            CREATE TABLE IF NOT EXISTS items (
+                item_id INTEGER PRIMARY KEY,
+                item_name TEXT NOT NULL,
+                amount REAL
+            );
+
+            INSERT OR IGNORE INTO items (item_id, item_name, amount) VALUES
+                (101, 'Widget A', 50.00),
+                (102, 'Widget B', 75.00),
+                (555, 'Original', 10.00);
             "#,
         )
         .map_err(|e| DbError::QueryError(format!("Schema seeding failed: {}", e)))?;
@@ -130,6 +141,27 @@ impl DatabaseDriver for SqliteDriver {
             }
 
             let param_refs: Vec<&dyn ToSql> = rusqlite_params.iter().map(|b| b.as_ref()).collect();
+
+            let is_select = sql_owned
+                .trim_start()
+                .to_ascii_uppercase()
+                .starts_with("SELECT");
+
+            if !is_select {
+                statement
+                    .execute(rusqlite::params_from_iter(param_refs))
+                    .map_err(|e| DbError::QueryError(format!("DML execution error: {}", e)))?;
+
+                return Ok(QueryResult {
+                    block_name: String::new(),
+                    table_name: String::new(),
+                    columns: vec![],
+                    records: vec![],
+                    total_count: 0,
+                    execution_time_ms: start.elapsed().as_millis() as u64,
+                    sql_statement: sql_owned,
+                });
+            }
 
             let mut rows = statement
                 .query(rusqlite::params_from_iter(param_refs))
