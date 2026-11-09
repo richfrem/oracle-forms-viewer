@@ -1018,9 +1018,60 @@
 
     const scale = (val) => Math.round((val || 0) * coordScale);
 
+    // Collect visual items on this canvas
+    const visualItems = [];
+    for (const block of mod.blocks) {
+      for (const item of block.items) {
+        const onThisCanvas = item.canvasName === canvas.name;
+        const matchesTab = !canvas.tabPages.length || !item.tabPageName || item.tabPageName === activeTabPage;
+
+        if (onThisCanvas && matchesTab) {
+          visualItems.push({ block, item, isFallbackLayout: false });
+        } else if (showNullCanvas && !item.canvasName) {
+          visualItems.push({ block, item, isFallbackLayout: true });
+        }
+      }
+    }
+
+    // Auto-layout fallback for unpositioned items (x == 0 && y == 0)
+    const zeroCoords = visualItems.filter(v => (v.item.xPosition || 0) === 0 && (v.item.yPosition || 0) === 0);
+    const needsAutoFlow = zeroCoords.length > 1;
+
+    const resolvedPositions = new Map();
+    let currentBlockName = "";
+    let currentBlockY = 40;
+    let currentItemY = 40;
+    const currentBlockX = 140;
+
+    if (needsAutoFlow) {
+      for (const { block, item } of visualItems) {
+        let rawX = item.xPosition || 0;
+        let rawY = item.yPosition || 0;
+        let w = item.width || (item.itemType?.includes('Button') ? 120 : 130);
+        let h = item.height || 22;
+
+        if (rawX === 0 && rawY === 0) {
+          if (block.name !== currentBlockName) {
+            if (currentBlockName !== "") {
+              currentBlockY = currentItemY + 35;
+            }
+            currentBlockName = block.name;
+            currentItemY = currentBlockY + 20;
+          }
+          resolvedPositions.set(`${block.name}.${item.name}`, { x: currentBlockX, y: currentItemY, w, h });
+          const recs = Math.max(1, block.recordsDisplayed || 1);
+          const dist = block.distanceBetweenRecords || 4;
+          const totalH = (recs > 1 && item.itemsDisplay !== 1) ? (recs * (h + dist)) : h;
+          currentItemY += totalH + 14;
+        }
+      }
+    }
+
     // Scaled canvas dimensions
-    const width = Math.max(200, scale(canvas.width) || 800);
-    const height = Math.max(150, scale(canvas.height) || 600);
+    const baseWidth = Math.max(200, scale(canvas.width) || 800);
+    const baseHeight = Math.max(150, scale(canvas.height) || 600);
+    const width = baseWidth;
+    const height = needsAutoFlow ? Math.max(baseHeight, currentItemY + 60) : baseHeight;
 
     formsSvg.setAttribute('width', width);
     formsSvg.setAttribute('height', height);
@@ -1049,6 +1100,10 @@
     });
 
     for (const g of canvasGraphics) {
+      // If auto-flow is managing unpositioned layout, ignore unpositioned dummy frames
+      if (needsAutoFlow && g.graphicsType === 'Frame' && !g.xPosition && !g.yPosition && !g.width && !g.height) {
+        continue;
+      }
       const gx = scale(g.xPosition) || 10;
       const gy = scale(g.yPosition) || 10;
       const gw = scale(g.width) || (width - 40);
@@ -1073,57 +1128,7 @@
       }
     }
 
-    // Layer 2: Items
-    // Collect visual items on this canvas
-    const visualItems = [];
-    for (const block of mod.blocks) {
-      for (const item of block.items) {
-        const onThisCanvas = item.canvasName === canvas.name;
-        const matchesTab = !canvas.tabPages.length || !item.tabPageName || item.tabPageName === activeTabPage;
-
-        if (onThisCanvas && matchesTab) {
-          visualItems.push({ block, item, isFallbackLayout: false });
-        } else if (showNullCanvas && !item.canvasName) {
-          visualItems.push({ block, item, isFallbackLayout: true });
-        }
-      }
-    }
-
-    // Auto-layout fallback for unpositioned items (x == 0 && y == 0)
-    const zeroCoords = visualItems.filter(v => (v.item.xPosition || 0) === 0 && (v.item.yPosition || 0) === 0);
-    const needsAutoFlow = zeroCoords.length > 1;
-
-    const resolvedPositions = new Map();
-    let currentBlockName = "";
-    let currentBlockY = 40;
-    let currentItemY = 40;
-    let currentBlockX = 140;
-
-    if (needsAutoFlow) {
-      for (const { block, item } of visualItems) {
-        let rawX = item.xPosition || 0;
-        let rawY = item.yPosition || 0;
-        let w = item.width || (item.itemType?.includes('Button') ? 120 : 130);
-        let h = item.height || 22;
-
-        if (rawX === 0 && rawY === 0) {
-          if (block.name !== currentBlockName) {
-            currentBlockName = block.name;
-            if (currentBlockY > 40) {
-              currentBlockY = currentItemY + 35;
-            }
-            currentItemY = currentBlockY + 20;
-          }
-          resolvedPositions.set(`${block.name}.${item.name}`, { x: currentBlockX, y: currentItemY, w, h });
-          const recs = Math.max(1, block.recordsDisplayed || 1);
-          const dist = block.distanceBetweenRecords || 4;
-          const totalH = (recs > 1 && item.itemsDisplay !== 1) ? (recs * (h + dist)) : h;
-          currentItemY += totalH + 14;
-        }
-      }
-    }
-
-    // If auto-flow blocks were rendered, synthesize frames if none exist
+    // Layer 2: Synthesized Frames for Auto-Flow Blocks
     if (needsAutoFlow) {
       const drawnBlocks = new Set();
       visualItems.forEach(({ block, item }) => {
@@ -1139,14 +1144,14 @@
             const lastH = (recs > 1 && blockItems[blockItems.length - 1].item.itemsDisplay !== 1)
               ? (recs * (lastPos.h + dist)) : lastPos.h;
             const fY = firstPos.y - 20;
-            const fH = (lastPos.y + lastH + 12) - fY;
+            const fH = (lastPos.y + lastH + 16) - fY;
             const fW = 480;
 
             svgHtml += `
               <g class="svg-graphic frame">
                 <rect x="20" y="${fY}" width="${fW}" height="${fH}" fill="none" stroke="#808080" stroke-width="1.5" rx="3"/>
                 <rect x="21" y="${fY + 1}" width="${fW - 2}" height="${fH - 2}" fill="none" stroke="#ffffff" stroke-width="1" rx="3"/>
-                <rect x="35" y="${fY - 7}" width="${block.name.length * 8 + 14}" height="14" fill="${bgCol}"/>
+                <rect x="35" y="${fY - 7}" width="${block.name.length * 8 + 60}" height="14" fill="${bgCol}"/>
                 <text x="40" y="${fY + 4}" font-family="Segoe UI, Tahoma, sans-serif" font-size="11" font-weight="bold" fill="#000">Block: ${escapeHtml(block.name)}</text>
               </g>
             `;
