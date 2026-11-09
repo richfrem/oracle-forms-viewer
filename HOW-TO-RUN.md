@@ -1,6 +1,6 @@
-# How to Run the Native Rust Oracle Forms Viewer
+# How to Run Oracle Forms Workbench
 
-This guide explains how to compile, test, and run the **`oracle-forms-viewer`** native Rust server and CLI.
+This guide explains how to compile, test, and run the **Oracle Forms Workbench** (`oracle-forms-viewer`) native Rust server, CLI, and database query engine.
 
 Zero JVM, zero Node.js, and zero Oracle runtime software are required.
 
@@ -53,63 +53,60 @@ PORT=8080 cargo run -p oracle-forms-server
 
 ---
 
-## 3. Using the Web Viewer
+## 3. Using the Web Workbench
 
 Once the server is running at `http://127.0.0.1:7070`:
 
 1. **Open Sample Forms**:
    - Use the **"Select Sample"** dropdown in the top header.
-   - Choose any sample (e.g. `orders_fmb.xml`, `claims_fmb.xml`, `simple_module.fmb`, or `rccm0000.fmb`).
+   - Choose any sample (e.g. `test_db_fmb.xml`, `orders_fmb.xml`, `claims_fmb.xml`, `simple_module.fmb`).
 2. **Open Your Own Files**:
    - Drag & drop any `.fmb`, `.xml`, `.pld`, `.mmb`, or `.olb` file into the browser window.
    - Or type a local file path into the **"File Path"** input box and click **"Open"**.
-3. **Interactive Features**:
+3. **Execute Live Database Queries (Phase A)**:
+   - Select your backend in the **DB:** dropdown:
+     - `Oracle 23ai (:1521)`: Connects directly to Oracle Database 23ai Free (`localhost:1521/FREEPDB1`).
+     - `SQLite (Embedded)`: Uses in-memory SQLite with pre-seeded datasets.
+     - `Mock Offline`: Offline driver returning deterministic test rows.
+   - Click **⚡ Query DB** (or press keyboard shortcut `Ctrl+F11` / `F8`).
+   - The canvas automatically populates the form fields with live data!
+   - Use the record navigator (`[◀] Rec 1 of 4 [▶]`) to browse records.
+4. **Interactive Features**:
    - **Canvas View**: Pan, zoom, and visually inspect 2D coordinates, buttons, frames, prompts, and layout elements.
    - **Object Navigator**: Tree navigation across Blocks, Items, Triggers, Program Units, LOVs, and Alerts.
    - **PL/SQL Tab**: Syntax-highlighted view of procedures, functions, package bodies, and triggers with clean line numbers.
    - **XML Tab**: Direct view of raw XML elements and line boundaries.
 
-### Database-Free Interactive Preview
+### Interactive Preview & Runtime Frame
 
-Enable **Interactive Preview** to edit local field values and toggle checkboxes
-inside the existing canvas layout. Values are separate for each displayed record
-and survive canvas and tab switches. **Reset Preview** restores initial values;
-opening another form clears all local edits. Disabling preview returns to inspection.
-
-The runtime frame is enabled automatically. Buttons, toolbar actions, and custom
-menu commands show a **not executed** notice; associated source can be inspected.
-Use **Preview Alert...** to display exported alert messages. This is a UI simulation:
-no database connection, PL/SQL execution, inferred application navigation, or
-query-generated data. Disabled/non-enterable fields remain disabled/read-only,
-and hidden/off-canvas controls are omitted. Lists and radio groups without parsed
-choices are explicitly unavailable rather than populated with invented values.
-
-For custom menus, open the form first, then choose **Load Menu XML** and select
-its converted `*_mmb.xml` file. The form stays loaded and menu source remains
-available in the PL/SQL viewer. A browser upload cannot automatically access
-companion files in its original directory; opening a local form path can resolve
-its existing sibling form/menu XML. Without menu definitions, the runtime frame
-shows the standard placeholder menus, not the application's custom menu.
+Enable **Interactive Preview** to edit local field values, toggle checkboxes, and test form behaviors
+inside the existing canvas layout. The runtime frame provides classic Oracle Forms menus, toolbars, and status bar.
 
 ---
 
 ## 4. Running the CLI Toolkit
 
-You can inspect modules or extract PL/SQL directly from your terminal:
+You can inspect modules, extract PL/SQL, or query database records directly from your terminal:
 
 ```bash
 cd oracle-forms-viewer
 
-# 1. Inspect an XML Form (Module summary)
+# 1. Execute live query against Oracle Database 23ai Free (:1521)
+cargo run -p oracle-forms-cli -- query samples/test_db_fmb.xml --backend oracle
+
+# 2. Execute query offline using mock driver
+cargo run -p oracle-forms-cli -- query samples/orders_fmb.xml --backend mock
+
+# 3. Inspect an XML Form (Module summary)
 cargo run -p oracle-forms-cli -- inspect samples/orders_fmb.xml
 
-# 2. Inspect a Binary .FMB Module (ROS 60050 stream decoding)
+# 4. Inspect a Binary .FMB Module directly (ROS 60050 stream decoding)
 cargo run -p oracle-forms-cli -- inspect samples/simple_module.fmb
 
-# 3. Output the complete module index as JSON
+# 5. Output the complete module index as JSON
 cargo run -p oracle-forms-cli -- inspect samples/orders_fmb.xml --json
 
-# 4. Dump all extracted PL/SQL (triggers and procedures) into a directory as .sql files
+# 6. Dump all extracted PL/SQL (triggers and procedures) into a directory as .sql files
 cargo run -p oracle-forms-cli -- dump-sql samples/orders_fmb.xml -o ./extracted-sql
 ```
 

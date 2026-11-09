@@ -1,10 +1,10 @@
-# System Architecture: Oracle Forms Research & Native Viewer
+# System Architecture: Oracle Forms Workbench
 
 ---
 
 ## 1. High-Level System Overview
 
-The system provides a complete, modern, cross-platform pipeline for inspecting, visualizing, and extracting legacy Oracle Forms applications without requiring Windows machines or proprietary Oracle client licenses.
+The system provides a complete, modern, cross-platform pipeline for inspecting, visualizing, querying, and extracting legacy Oracle Forms applications without requiring Windows machines or proprietary Oracle client licenses.
 
 It operates on a **two-track strategy**:
 
@@ -35,8 +35,12 @@ flowchart TD
         PLD --> CORE
         ROS --> CORE
         CORE --> SIDECARS[PL/SQL Sidecar Filesystem Cache]
-        CORE --> HTTP[oracle-forms-server<br/>Axum Web Viewer]
-        CORE --> CLI[oracle-forms-cli<br/>Terminal Inspector & SQL Dumper]
+        CORE --> DB[oracle-forms-db<br/>SQL Synthesizer & Drivers]
+        DB <-->|SQL*Net :1521 / SQLite| TARGET_DB[(Oracle 23ai / SQLite / Mock)]
+        DB --> HTTP[oracle-forms-server<br/>Axum Web Viewer]
+        DB --> CLI[oracle-forms-cli<br/>Terminal Inspector & Query Engine]
+        CORE --> HTTP
+        CORE --> CLI
     end
 
     CERT_XML -.->|Differential Validation 12c vs 14c| QXML
@@ -46,7 +50,7 @@ flowchart TD
 
 ## 2. The Rust Multi-Crate Workspace
 
-The core deliverable is housed in `oracle-forms-viewer/`, partitioned into 5 modular crates:
+The core deliverable is housed in `oracle-forms-viewer/`, partitioned into 6 modular crates:
 
 ```text
 oracle-forms-viewer/
@@ -55,7 +59,8 @@ oracle-forms-viewer/
 │   ├── oracle-forms-core/                # Shared domain models, sidecars, geometry
 │   ├── oracle-forms-xml/                 # Streaming quick-xml parser (Forms XML & PLD)
 │   ├── oracle-forms-binary/              # ROS 60050 stream & heuristic binary extractor
-│   ├── oracle-forms-cli/                 # Standalone CLI (inspect & dump-sql)
+│   ├── oracle-forms-db/                  # Direct DB query engine (Oracle 23ai, SQLite, Mock)
+│   ├── oracle-forms-cli/                 # Standalone CLI (inspect, dump-sql, query)
 │   └── oracle-forms-server/              # Axum HTTP server with embedded UI assets
 ├── ui/                                   # Embedded web frontend (HTML/CSS/JS/SVG)
 └── samples/                              # Test corpus (XML, PLD, and binary FMB)
@@ -68,8 +73,9 @@ oracle-forms-viewer/
 | **`oracle-forms-core`** | Defines canonical AST structures (`ModuleIndex`, `BlockInfo`, `ItemInfo`, `CanvasInfo`, `TriggerInfo`, `ProgramUnitInfo`), Serde camelCase serialization matching web contracts, coordinate scaling math (milli-unit scaling `0.0378`), PL/SQL sidecar filesystem writer with collision deduplication (`~2`, `~3`), and conditional entity unescaping. | `serde`, `serde_json`, `sha2`, `thiserror`, `regex` |
 | **`oracle-forms-xml`** | High-performance streaming XML reader using `quick-xml`. Translates byte offsets to line ranges via precomputed newline indexes. Handles Oracle 12c and earlier Forms2XML schemas without building heavy DOM trees. Also includes `PldParser` for `.pld` text libraries. | `oracle-forms-core`, `quick-xml`, `regex`, `thiserror` |
 | **`oracle-forms-binary`** | Direct ROS 60050 byte-stream parser. Dissects binary headers (`ROS.60050`), extracts uncompressed PL/SQL triggers and program units, discovers blocks and items via bind variable patterns (`:BLOCK.ITEM`), extracts SQL queries for record groups, and computes collision-free dynamic masonry multi-column preview layouts. | `oracle-forms-core`, `regex`, `thiserror` |
-| **`oracle-forms-cli`** | Command-line binary providing `inspect` (summaries or full AST JSON) and `dump-sql` (dumps all extracted PL/SQL blocks directly into `.sql` files). | `oracle-forms-core`, `oracle-forms-xml`, `oracle-forms-binary`, `clap`, `tokio` |
-| **`oracle-forms-server`** | Standalone web server built on `axum`. Embeds `ui/` assets directly into the binary via `rust-embed`. Provides REST endpoints for sample discovery, file opening (multipart or path), source retrieval, and XML slicing. | `oracle-forms-core`, `oracle-forms-xml`, `oracle-forms-binary`, `axum`, `tokio`, `tower-http`, `rust-embed`, `tracing` |
+| **`oracle-forms-db`** | Direct database query execution engine. Form block-to-SQL synthesizer (`SqlGenerator`) mapping WHERE clauses, items, and pagination. Asynchronous `DatabaseDriver` trait with drivers for Oracle 23ai Free (`:1521/FREEPDB1`), embedded SQLite with pre-seeded datasets, and offline Mock fallback. | `oracle-forms-core`, `tokio`, `rusqlite`, `async-trait`, `tracing` |
+| **`oracle-forms-cli`** | Command-line binary providing `inspect` (summaries or full AST JSON), `dump-sql` (dumps all extracted PL/SQL blocks directly into `.sql` files), and `query` (executes block queries against Oracle 23ai, SQLite, or Mock). | `oracle-forms-core`, `oracle-forms-xml`, `oracle-forms-binary`, `oracle-forms-db`, `clap`, `tokio` |
+| **`oracle-forms-server`** | Standalone web server built on `axum`. Embeds `ui/` assets directly into the binary via `rust-embed`. Provides REST endpoints for sample discovery, file opening (multipart or path), source retrieval, XML slicing, and block querying (`/api/forms/query-block`, `/api/db/test`). | `oracle-forms-core`, `oracle-forms-xml`, `oracle-forms-binary`, `oracle-forms-db`, `axum`, `tokio`, `tower-http`, `rust-embed`, `tracing` |
 
 ---
 

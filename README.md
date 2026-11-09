@@ -1,8 +1,19 @@
-# Oracle Forms Research & Native Viewer
+# Oracle Forms Workbench
 
-A comprehensive research project, reverse-engineering engine, and pure-native Rust toolchain for inspecting, visualizing, and migrating legacy **Oracle Forms** applications (`.fmb`, `.mmb`, `.olb`, Forms2XML exports, and `.pld` libraries).
+A comprehensive, pure-native Rust workbench and reverse-engineering toolchain for inspecting, visualizing, querying, and modernizing legacy **Oracle Forms & Reports** applications (`.fmb`, `.mmb`, `.olb`, Forms2XML exports, `.pld`, `.rdf`).
 
-Zero JVM, zero Node.js, and zero Oracle runtime software required for day-to-day operation.
+Zero JVM, zero Node.js, and zero Oracle runtime software required for the native engine.
+
+---
+
+## Key Capabilities
+
+- **Pure-Native Visual Viewer**: High-performance streaming parser and 2D canvas renderer for complex forms layouts, coordinate scaling, and visual hierarchy.
+- **Direct Database Query Engine (Phase A)**: Query live database backends (Oracle Database 23ai Free `:1521/FREEPDB1`, embedded SQLite with pre-seeded datasets, and offline mock driver) directly from forms modules—no WebLogic or Java required!
+- **Interactive Multi-Record Browsing**: Live record flipping (`[◀] Rec 1 of 4 [▶]`) directly on the visual canvas and runtime window frame.
+- **Direct Binary ROS 60050 Parser**: Direct byte-stream extraction of triggers, program units, and items from legacy binary `.fmb` files without Oracle Forms Builder.
+- **Full CLI Toolkit**: Inspect ASTs, dump SQL triggers and program units, and execute block queries from the terminal.
+- **Containerized Ground Truth & APM Skills**: Integrated automation skills for official Forms 12c/14c headless batch compilation (`.fmb` $\to$ `.fmx`), Forms2XML, PLL conversion, and live desktop execution via Forms Standalone Launcher (FSAL).
 
 ---
 
@@ -39,7 +50,8 @@ Run compiled forms (`.fmx`) natively on macOS and Windows via Forms Standalone L
 │   │   ├── oracle-forms-core/    # Canonical AST models, sidecars, geometry
 │   │   ├── oracle-forms-xml/     # quick-xml streaming parser (XML & PLD)
 │   │   ├── oracle-forms-binary/  # ROS 60050 stream & heuristic binary extractor
-│   │   ├── oracle-forms-cli/     # Standalone CLI (inspect & dump-sql)
+│   │   ├── oracle-forms-db/      # Direct DB query engine (Oracle 23ai, SQLite, Mock)
+│   │   ├── oracle-forms-cli/     # Standalone CLI (inspect, dump-sql, query)
 │   │   └── oracle-forms-server/  # Axum web server with embedded UI assets
 │   ├── ui/                       # Vanilla HTML/CSS/JS frontend
 │   └── samples/                  # Curated redistributable sample forms
@@ -78,15 +90,21 @@ cd oracle-forms-viewer
 cargo run -p oracle-forms-server
 ```
 
-Open **[http://127.0.0.1:7070](http://127.0.0.1:7070)** in your browser.
-
-- Select any preloaded sample (`orders_fmb.xml`, `claims_fmb.xml`, `simple_module.fmb`).
+Open **[http://127.0.0.1:7070](http://127.0.0.1:7070)** in your browser:
+- Select any preloaded sample (`test_db_fmb.xml`, `orders_fmb.xml`, `claims_fmb.xml`, `simple_module.fmb`).
 - Or drag & drop your own `.fmb` or `.xml` file to view its 2D canvas, object hierarchy, and PL/SQL triggers.
+- **Direct Database Querying**: Select your database backend (`Oracle 23ai (:1521)`, `SQLite`, `Mock`) and click **⚡ Query DB** (or press `Ctrl+F11` / `F8`) to fetch live database records and navigate through rows (`[◀] 1 of 4 [▶]`) directly on the canvas!
 
-### 2. Inspect Forms from the Command Line
+### 2. Inspect and Query Forms from the Command Line
 
 ```bash
 cd oracle-forms-viewer
+
+# Query live database records for a block (connects to Oracle 23ai Free :1521)
+cargo run -p oracle-forms-cli -- query samples/test_db_fmb.xml --backend oracle
+
+# Query offline using the mock driver
+cargo run -p oracle-forms-cli -- query samples/orders_fmb.xml --backend mock
 
 # Inspect an XML module export
 cargo run -p oracle-forms-cli -- inspect samples/orders_fmb.xml

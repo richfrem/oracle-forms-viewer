@@ -6,9 +6,9 @@ Instructions and operational constraints for AI coding agents operating within t
 
 ## 1. Project Purpose & Scope
 
-This repository houses research, reverse-engineering, and tooling for legacy Oracle Forms (`.fmb`, `.mmb`, `.olb`, Forms2XML exports, `.pld`).
+This repository houses **Oracle Forms Workbench** (`oracle-forms-workbench`), a comprehensive research, reverse-engineering, and native developer toolchain for legacy Oracle Forms & Reports (`.fmb`, `.mmb`, `.olb`, Forms2XML exports, `.pld`, `.rdf`).
 
-The primary active deliverable is **`oracle-forms-viewer/`**: a pure-native, standalone Rust multi-crate workspace providing a high-performance streaming parser, direct binary ROS 60050 extractor, CLI tool, and Axum web viewer.
+The primary active deliverable is **`oracle-forms-viewer/`**: a pure-native, standalone Rust multi-crate workspace providing a high-performance streaming parser, direct binary ROS 60050 extractor, direct database query engine, CLI tool, and Axum web viewer.
 
 ---
 
@@ -16,7 +16,7 @@ The primary active deliverable is **`oracle-forms-viewer/`**: a pure-native, sta
 
 ### Architecture & Dependencies
 - **Zero JVM in Rust Workspace**: Never introduce Java, JVM, Javalin, or Node.js runtime/build dependencies into `oracle-forms-viewer/`.
-- **Zero Oracle Runtime Dependency**: The Rust parsing and extraction crates (`oracle-forms-core`, `oracle-forms-xml`, `oracle-forms-binary`) MUST remain pure-native and run without Oracle Forms Builder, Oracle Client libraries, or Windows DLLs.
+- **Zero Oracle Runtime Dependency**: The Rust parsing, extraction, and database crates (`oracle-forms-core`, `oracle-forms-xml`, `oracle-forms-binary`, `oracle-forms-db`) MUST remain pure-native and run without Oracle Forms Builder, Oracle Client libraries, or Windows DLLs.
 - **Portability**: Never hardcode absolute machine paths (e.g., `/Users/...` or `C:\...`) in code, configuration, or documentation. Always use workspace-relative paths (`./`, `samples/`, `docs/`).
 - **Data Privacy & Git Hygiene**: Never commit or stage files from `temp/`, `temp/example-fmb/`, or `context/`. Proprietary binaries, internal form files, and session memories must remain strictly within ignored directories.
 
@@ -40,14 +40,15 @@ The primary active deliverable is **`oracle-forms-viewer/`**: a pure-native, sta
 │   │   ├── oracle-forms-core/    # Shared AST models, sidecars, geometry
 │   │   ├── oracle-forms-xml/     # quick-xml streaming parser (XML & PLD)
 │   │   ├── oracle-forms-binary/  # ROS 60050 stream & heuristic extractor
-│   │   ├── oracle-forms-cli/     # Standalone CLI (inspect & dump-sql)
+│   │   ├── oracle-forms-db/      # Direct DB query engine (Oracle 23ai, SQLite, Mock)
+│   │   ├── oracle-forms-cli/     # Standalone CLI (inspect, dump-sql, query)
 │   │   └── oracle-forms-server/  # Axum server with embedded UI assets
 │   ├── ui/                       # Vanilla HTML/CSS/JS frontend
 │   └── samples/                  # Redistributable test fixtures (XML, PLD, FMB)
 ├── docs/                     # Architectural specifications & blueprints
 ├── samples/                  # Shared test samples corpus
-├── tools/                    # Oracle 12c Podman container converter
-├── temp/                     # [GITIGNORED] Legacy Kotlin POC, clones, test binaries
+├── tools/                    # Oracle 12c & 14c Podman container converter + 23ai DB
+├── temp/                     # [GITIGNORED] Legacy Kotlin POC, clones, test binaries, plans
 └── HOW-TO-RUN.md             # Server startup and CLI user guide
 ```
 
@@ -62,11 +63,19 @@ cargo run -p oracle-forms-server
 # Serves http://127.0.0.1:7070
 ```
 
-### Inspecting Modules via CLI
+### Inspecting & Querying Modules via CLI
 ```bash
 cd oracle-forms-viewer
+
+# Inspect module structure
 cargo run -p oracle-forms-cli -- inspect samples/orders_fmb.xml
 cargo run -p oracle-forms-cli -- inspect samples/simple_module.fmb
+
+# Execute live database query (Phase A Query Engine)
+cargo run -p oracle-forms-cli -- query samples/test_db_fmb.xml --backend oracle
+cargo run -p oracle-forms-cli -- query samples/orders_fmb.xml --backend mock
+
+# Dump extracted PL/SQL
 cargo run -p oracle-forms-cli -- dump-sql samples/orders_fmb.xml -o ./extracted-sql
 ```
 
