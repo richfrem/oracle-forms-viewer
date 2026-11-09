@@ -494,6 +494,16 @@
     document.getElementById('previewDialog').showModal();
   }
 
+  function switchTabPage(tabName) {
+    if (!activeCanvas || !activeCanvas.tabPages) return;
+    activeTabPage = tabName;
+    document.querySelectorAll('.tab-pill').forEach(p => {
+      p.classList.toggle('active', p.dataset.tabName === tabName || p.textContent === tabName);
+    });
+    renderCanvasSvg();
+  }
+  window.switchSvgTabPage = switchTabPage;
+
   function setActiveCanvas(canvas) {
     activeCanvas = canvas;
     activeTabPage = null;
@@ -503,13 +513,9 @@
       canvas.tabPages.forEach((tp, i) => {
         const pill = document.createElement('span');
         pill.className = `tab-pill ${i === 0 ? 'active' : ''}`;
-        pill.textContent = tp.label || tp.name;
-        pill.onclick = () => {
-          document.querySelectorAll('.tab-pill').forEach(p => p.classList.remove('active'));
-          pill.classList.add('active');
-          activeTabPage = tp.name;
-          renderCanvasSvg();
-        };
+        pill.dataset.tabName = tp.name;
+        pill.textContent = unescapeXml(tp.label || tp.name);
+        pill.onclick = () => switchTabPage(tp.name);
         tabPagePills.appendChild(pill);
       });
       activeTabPage = canvas.tabPages[0].name;
@@ -1067,11 +1073,41 @@
       }
     }
 
-    // Scaled canvas dimensions
+    // Scaled canvas dimensions & dynamic bounding box expansion
     const baseWidth = Math.max(200, scale(canvas.width) || 800);
     const baseHeight = Math.max(150, scale(canvas.height) || 600);
-    const width = baseWidth;
-    const height = needsAutoFlow ? Math.max(baseHeight, currentItemY + 60) : baseHeight;
+
+    // Layer 1: Graphics
+    const canvasGraphics = mod.graphics.filter(g => {
+      if (g.canvasName !== canvas.name) return false;
+      if (canvas.tabPages.length > 0 && activeTabPage && g.tabPageName && g.tabPageName !== activeTabPage) return false;
+      return true;
+    });
+
+    let maxContentX = baseWidth;
+    let maxContentY = baseHeight;
+
+    for (const v of visualItems) {
+      const pos = resolvedPositions.get(`${v.block.name}.${v.item.name}`);
+      const ix = pos ? pos.x : scale(v.item.xPosition || 0);
+      const iy = pos ? pos.y : scale(v.item.yPosition || 0);
+      const iw = pos ? pos.w : scale(v.item.width || 120);
+      const ih = pos ? pos.h : scale(v.item.height || 22);
+      if (ix + iw > maxContentX) maxContentX = ix + iw;
+      if (iy + ih > maxContentY) maxContentY = iy + ih;
+    }
+
+    for (const g of canvasGraphics) {
+      const gx = scale(g.xPosition || 0);
+      const gy = scale(g.yPosition || 0);
+      const gw = scale(g.width || 0);
+      const gh = scale(g.height || 0);
+      if (gx + gw > maxContentX) maxContentX = gx + gw;
+      if (gy + gh > maxContentY) maxContentY = gy + gh;
+    }
+
+    const width = Math.max(baseWidth, maxContentX + 30);
+    const height = Math.max(baseHeight, maxContentY + 30, needsAutoFlow ? currentItemY + 60 : 0);
 
     formsSvg.setAttribute('width', width);
     formsSvg.setAttribute('height', height);
@@ -1092,12 +1128,51 @@
     const bgCol = canvas.backColor || '#d4d0c8';
     svgHtml += `<rect x="0" y="0" width="${width}" height="${height}" fill="${bgCol}"/>`;
 
-    // Layer 1: Graphics
-    const canvasGraphics = mod.graphics.filter(g => {
-      if (g.canvasName !== canvas.name) return false;
-      if (canvas.tabPages.length > 0 && activeTabPage && g.tabPageName && g.tabPageName !== activeTabPage) return false;
-      return true;
-    });
+    // Layer 0.5: Tab Canvas Notebook Body & Interactive Tab Headers
+    if (canvas.tabPages && canvas.tabPages.length > 0) {
+      const tabStartX = (canvas.xPosition && canvas.xPosition > 0) ? scale(canvas.xPosition) : 15;
+      const tabStartY = (canvas.yPosition && canvas.yPosition > 0) ? scale(canvas.yPosition) : 15;
+      const tabWidth = scale(canvas.width) || (width - tabStartX * 2);
+      const tabHeight = scale(canvas.height) || (height - tabStartY - 30);
+      const tabBodyY = tabStartY + 26;
+      const tabBodyH = Math.max(60, tabHeight - 26);
+
+      svgHtml += `
+        <g class="svg-tab-notebook">
+          <!-- Notebook Body Container Frame -->
+          <rect x="${tabStartX}" y="${tabBodyY}" width="${tabWidth}" height="${tabBodyH}" fill="${bgCol}" stroke="#808080" stroke-width="1.5" rx="3"/>
+          <rect x="${tabStartX + 1}" y="${tabBodyY + 1}" width="${tabWidth - 2}" height="${tabBodyH - 2}" fill="none" stroke="#ffffff" stroke-width="1" rx="2"/>
+      `;
+
+      let curTabX = tabStartX + 4;
+      canvas.tabPages.forEach((tp) => {
+        const isActive = tp.name === activeTabPage;
+        const tabLabel = tp.label || tp.name;
+        const tabW = Math.max(90, Math.round(tabLabel.length * 7.5 + 24));
+
+        if (isActive) {
+          svgHtml += `
+            <g class="svg-tab-header active" style="cursor: pointer;" onclick="window.switchSvgTabPage('${escapeHtml(tp.name)}')">
+              <path d="M ${curTabX} ${tabBodyY + 1} L ${curTabX} ${tabStartY + 3} Q ${curTabX} ${tabStartY - 2} ${curTabX + 4} ${tabStartY - 2} L ${curTabX + tabW - 4} ${tabStartY - 2} Q ${curTabX + tabW} ${tabStartY - 2} ${curTabX + tabW} ${tabStartY + 3} L ${curTabX + tabW} ${tabBodyY + 1} Z" fill="#f5f4ef" stroke="#808080" stroke-width="1.5"/>
+              <path d="M ${curTabX + 1.5} ${tabBodyY} L ${curTabX + 1.5} ${tabStartY + 4} Q ${curTabX + 1.5} ${tabStartY - 0.5} ${curTabX + 4} ${tabStartY - 0.5} L ${curTabX + tabW - 3} ${tabStartY - 0.5}" fill="none" stroke="#ffffff" stroke-width="1"/>
+              <!-- Open bottom line to seamlessly merge into active notebook body -->
+              <line x1="${curTabX + 1}" y1="${tabBodyY}" x2="${curTabX + tabW - 1}" y2="${tabBodyY}" stroke="#f5f4ef" stroke-width="2.5"/>
+              <text x="${curTabX + tabW / 2}" y="${tabStartY + 16}" text-anchor="middle" font-family="Segoe UI, Tahoma, sans-serif" font-size="11" font-weight="bold" fill="#000">${escapeHtml(tabLabel)}</text>
+            </g>
+          `;
+        } else {
+          svgHtml += `
+            <g class="svg-tab-header inactive" style="cursor: pointer;" onclick="window.switchSvgTabPage('${escapeHtml(tp.name)}')">
+              <path d="M ${curTabX} ${tabBodyY} L ${curTabX} ${tabStartY + 6} Q ${curTabX} ${tabStartY + 3} ${curTabX + 3} ${tabStartY + 3} L ${curTabX + tabW - 3} ${tabStartY + 3} Q ${curTabX + tabW} ${tabStartY + 3} ${curTabX + tabW} ${tabStartY + 6} L ${curTabX + tabW} ${tabBodyY} Z" fill="#d0ccc3" stroke="#808080" stroke-width="1"/>
+              <text x="${curTabX + tabW / 2}" y="${tabStartY + 18}" text-anchor="middle" font-family="Segoe UI, Tahoma, sans-serif" font-size="11" fill="#444">${escapeHtml(tabLabel)}</text>
+            </g>
+          `;
+        }
+        curTabX += tabW + 3;
+      });
+
+      svgHtml += `</g>`;
+    }
 
     for (const g of canvasGraphics) {
       // If auto-flow is managing unpositioned layout, ignore unpositioned dummy frames
@@ -1830,9 +1905,20 @@
     return highlightedLines.join('\n');
   }
 
-  function escapeHtml(str) {
+  function unescapeXml(str) {
     if (!str) return '';
     return str
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'");
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return unescapeXml(str)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
