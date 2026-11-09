@@ -5,6 +5,7 @@ tasks/
 .fmb
 tools/podman-converter/installer/
 tools/podman-converter/oracle_home/
+tools/podman-converter/oracle_home_14c/
 context/
 *.zip
 *.bin

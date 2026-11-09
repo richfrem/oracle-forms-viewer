@@ -1,6 +1,6 @@
-# Running Native Oracle Forms Builder GUI (frmbld)
+# Running Native Oracle Forms Builder GUI (frmbld) & Live Forms
 
-This guide documents how to launch and run the official, visual **Oracle Forms Builder 12c (`frmbld`)** application from the containerized Linux installation on macOS, Linux, and Windows.
+This guide documents how to launch and run the official, visual **Oracle Forms Builder (`frmbld`)** application (12c & 14c) from the containerized Linux installation on macOS, Linux, and Windows, as well as running live forms against Oracle Database 23ai Free via Forms Standalone Launcher (FSAL).
 
 ---
 
@@ -69,24 +69,20 @@ xhost +local:
 
 ---
 
-## 3. Launching Oracle Forms Builder
+## 3. Launching Oracle Forms Builder & Live Forms
 
-### Option A: Using the Automated Python Runner (Recommended)
+### Option A: Running Live Forms via Desktop FSAL (Recommended)
 
-A convenience launcher script is provided at `tools/podman-converter/run_forms_builder.py`. It automatically verifies X11, starts XQuartz if needed, authorizes the display, mounts the repository to `/work`, sets up `FORMS_PATH`, and launches `frmbld`:
+To run any form live with database connectivity on your native desktop (without XQuartz or browser plugins), use the APM runner:
 
 ```bash
-python3 tools/podman-converter/run_forms_builder.py
-```
-
-You can also pass a file path directly to open it on startup:
-```bash
-python3 tools/podman-converter/run_forms_builder.py /work/samples/simple_module.fmb
+# Compile and run form live on desktop:
+python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/run_form.py samples/test_db.fmb
 ```
 
 ---
 
-### Option B: Direct Podman Command
+### Option B: Launching Forms Builder IDE (`frmbld`) via Direct Podman Command
 
 If you prefer to run Podman directly without the script:
 
@@ -165,3 +161,23 @@ If your form depends on libraries in a different folder, add that folder to the 
 | **`Error: cannot connect to the Podman socket`** | Podman machine VM is not running. | Run `podman machine start` |
 | **Fonts look small or low-resolution** | High-DPI / Retina display scaling in XQuartz. | In XQuartz Settings > **Output**, check or uncheck **"Enable full screen mode"** or adjust display scaling via `xrandr`. |
 | **Missing Attached Library error on Open** | The referenced `.pll` or `.olb` is not in `FORMS_PATH`. | Place the dependent `.pll` / `.olb` files into `temp/example-fmb/` so `FORMS_PATH` discovers them automatically. |
+
+---
+
+## 7. Running Live Forms via Forms Standalone Launcher (FSAL)
+
+To run a form interactively with real database transactions against the local Oracle Database 23ai container:
+
+1. **Start the Oracle Database 23ai Free container**:
+   ```bash
+   podman start oracle23ai-lite
+   ```
+2. **Compile the form into runtime format (`.fmx`)**:
+   ```bash
+   python3 tools/podman-converter/convert_fmb.py samples/simple_module.fmb --compile
+   ```
+3. **Launch the live form via FSAL**:
+   ```bash
+   java -jar /path/to/frmsal.jar -url "http://localhost:9001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx&userid=scott/tiger@oracle-db-23ai:1521/FREEPDB1"
+   ```
+This launches the native desktop Java client window directly connected to the server and database.

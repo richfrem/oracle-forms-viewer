@@ -1,12 +1,16 @@
-# Podman Oracle Forms 12c Container Environment
+# Podman Oracle Forms Container Environment (12c & 14c + 23ai Database)
 
-An on-demand, containerized environment hosting the official **Oracle Forms 12c Linux installation** on **macOS Apple Silicon (ARM64)** and Linux using Podman and Rosetta 2 (`linux/amd64`) emulation.
+An on-demand, containerized environment hosting official **Oracle Forms 12c and 14c installations** alongside **Oracle Database 23ai Free** on **macOS Apple Silicon (ARM64)** and Linux using Podman.
 
-This provides full developer capabilities without requiring a Windows virtual machine or remote server:
-1. **Interactive Visual Forms Builder GUI (`run_forms_builder.py`)**: Runs the full official Oracle Forms Builder IDE (`frmbld`) on macOS/Linux via X11 forwarding.
+> [!NOTE]
+> All container scripts have been refactored and packaged into **APM Skills** under `plugins/oracle-forms/.apm/skills/`. They follow universal coding conventions (type hints, standardized headers, dual-layer docstrings) and can be invoked directly from the CLI or autonomously by AI agents.
+
+This environment provides full developer and runtime capabilities without requiring a Windows virtual machine or remote server:
+1. **Live Form Execution against Real Database (`run_form.py`)**: Runs working forms on WebLogic 14c (`formsapp` on port 7001) connected to Oracle Database 23ai Free using native desktop **Forms Standalone Launcher (FSAL)**.
 2. **Forms/Menus/Object Libraries to XML (`convert_fmb.py`)**: Executes official Oracle `frmf2xml.sh` to generate vendor-standard XML ground truth.
 3. **PL/SQL Libraries to Text & Compiler (`convert_pll.py`)**: Executes official Oracle `frmcmp_batch` to export `.pll` binaries into `.pld` ASCII text scripts and compile them back.
 4. **Oracle Reports Converter (`convert_rpt.py`)**: Interface for converting Oracle Reports (`.rdf`, `.rpt`, `.rex`) using Oracle `rwconverter.sh`.
+5. **Headless Batch Compiler (`compile_form.py`)**: Compiles `.fmb` into `.fmx` with SQL*Net database binding.
 
 ---
 
@@ -14,19 +18,20 @@ This provides full developer capabilities without requiring a Windows virtual ma
 
 ```mermaid
 flowchart TD
-    subgraph Track1["Track 1: Official Oracle Toolchain (Podman linux/amd64)"]
+    subgraph Track1["Track 1: Official Oracle Toolchain (Podman linux/amd64 & APM Skills)"]
         FMB[Binary .fmb / .mmb / .olb]
         PLL[Binary Library .pll]
         RPT[Reports .rdf / .rpt]
         
-        FMB --> CONV_FMB[convert_fmb.py<br/>frmf2xml.sh]
+        FMB --> RUN[run_form.py<br/>Auto Compile & FSAL Launch]
+        FMB --> CONV_FMB[convert_fmb.py<br/>Forms2XML]
         PLL --> CONV_PLL[convert_pll.py<br/>frmcmp_batch]
         RPT --> CONV_RPT[convert_rpt.py<br/>rwconverter.sh]
-        FMB --> GUI[run_forms_builder.py<br/>Forms Builder GUI]
         
-        CONV_FMB --> XML[Certified Oracle 12c XML]
+        CONV_FMB --> XML[Certified Oracle 14c XML]
         CONV_PLL --> PLD[PL/SQL Text Script .pld]
         CONV_RPT --> RPT_OUT[Reports XML / Text .rex]
+        RUN --> LIVE[Live macOS / Windows Desktop FSAL Window]
     end
 
     subgraph Track2["Track 2: Pure-Native Rust Engine (oracle-forms-viewer)"]
@@ -38,52 +43,44 @@ flowchart TD
     end
 
     XML -.->|Differential Validation| RUST_XML
-    GUI -.->|Visual Ground Truth| VIEWER
+    LIVE -.->|Visual Ground Truth| VIEWER
 ```
 
 ---
 
-## 2. Capability 1: Running Forms Builder GUI (`run_forms_builder.py`)
+## 2. Capability 1: Running Forms Live in WebLogic (`run_form.py`)
 
-Launch the visual Oracle Forms Builder IDE on macOS or Linux:
+Run any `.fmb`, `.xml`, or `.fmx` form directly on your desktop via Forms Standalone Launcher (FSAL):
 
 ```bash
-python3 tools/podman-converter/run_forms_builder.py
+# Automatically converts (if XML), compiles (if FMB), and launches FSAL on desktop:
+python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/run_form.py samples/test_db.fmb
+
+# Run directly from compiled FMX:
+python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/run_form.py samples/test_db.fmx
+
+# Prompt for credentials via the native GUI Logon dialog:
+python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/run_form.py samples/test_db.fmx --interactive
 ```
-
-Or open a specific module directly:
-```bash
-python3 tools/podman-converter/run_forms_builder.py /work/samples/simple_module.fmb
-```
-
-### macOS Prerequisites (XQuartz)
-1. Install XQuartz: `brew install --cask xquartz`
-2. In **XQuartz > Settings > Security**, enable **"Allow connections from network clients"**.
-3. Restart XQuartz (`Cmd + Q` and reopen).
-4. Run `python3 tools/podman-converter/run_forms_builder.py`. The Python script automatically configures `xhost`, exports required paths, mounts your repository to `/work`, sets up `FORMS_BUILDER_CLASSPATH`, and starts `frmbld`.
-
-Inside Forms Builder, navigate to `/work` in the File dialog to open forms from `samples/` or internal test folders.
-
-For complete details on navigating Forms Builder, editing canvases, and inspecting triggers, see **[ORACLE-FORMS-BUILDER-GUI.md](../../ORACLE-FORMS-BUILDER-GUI.md)**.
 
 ---
 
 ## 3. Capability 2: Headless Batch Conversion Scripts
 
-All scripts are written in Python 3, follow the repository's coding conventions, and require zero local Oracle runtime installations.
+All scripts are located in `plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/`:
 
 ### 1. Forms, Menus & Object Libraries to XML (`convert_fmb.py`)
 Converts `.fmb`, `.mmb`, and `.olb` modules into certified XML representations (`*_fmb.xml`, `*_mmb.xml`, `*_olb.xml`):
 
 ```bash
 # Verify environment readiness
-python3 tools/podman-converter/convert_fmb.py --check
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_fmb.py --check
 
 # Convert a form (produces <stem>_fmb.xml beside original):
-python3 tools/podman-converter/convert_fmb.py samples/simple_module.fmb
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_fmb.py samples/simple_module.fmb
 
 # Convert with custom destination:
-python3 tools/podman-converter/convert_fmb.py samples/simple_module.fmb -o ./converted/simple_module.xml
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_fmb.py samples/simple_module.fmb -o ./converted/simple_module.xml
 ```
 
 ### 2. PL/SQL Libraries to Text & Compiler (`convert_pll.py`)
@@ -91,17 +88,28 @@ Converts binary `.pll` libraries to human-readable `.pld` text scripts (and comp
 
 ```bash
 # Verify environment readiness
-python3 tools/podman-converter/convert_pll.py --check
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_pll.py --check
 
 # Export binary .pll to text .pld:
-python3 tools/podman-converter/convert_pll.py samples/library.pll
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_pll.py samples/library.pll
 
 # Compile text .pld back into binary .pll:
-python3 tools/podman-converter/convert_pll.py samples/library.pld --compile
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_pll.py samples/library.pld --compile
 ```
 
 ### 3. Oracle Reports Converter (`convert_rpt.py`)
 CLI interface for converting Oracle Reports definitions (`.rdf`, `.rpt`, `.rex`) into Reports XML or text definitions using `rwconverter.sh`:
+
+```bash
+# Verify environment readiness
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_rpt.py --check
+
+# Convert report to XML (default, if rwconverter is available):
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_rpt.py samples/invoice.rdf
+
+# Export report to ASCII text script (.rex):
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_rpt.py samples/invoice.rdf --format rex
+```
 
 > [!WARNING]
 > **Container Installation Limitation**: The container's `oracle_home` was installed using Oracle's `Standalone Forms Builder` profile, which deliberately omits Oracle Reports (`rwconverter.sh`). In Oracle 12c, installing Reports requires a separate, full **Oracle Fusion Middleware Infrastructure (WebLogic Server 12c)** installation.
@@ -114,32 +122,30 @@ CLI interface for converting Oracle Reports definitions (`.rdf`, `.rpt`, `.rex`)
 > cargo run -p oracle-forms-cli -- dump-sql /path/to/report.rdf -o ./extracted-sql
 > ```
 
-```bash
-# Verify environment readiness
-python3 tools/podman-converter/convert_rpt.py --check
-
-# Convert report to XML (default, if rwconverter is available):
-python3 tools/podman-converter/convert_rpt.py samples/invoice.rdf
-
-# Export report to ASCII text script (.rex):
-python3 tools/podman-converter/convert_rpt.py samples/invoice.rdf --format rex
-```
-
 ---
 
 ## 4. Architecture & Lifecycle
 
 ```text
-[ Host Machine (macOS ARM64 / Linux x86_64) ]
+[ Host Machine (macOS ARM64 / Linux x86_64 / Windows 11) ]
    │
-   ├── run_forms_builder.py  ──► Launches GUI via X11 / XQuartz
-   ├── convert_fmb.py        ──► Runs headless frmf2xml.sh batch conversion
-   ├── convert_pll.py        ──► Runs headless frmcmp_batch for PL/SQL libraries
-   └── convert_rpt.py        ──► Dispatches rwconverter.sh for Oracle Reports
-          │
-          ▼  (podman run --rm --platform linux/amd64 -v host_dir:/work:Z)
-[ Podman Container (linux/amd64) ]
-   ├── OS: Oracle Linux 8 Slim
+   ├── plugins/oracle-forms/.apm/skills/
+   │   ├── setting-up-oracle-testbed/
+   │   │   └── scripts/health_check.py          ──► Verifies Podman containers & DB
+   │   ├── converting-oracle-artifacts/
+   │   │   ├── scripts/convert_fmb.py           ──► Headless Forms2XML / XML2Forms
+   │   │   ├── scripts/convert_pll.py           ──► Headless PLL <-> PLD converter
+   │   │   └── scripts/convert_rpt.py           ──► Reports rwconverter.sh
+   │   └── compiling-and-running-oracle-forms/
+   │       ├── scripts/run_form.py              ──► End-to-end convert, compile, & launch
+   │       ├── scripts/compile_form.py          ──► Headless frmcmp_batch compiler
+   │       └── scripts/launch_fsal.py           ──► Native desktop FSAL client (Java)
+   │
+   ▼  (Mounted workspace: /work:Z, AdminServer: 7001, Oracle 23ai: 1521)
+[ Podman Containers ]
+   ├── forms-server-14c (Oracle Linux 8 + JDK 17 + Forms 14c + WebLogic)
+   └── oracle23ai-lite  (Oracle Database 23ai Free PDB FREEPDB1)
+```
    ├── Runtime: OpenJDK 8, X11 & Motif libraries, glibc-devel
    ├── /work (Mounted workspace root)
    └── /oracle_home (Mounted Oracle Forms 12c installation)
@@ -154,13 +160,15 @@ python3 tools/podman-converter/convert_rpt.py samples/invoice.rdf --format rex
 
 | File / Folder | Purpose |
 | :--- | :--- |
-| `Containerfile` | Container definition building `forms-converter:latest` with OpenJDK 8, Motif, and X11 libraries. |
-| `run_forms_builder.py` | Python GUI launcher configuring XQuartz, display forwarding, `FORMS_BUILDER_CLASSPATH`, and starting `frmbld`. |
-| `convert_fmb.py` | Python CLI runner for headless `frmf2xml.sh` conversion (`.fmb`, `.mmb`, `.olb` to XML). |
-| `convert_pll.py` | Python CLI runner for headless `frmcmp_batch` conversion (`.pll` <-> `.pld`). |
-| `convert_rpt.py` | Python CLI runner for headless `rwconverter.sh` conversion (`.rdf`, `.rpt` to XML / `.rex`). |
+| `Containerfile` | Container definition building `forms-converter:latest` with OpenJDK 8, Motif, and X11 libraries for Forms 12c. |
+| `Containerfile.14c` | Container definition building `forms-converter-14c:latest` with OpenJDK 17, Motif, and X11 libraries for Forms 14c. |
+| `compose.yaml` | Multi-service Podman compose defining `oracle-db-23ai`, `forms-converter-12c`, and `forms-server-14c`. |
 | `oracle_home/` | Installed Oracle Forms 12c standalone home containing binaries (`bin/frmbld`, `bin/frmcmp_batch`, `bin/frmf2xml.sh`, `lib/`, `jlib/`). |
-| `installer/` | Staging directory for original Oracle installation archives (excluded from Git). |
+| `oracle_home_14c/` | Installed Oracle Forms 14c enterprise home containing FMW Infrastructure, WebLogic, Forms, and Reports. |
+| `installer/` | Staging directory for original Oracle installation archives and silent response files (`infra14c_silent.rsp`, `forms14c_silent.rsp`). |
+
+> [!NOTE]
+> All runner and conversion scripts have been packaged and organized into APM skills under `plugins/oracle-forms/.apm/skills/`.
 
 ---
 
@@ -170,4 +178,56 @@ The container environment connects directly with the pure-native Rust toolchain:
 1. **Certified XML Generation**: `convert_fmb.py` generates certified `*_fmb.xml` files consumed by `oracle-forms-xml` and displayed in `oracle-forms-server` on port 7070.
 2. **PL/SQL Text Ingestion**: `convert_pll.py` produces `.pld` files directly parseable by the native Rust PLD parser in `oracle-forms-xml`.
 3. **Sibling Discovery**: When opening a `.fmb` in `oracle-forms-server`, the server automatically detects if a companion `*_fmb.xml` exists and renders the canonical layout.
-4. **Visual Ground-Truth Audit**: Running `run_forms_builder.py` allows side-by-side inspection to confirm that our native SVG canvas renderer reproduces authentic Oracle coordinate scaling and widget layouts.
+4. **Visual Ground-Truth Audit**: Running `run_form.py` with FSAL allows side-by-side inspection against `oracle-forms-server` to confirm that our native SVG canvas renderer accurately reproduces authentic Oracle coordinate scaling and widget layouts.
+5. **Differential Schema Validation**: Compare 12c Forms2XML exports with 14c Forms2XML exports to isolate Oracle syntax deprecations or modern additions.
+
+---
+
+## 7. Oracle Database 23ai Free & Forms 14c Runtime
+
+### Running Oracle Database 23ai Free (Native ARM64)
+Oracle Database 23ai Free runs as a native ARM64 container on Apple Silicon:
+
+```bash
+# Start 23ai Free Lite (runs on port 1521)
+podman run -d \
+  --name oracle23ai-lite \
+  -p 1521:1521 \
+  -e ORACLE_PWD=Welcome1 \
+  container-registry.oracle.com/database/free:latest-lite
+
+# Check startup logs
+podman logs -f oracle23ai-lite
+```
+
+Connecting to the database:
+- **Host**: `localhost` (or `host.containers.internal` inside containers)
+- **Port**: `1521`
+- **Service Name**: `FREEPDB1`
+- **User**: `system` / **Password**: `Welcome1`
+
+### Installing Oracle Forms 14c (Two-Stage Silent Install)
+
+1. **Build the 14c container image**:
+   ```bash
+   podman build -t forms-converter-14c:latest -f tools/podman-converter/Containerfile.14c tools/podman-converter
+   ```
+
+2. **Stage the installers into `tools/podman-converter/installer`**:
+   - `fmw_14.1.2.0.0_infrastructure.jar` (from `V1045135-01.zip`)
+   - `fmw_14.1.2.0.0_fr_linux64.bin` (from `V1045121-01.zip`)
+
+3. **Run Stage 1: Fusion Middleware Infrastructure 14c**:
+   ```bash
+   podman compose -f tools/podman-converter/compose.yaml run --rm infra-install-14c
+   ```
+
+4. **Run Stage 2: Forms and Reports 14c**:
+   ```bash
+   podman compose -f tools/podman-converter/compose.yaml run --rm forms-install-14c
+   ```
+
+5. **Start WebLogic & Forms Server**:
+   ```bash
+   podman compose -f tools/podman-converter/compose.yaml up -d forms-server-14c
+   ```

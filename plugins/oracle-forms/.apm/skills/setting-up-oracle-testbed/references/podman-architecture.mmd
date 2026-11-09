@@ -1,0 +1,76 @@
+flowchart TB
+    classDef host fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a;
+    classDef vm fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d;
+    classDef storage fill:#eff6ff,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a;
+    classDef container fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f;
+    classDef db fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b;
+    classDef mount fill:#ffffff,stroke:#94a3b8,stroke-dasharray:4 2,color:#334155;
+    classDef oracleStorage fill:#fff1f2,stroke:#e11d48,stroke-width:2.5px,color:#881337;
+    classDef execution fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#4c1d95;
+
+    subgraph Host["Host Machine (macOS ARM64 / Windows 11 / Linux)"]
+        direction TB
+        
+        subgraph HostTools["APM Skills & CLI Runners (plugins/oracle-forms/)"]
+            RUNNER["run_form.py (Auto Convert, Compile, & Launch)"]:::host
+            COMPILER["compile_form.py (Batch frmcmp_batch)"]:::host
+            CONVERTER["convert_fmb.py / convert_pll.py / convert_rpt.py"]:::host
+            HEALTH["health_check.py (3-Stage Testbed Validator)"]:::host
+        end
+
+        subgraph HostFS["Host Filesystem Bind Mounts"]
+            WorkDir["samples/ (Modules, FMB, FMX, XML)"]:::storage
+            OH14["tools/podman-converter/oracle_home_14c/ (FMW 14.1.2)"]:::oracleStorage
+            FSAL_JAR["oracle_home_14c/forms/java/frmsal.jar"]:::storage
+        end
+
+        subgraph DesktopApp["Native Desktop Client"]
+            FSAL_PROC["Java Runtime: Forms Standalone Launcher (FSAL)"]:::execution
+            GUI_WIN["Native Forms Window (Logon & 2D Vector Canvas)"]:::execution
+        end
+    end
+
+    subgraph PodmanNet["Podman Bridge Network (oracle-net)"]
+        direction TB
+
+        subgraph Forms14cContainer["Container: forms-server-14c (linux/amd64 via Rosetta 2)"]
+            direction TB
+            WLS["WebLogic 14.1.2 AdminServer (Port 7001)"]:::container
+            SERVLET["Forms Listener Servlet (/forms/frmservlet)"]:::container
+            FRMCMP["Headless Batch Compiler (bin/frmcmp_batch)"]:::container
+            F2XML["Forms2XML Engine (bin/frmf2xml.sh)"]:::container
+            RPT["Reports Converter (bin/rwconverter.sh)"]:::container
+        end
+
+        subgraph DB23aiContainer["Container: oracle23ai-lite (Native ARM64 / aarch64)"]
+            direction TB
+            DB_ENGINE["Oracle Database 23ai Free Engine"]:::db
+            LISTENER["TNS Listener (Port 1521)"]:::db
+            PDB["Pluggable Database: FREEPDB1"]:::db
+            USER_SCHEMA["Test Schema: forms_user / test_items"]:::db
+        end
+    end
+
+    %% Bind Mounts
+    WorkDir -.->|Mounted at /work:Z| Forms14cContainer
+    OH14 -.->|Mounted at /oracle_home_14c:Z| Forms14cContainer
+
+    %% Orchestration & Compilation
+    RUNNER -->|Executes batch compile| FRMCMP
+    RUNNER -->|Launches client| FSAL_PROC
+    COMPILER -->|Executes| FRMCMP
+    CONVERTER -->|Executes| F2XML
+    FSAL_JAR -.->|Loaded by| FSAL_PROC
+
+    %% Client-Server Communication
+    FSAL_PROC -->|Renders UI| GUI_WIN
+    FSAL_PROC <==>|HTTP :7001 Forms Session Protocol| SERVLET
+    SERVLET --- WLS
+
+    %% Database Communication
+    WLS <==>|SQL*Net TCP :1521 (FREEPDB1)| LISTENER
+    LISTENER --- DB_ENGINE
+    DB_ENGINE --- PDB
+    PDB --- USER_SCHEMA
+
+    HEALTH -.->|Probes Containers, HTTP 7001, & SQL 1521| HostTools

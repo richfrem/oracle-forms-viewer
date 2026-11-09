@@ -1,13 +1,82 @@
+version: '3.8'
+
+networks:
+  oracle-net:
+    driver: bridge
+
 services:
-  oracle-install:
+  # Oracle Database 23ai Free (Native ARM64 / Multi-Arch)
+  oracle-db-23ai:
+    image: container-registry.oracle.com/database/free:latest-lite
+    container_name: oracle23ai-lite
+    ports:
+      - "1521:1521"
+    environment:
+      - ORACLE_PWD=Welcome1
+    networks:
+      - oracle-net
+    restart: unless-stopped
+
+  # Forms 12c Standalone Converter & GUI (linux/amd64 via Rosetta 2)
+  forms-converter-12c:
     image: forms-converter:latest
+    platform: linux/amd64
+    container_name: forms-12c-converter
+    volumes:
+      - ./oracle_home:/oracle_home:Z
+      - ../..:/work:Z
+    environment:
+      - ORACLE_HOME=/oracle_home
+      - DISPLAY=host.containers.internal:0
+    networks:
+      - oracle-net
+
+  # 14c Stage 1: Install FMW Infrastructure 14.1.2 into oracle_home_14c
+  infra-install-14c:
+    image: forms-converter-14c:latest
     platform: linux/amd64
     volumes:
       - ./installer:/installer:Z
-      - ./oracle_home:/oracle_home:Z
+      - ./oracle_home_14c:/oracle_home_14c:Z
     command: >
-      /installer/fmw_12.2.1.4.0_fr_linux64.bin
+      java -jar /installer/fmw_14.1.2.0.0_infrastructure.jar
       -silent
       -ignoreSysPrereqs
-      -responseFile /installer/forms_silent.rsp
+      -responseFile /installer/infra14c_silent.rsp
       -invPtrLoc /installer/oraInst.loc
+    networks:
+      - oracle-net
+
+  # 14c Stage 2: Install Forms and Reports 14.1.2 into oracle_home_14c
+  forms-install-14c:
+    image: forms-converter-14c:latest
+    platform: linux/amd64
+    volumes:
+      - ./installer:/installer:Z
+      - ./oracle_home_14c:/oracle_home_14c:Z
+    command: >
+      /installer/fmw_14.1.2.0.0_fr_linux64.bin
+      -silent
+      -ignoreSysPrereqs
+      -responseFile /installer/forms14c_silent.rsp
+      -invPtrLoc /installer/oraInst.loc
+    networks:
+      - oracle-net
+
+  # Forms 14c Server (WebLogic AdminServer & WLS_FORMS)
+  forms-server-14c:
+    image: forms-converter-14c:latest
+    platform: linux/amd64
+    container_name: forms-14c-server
+    ports:
+      - "7001:7001"   # WebLogic AdminServer
+      - "9001:9001"   # WLS_FORMS managed server
+    volumes:
+      - ./oracle_home_14c:/oracle_home_14c:Z
+      - ../..:/work:Z
+    environment:
+      - ORACLE_HOME=/oracle_home_14c
+      - DISPLAY=host.containers.internal:0
+      - DB_URL=oracle-db-23ai:1521/FREEPDB1
+    networks:
+      - oracle-net

@@ -1,0 +1,12 @@
+{
+  "name": "oracle-forms",
+  "version": "0.1.0",
+  "description": "Autonomous tooling, headless compilation, XML round-trip, and testbed container orchestration for Oracle Forms and Reports (12c/14c).",
+  "author": {
+    "name": "Richard Fremmerlid"
+  },
+  "license": "MIT",
+  "keywords": [
+    "oracle-forms"
+  ]
+}

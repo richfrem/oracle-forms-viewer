@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+"""
+compile_form.py (CLI)
+=====================================
+
+Purpose:
+    Headless batch compiler wrapper for Oracle Forms (.fmb), menus (.mmb),
+    and libraries (.pll) using frmcmp_batch inside the Forms 14c container
+    with automatic environment variable injection, TNS Net services binding,
+    and structured error parsing.
+
+Layer: Tooling / Skill Script (compiling-and-running-oracle-forms)
+
+Usage Examples:
+    python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/compile_form.py samples/test_db.fmb
+    python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/compile_form.py samples/simple_module.fmb --offline
+    python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/compile_form.py samples/mainmenu.mmb --type menu
+
+Supported Object Types:
+    - .fmb (Oracle Forms binary form module) -> .fmx
+    - .mmb (Oracle Forms binary menu module) -> .mmx
+    - .pll (Oracle Forms binary PL/SQL library) -> .plx
+
+CLI Arguments:
+    module                : Path to input .fmb, .mmb, or .pll file.
+    -t, --type <str>      : Module type (form, menu, library; default: form).
+    --offline             : Compile offline without database logon (logon=no).
+    -u, --userid <str>    : Database logon connection string (default: forms_user/Welcome123#@FREEPDB1).
+
+Input Files:
+    - Target source module (.fmb, .mmb, or .pll)
+    - Container 'forms-server-14c' running with /oracle_home_14c/bin/frmcmp_batch
+    - TNS configuration: /oracle_home_14c/user_projects/domains/base_domain/config/fmwconfig/tnsnames.ora
+
+Output:
+    - Compiled executable file (.fmx, .mmx, or .plx) placed in source directory
+
+Key Functions:
+    - resolve_workspace_root() -> Path
+    - build_compiler_command(container_path: str, mod_type: str, logon_param: str) -> str
+    - execute_compilation(cmd: str) -> int
+    - parse_cli_args(argv: List[str]) -> argparse.Namespace
+    - main() -> int
+
+Script Dependencies:
+    - Python 3.8+ (standard library: sys, os, argparse, subprocess, pathlib, typing)
+    - Podman CLI available on host system
+    - Running container: forms-server-14c
+
+Consumed by:
+    - run_form.py (compilation stage before launch)
+    - Developers running batch compiles of legacy forms
+"""
+
+import sys
+import os
+import argparse
+import subprocess
+from pathlib import Path
+from typing import List
+
+
+# Resolves the absolute path to the repository root directory.
+def resolve_workspace_root() -> Path:
+    """Locate the top-level repository root directory.
+
+    Returns:
+        Path pointing to the repository root.
+    """
+    return Path(__file__).resolve().parents[6]
+
+
+# Constructs the shell command executed inside the Forms 14c container for frmcmp_batch.
+def build_compiler_command(container_path: str, mod_type: str, logon_param: str) -> str:
+    """Build the environment exports and frmcmp_batch invocation string.
+
+    Args:
+        container_path: Path to module inside /work mount.
+        mod_type: Module type (form, menu, library).
+        logon_param: Database logon argument string.
+
+    Returns:
+        Complete bash shell command string.
+    """
+    return (
+        f"export ORACLE_HOME=/oracle_home_14c; "
+        f"export LD_LIBRARY_PATH=/oracle_home_14c/lib; "
+        f"export ORACLE_TERM=vt220; "
+        f"export TERM=vt220; "
+        f"export FORMS_PATH=/oracle_home_14c/forms:/work/samples:{container_path.rsplit('/', 1)[0]}; "
+        f"export TNS_ADMIN=/oracle_home_14c/user_projects/domains/base_domain/config/fmwconfig; "
+        f"/oracle_home_14c/bin/frmcmp_batch "
+        f"module={container_path} "
+        f"module_type={mod_type} "
+        f"{logon_param} "
+        f"compile_all=yes"
+    )
+
+
+# Dispatches the compilation command inside the container and processes output.
+def execute_compilation(cmd: str) -> int:
+    """Execute the compiler inside the container via podman exec.
+
+    Args:
+        cmd: Shell command string to execute.
+
+    Returns:
+        0 on success, non-zero on compilation failure.
+    """
+    podman_cmd = ["podman", "exec", "-u", "oracle", "forms-server-14c", "/bin/sh", "-c", cmd]
+    res = subprocess.run(podman_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    print(res.stdout)
+
+    if "Created form file" in res.stdout or "Created menu file" in res.stdout or res.returncode == 0:
+        print("Compilation SUCCESSFUL.")
+        return 0
+    else:
+        print(f"Compilation FAILED with exit code {res.returncode}.", file=sys.stderr)
+        return 1
+
+
+# Parses CLI arguments for compile_form.
+def parse_cli_args(argv: List[str]) -> argparse.Namespace:
+    """Parse command-line arguments for the form compiler.
+
+    Args:
+        argv: List of raw CLI arguments.
+
+    Returns:
+        Parsed arguments namespace.
+    """
+    parser = argparse.ArgumentParser(description="Headless Oracle Forms Batch Compiler")
+    parser.add_argument("module", help="Path to input .fmb, .mmb, or .pll file")
+    parser.add_argument("-t", "--type", default="form", choices=["form", "menu", "library"], help="Module type (default: form)")
+    parser.add_argument("--offline", action="store_true", help="Compile offline without database logon (logon=no)")
+    parser.add_argument("-u", "--userid", default="forms_user/Welcome123#@FREEPDB1", help="Database logon connection string")
+    return parser.parse_args(argv)
+
+
+# Main execution entry point for compile_form.py.
+def main() -> int:
+    """Validate inputs, resolve paths, and trigger headless compilation.
+
+    Returns:
+        0 on success, 1 on failure.
+    """
+    args = parse_cli_args(sys.argv[1:])
+    input_path = Path(args.module).resolve()
+
+    if not input_path.exists():
+        print(f"Error: Input module not found: {input_path}", file=sys.stderr)
+        return 1
+
+    repo_root = resolve_workspace_root()
+    try:
+        rel_path = input_path.relative_to(repo_root)
+        container_module_path = f"/work/{rel_path}"
+    except ValueError:
+        container_module_path = f"/work/{input_path.name}"
+
+    logon_param = "logon=no" if args.offline else f"userid='{args.userid}'"
+    print(f"Compiling {input_path.name} ({args.type}) via container frmcmp_batch...")
+    cmd = build_compiler_command(container_module_path, args.type, logon_param)
+    return execute_compilation(cmd)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

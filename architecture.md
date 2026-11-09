@@ -10,11 +10,20 @@ It operates on a **two-track strategy**:
 
 ```mermaid
 flowchart TD
-    subgraph Track1["Track 1: Official Oracle Ground-Truth Engine"]
-        FMB1[Binary .FMB / .MMB / .OLB] --> PODMAN[Podman Linux Container<br/>Oracle Forms 12c frmf2xml / frmcmp_batch]
-        PODMAN --> CERT_XML[Certified Oracle 12c XML Ground Truth]
-        PODMAN --> CERT_PLD[Exported .pld PL/SQL Scripts]
-        PODMAN --> GUI[Forms Builder GUI frmbld via run_forms_builder.py]
+    subgraph Track1["Track 1: Official Oracle Ground-Truth & Runtime Engine"]
+        subgraph FMW_ENV["Oracle Container Space (Podman)"]
+            F12["Oracle Forms 12c (Standalone Builder)<br/>frmf2xml / frmcmp_batch / frmbld"]
+            F14["Oracle Forms 14c (FMW Infrastructure)<br/>frmf2xml / WebLogic WLS_FORMS :9001 / AdminServer :7001"]
+            DB23["Oracle Database 23ai Free (Native ARM64)<br/>Port 1521 (FREEPDB1)"]
+        end
+        FMB1[Binary .FMB / .MMB / .OLB] --> F12
+        FMB1 --> F14
+        F12 --> CERT_XML[Certified Oracle XML Ground Truth]
+        F12 --> CERT_PLD[Exported .pld PL/SQL Scripts]
+        F12 --> GUI[Forms Builder GUI frmbld via X11]
+        F14 --> CERT_XML
+        F14 <-->|SQL*Net :1521| DB23
+        F14 --> FSAL[Forms Standalone Launcher FSAL Live Execution via run_form.py]
     end
 
     subgraph Track2["Track 2: Pure Native Rust Engine (oracle-forms-viewer)"]
@@ -30,7 +39,7 @@ flowchart TD
         CORE --> CLI[oracle-forms-cli<br/>Terminal Inspector & SQL Dumper]
     end
 
-    CERT_XML -.->|Differential Validation| QXML
+    CERT_XML -.->|Differential Validation 12c vs 14c| QXML
 ```
 
 ---
@@ -102,14 +111,47 @@ The frontend embedded in `oracle-forms-server` uses vanilla JavaScript, CSS, and
 
 ## 5. Track 1 Container Architecture (`tools/podman-converter`)
 
-For baseline validation against certified Oracle output:
+The Track 1 environment provides the official Oracle runtime, ground-truth XML exports, Reports conversion, and Forms Builder visual verification without requiring a Windows VM or remote server.
 
-- **Base Image**: Oracle Linux 8 slim (`linux/amd64`).
-- **Runtime**: OpenJDK 1.8.0, Motif (`libXm.so.4`), libXp, X11 libraries, shadow-utils.
-- **Execution**: Emulated via Rosetta 2 on Apple Silicon macOS and native on Linux.
-- **Mounted Oracle Home**: Mounts official Oracle Forms 12.2.1.4.0 (`/oracle_home`).
-- **Tooling Suite**:
-  - `convert_fmb.py`: Invokes native `frmf2xml.sh` to produce certified Oracle XML exports (`.fmb`, `.mmb`, `.olb`).
-  - `convert_pll.py`: Invokes native `frmcmp_batch` to export PL/SQL libraries (`.pll`) into `.pld` scripts or compile `.pld` into `.pll`.
-  - `convert_rpt.py`: Invokes `rwconverter.sh` for Oracle Reports conversion (`.rdf`, `.rpt`, `.rex`).
-  - `run_forms_builder.py`: Launches the interactive Oracle Forms Builder IDE (`frmbld`) on desktop via X11 / XQuartz display routing.
+### Dual Oracle Home Coexistence (12c & 14c)
+To avoid version coupling, the environment supports running both **Oracle Forms 12c** and **Oracle Forms 14c** side by side:
+
+| Attribute | Oracle Forms 12c (`forms-12c-converter`) | Oracle Forms 14c (`forms-14c-server`) |
+|---|---|---|
+| **Architecture** | `linux/amd64` (Rosetta 2 emulation) | `linux/amd64` (Rosetta 2 emulation) |
+| **Java Runtime** | OpenJDK 1.8.0 Headless | OpenJDK 17 Devel (`java-17-openjdk`) |
+| **Target Directory** | `tools/podman-converter/oracle_home` | `tools/podman-converter/oracle_home_14c` |
+| **Scope** | Lightweight Standalone Forms Builder (~3.5 GB) | Full FMW Infrastructure + Forms & Reports Deployment |
+| **Primary Use** | Ultra-fast batch XML/PLD conversion & `frmbld` GUI | Live WebLogic Forms Runtime (`WLS_FORMS`), AdminServer & Reports |
+| **Ports** | None (X11 display only) | `7001` (AdminServer), `9001` (`WLS_FORMS`) |
+
+### Tooling Suite (Packaged in APM Plugin `plugins/oracle-forms/`)
+- `run_form.py`: Unified end-to-end converter, compiler, and desktop FSAL launcher.
+- `compile_form.py`: Invokes official `frmcmp_batch` in headless mode to produce runnable `.fmx` binaries.
+- `launch_fsal.py`: Launches live forms on desktop via Forms Standalone Launcher (FSAL) connecting to WebLogic 14c.
+- `convert_fmb.py`: Invokes official `frmf2xml.sh` to produce certified Oracle XML exports (`.fmb`, `.mmb`, `.olb`) or convert XML back to FMB.
+- `convert_pll.py`: Invokes official `frmcmp_batch` to export PL/SQL libraries (`.pll`) into `.pld` scripts or compile `.pld` into `.pll`.
+- `convert_rpt.py`: Invokes `rwconverter.sh` for Oracle Reports conversion (`.rdf`, `.rpt`, `.rex`).
+- `health_check.py`: Automated 3-stage validation for containers, WebLogic servlet, and 23ai SQL query.
+
+---
+
+## 6. Database Tier: Oracle Database 23ai Free (Native ARM64)
+
+For end-to-end execution of live forms with real database blocks, queries, LOVs, and commits:
+
+- **Image**: `container-registry.oracle.com/database/free:latest-lite` (or `latest`).
+- **Architecture**: **Native ARM64 (`aarch64`)**. Because Oracle publishes native ARM64 container images for Apple Silicon, the database executes natively without Rosetta 2 translation overhead, providing near-bare-metal I/O and SQL performance.
+- **Networking**: Maps `1521:1521` on the host, accessible to the host macOS, the native Rust viewer, and the Forms 14c container via the shared `oracle-net` bridge or `host.containers.internal:1521`.
+- **Default Database Service**: `FREEPDB1` (Pluggable Database) with administrative credentials configured via `ORACLE_PWD`.
+
+---
+
+## 7. Live Form Execution via Forms Standalone Launcher (FSAL)
+
+Rather than legacy browser NPAPI plugins or Internet Explorer, live form testing operates through Oracle's **Forms Standalone Launcher (FSAL)**:
+
+1. A form (`.fmb`) is compiled into runtime format (`.fmx`) using `frmcmp_batch.sh`.
+2. The form is deployed to the Forms 14c managed server (`WLS_FORMS:9001`).
+3. The native client launcher (`java -jar fsal.jar -url http://localhost:9001/forms/frmservlet?form=module.fmx`) runs directly on the macOS desktop.
+4. The client communicates with `WLS_FORMS`, which connects via SQL*Net to the native Oracle Database 23ai Free instance on port 1521, proving full operational parity against our static Rust viewer models.
