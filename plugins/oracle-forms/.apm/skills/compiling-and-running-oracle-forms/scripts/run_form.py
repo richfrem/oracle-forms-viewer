@@ -30,7 +30,7 @@ CLI Arguments:
     --offline             : Compile offline without database verification (logon=no).
 
 Input Files:
-    - tools/podman-converter/oracle_home_14c/forms/java/frmsal.jar (FSAL desktop launcher)
+    - oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar (FSAL desktop launcher)
     - Target source form (.fmx, .fmb, or .xml)
     - Docker / Podman running container 'forms-server-14c' (WebLogic Forms 14c runtime)
     - Docker / Podman running container 'oracle23ai-lite' (Oracle Database 23ai Free)
@@ -182,7 +182,7 @@ def launch_fsal_desktop(fmx_path: Path, repo_root: Path, port: int, userid: str,
     Returns:
         Process exit code from frmsal.jar.
     """
-    frmsal_jar = repo_root / "tools/podman-converter/oracle_home_14c/forms/java/frmsal.jar"
+    frmsal_jar = repo_root / "oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar"
     if not frmsal_jar.exists():
         print(f"Error: frmsal.jar not found at {frmsal_jar}", file=sys.stderr)
         return 1

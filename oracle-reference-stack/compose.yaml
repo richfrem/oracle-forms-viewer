@@ -24,7 +24,7 @@ services:
     container_name: forms-12c-converter
     volumes:
       - ./oracle_home:/oracle_home:Z
-      - ../..:/work:Z
+      - ..:/work:Z
     environment:
       - ORACLE_HOME=/oracle_home
       - DISPLAY=host.containers.internal:0
@@ -67,16 +67,18 @@ services:
   forms-server-14c:
     image: forms-converter-14c:latest
     platform: linux/amd64
-    container_name: forms-14c-server
+    container_name: forms-server-14c
     ports:
       - "7001:7001"   # WebLogic AdminServer
       - "9001:9001"   # WLS_FORMS managed server
     volumes:
       - ./oracle_home_14c:/oracle_home_14c:Z
-      - ../..:/work:Z
+      - ..:/work:Z
     environment:
       - ORACLE_HOME=/oracle_home_14c
+      - DOMAIN_HOME=/oracle_home_14c/user_projects/domains/base_domain
       - DISPLAY=host.containers.internal:0
       - DB_URL=oracle-db-23ai:1521/FREEPDB1
+    command: /oracle_home_14c/user_projects/domains/base_domain/bin/startWebLogic.sh
     networks:
       - oracle-net

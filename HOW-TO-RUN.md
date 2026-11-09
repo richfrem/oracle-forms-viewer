@@ -1,6 +1,6 @@
 # How to Run Oracle Forms Workbench
 
-This guide explains how to compile, test, and run the **Oracle Forms Workbench** (`oracle-forms-viewer`) native Rust server, CLI, and database query engine.
+This guide explains how to compile, test, and run the **Oracle Forms Workbench** (`oracle-forms-workbench`) native Rust server, CLI, and database query engine.
 
 Zero JVM, zero Node.js, and zero Oracle runtime software are required.
 
@@ -24,10 +24,9 @@ If not installed: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | s
 
 ### Default Port (7070)
 
-Navigate to the `oracle-forms-viewer` workspace directory and run:
+From the repository root, run:
 
 ```bash
-cd oracle-forms-viewer
 cargo run -p oracle-forms-server
 ```
 
@@ -47,7 +46,6 @@ Open your browser to:
 Pass the `PORT` environment variable:
 
 ```bash
-cd oracle-forms-viewer
 PORT=8080 cargo run -p oracle-forms-server
 ```
 
@@ -89,8 +87,6 @@ inside the existing canvas layout. The runtime frame provides classic Oracle For
 You can inspect modules, extract PL/SQL, or query database records directly from your terminal:
 
 ```bash
-cd oracle-forms-viewer
-
 # 1. Execute live query against Oracle Database 23ai Free (:1521)
 cargo run -p oracle-forms-cli -- query samples/test_db_fmb.xml --backend oracle
 
@@ -117,7 +113,6 @@ cargo run -p oracle-forms-cli -- dump-sql samples/orders_fmb.xml -o ./extracted-
 To run all unit, differential, and conformance tests:
 
 ```bash
-cd oracle-forms-viewer
 cargo test
 ```
 
@@ -149,12 +144,6 @@ kill -9 $(lsof -t -i:7070) 2>/dev/null || true
 
 If you made code/UI changes or encounter `Address already in use (os error 48)`:
 
-**From repository root (`oracle-forms-fmb-research`):**
-```bash
-kill -9 $(lsof -t -i:7070) 2>/dev/null || true; cd oracle-forms-viewer && cargo run -p oracle-forms-server
-```
-
-**If already inside `oracle-forms-viewer/`:**
 ```bash
 kill -9 $(lsof -t -i:7070) 2>/dev/null || true; cargo run -p oracle-forms-server
 ```

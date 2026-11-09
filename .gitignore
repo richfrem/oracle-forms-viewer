@@ -1,12 +1,14 @@
+target/
+**/*.rs.bk
 example-fmb/
 temp
 temp/
 temp/example-fmb/
 tasks/
 .fmb
-tools/podman-converter/installer/
-tools/podman-converter/oracle_home/
-tools/podman-converter/oracle_home_14c/
+oracle-reference-stack/installer/
+oracle-reference-stack/oracle_home/
+oracle-reference-stack/oracle_home_14c/
 context/
 *.zip
 *.bin

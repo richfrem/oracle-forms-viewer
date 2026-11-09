@@ -20,7 +20,7 @@ flowchart TB
 
         subgraph HostFS["Host Filesystem Bind Mounts"]
             WorkDir["samples/ (Modules, FMB, FMX, XML)"]:::storage
-            OH14["tools/podman-converter/oracle_home_14c/ (FMW 14.1.2)"]:::oracleStorage
+            OH14["oracle-reference-stack/oracle_home_14c/ (FMW 14.1.2)"]:::oracleStorage
             FSAL_JAR["oracle_home_14c/forms/java/frmsal.jar"]:::storage
         end
 

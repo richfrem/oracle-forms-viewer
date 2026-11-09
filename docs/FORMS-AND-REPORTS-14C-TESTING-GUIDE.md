@@ -71,11 +71,11 @@ Oracle bundles an official diagnostic form (`test.fmx`) with every installation.
 
 ```bash
 # macOS / Linux (Port 7001 for Development Mode):
-java -jar tools/podman-converter/oracle_home_14c/forms/java/frmsal.jar \
+java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=test.fmx"
 
 # Windows PowerShell:
-java -jar tools/podman-converter/oracle_home_14c/forms/java/frmsal.jar `
+java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar `
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=test.fmx"
 ```
 
@@ -92,15 +92,15 @@ Once `test.fmx` is verified, compile and run our own test form (`simple_module.f
 ```bash
 # macOS / Linux (Development Mode on Port 7001):
 # Option A: Interactive GUI Logon Prompt
-java -jar tools/podman-converter/oracle_home_14c/forms/java/frmsal.jar \
+java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx"
 
 # Option B: Pre-authenticated (Note: '#' in password MUST be URL-encoded as '%23'):
-java -jar tools/podman-converter/oracle_home_14c/forms/java/frmsal.jar \
+java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx&userid=forms_user/Welcome123%23@FREEPDB1"
 
 # Windows PowerShell:
-java -jar tools/podman-converter/oracle_home_14c/forms/java/frmsal.jar `
+java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar `
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx&userid=forms_user/Welcome123%23@FREEPDB1"
 ```
 
@@ -118,7 +118,7 @@ java -jar tools/podman-converter/oracle_home_14c/forms/java/frmsal.jar `
 
 ### Test 3.1: Live Form Querying Oracle 23ai Database (`test_db.fmx`)
 
-We authored and compiled a dedicated database-backed test form ([samples/test_db.fmx](file:///Users/richardfremmerlid/Projects/oracle-forms-fmb-research/samples/test_db.fmx)) containing live PL/SQL triggers wired to the `forms_user.test_items` table in 23ai:
+We authored and compiled a dedicated database-backed test form (`samples/test_db.fmx`) containing live PL/SQL triggers wired to the `forms_user.test_items` table in 23ai:
 
 * **Startup Trigger (`WHEN-NEW-FORM-INSTANCE`)**:
   Executes `SELECT item_name, TO_CHAR(amount) INTO :BLOCK5.TEXT_ITEM4, :BLOCK5.TEXT_ITEM284 FROM test_items WHERE item_id = 1;`
@@ -129,11 +129,11 @@ We authored and compiled a dedicated database-backed test form ([samples/test_db
 #### Launch Live Database Form:
 ```bash
 # macOS / Linux (Pre-authenticated to 23ai):
-java -jar tools/podman-converter/oracle_home_14c/forms/java/frmsal.jar \
+java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=test_db.fmx&userid=forms_user/Welcome123%23@FREEPDB1"
 
 # Windows PowerShell:
-java -jar tools/podman-converter/oracle_home_14c/forms/java/frmsal.jar `
+java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar `
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=test_db.fmx&userid=forms_user/Welcome123%23@FREEPDB1"
 ```
 
@@ -215,10 +215,10 @@ Test converting legacy binary reports to XML or text definitions using our Pytho
 
 ```bash
 # Export binary report to vendor XML definition
-python3 tools/podman-converter/convert_rpt.py samples/invoice.rdf
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_rpt.py samples/invoice.rdf
 
 # Export binary report to human-readable ASCII text script (.rex)
-python3 tools/podman-converter/convert_rpt.py samples/invoice.rdf --format rex
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_rpt.py samples/invoice.rdf --format rex
 ```
 
 ---
@@ -233,4 +233,4 @@ python3 tools/podman-converter/convert_rpt.py samples/invoice.rdf --format rex
 ### Windows 11 (WSL2 / Podman Desktop)
 - Windows 11 includes **WSLg** built-in: graphical windows render seamlessly with zero extra X-server setup.
 - Display environment variable: `-e DISPLAY=":0"`.
-- Volume mounts use PowerShell `${PWD}` syntax: `-v ${PWD}/tools/podman-converter/oracle_home_14c:/oracle_home_14c:Z`.
+- Volume mounts use PowerShell `${PWD}` syntax: `-v ${PWD}/oracle-reference-stack/oracle_home_14c:/oracle_home_14c:Z`.

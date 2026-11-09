@@ -8,7 +8,7 @@ flowchart TB
     classDef note fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,stroke-dasharray:4 3,color:#92400e;
 
     %% ------------------- ANNOTATION -------------------
-    Annotation["⭐ <b>Pure-Native Rust Architecture</b><br/>• <b>Zero JVM &amp; Zero Node:</b> Pure Rust multi-crate workspace with embedded vanilla web assets<br/>• <b>Zero Oracle Dependencies:</b> Operates without Oracle Forms Builder, client DLLs, or Windows VMs<br/>• <b>Sibling XML Linking:</b> Automatically pairs binary .fmb with certified companion XML for ground-truth layout<br/>• <b>Masonry Layout Engine:</b> Multi-column dynamic cursor layout eliminates block and item collisions"]:::note
+    Annotation["⭐ <b>Pure-Native Rust Architecture (Oracle Forms Workbench)</b><br/>• <b>Zero JVM &amp; Zero Node:</b> Pure Rust multi-crate workspace with embedded vanilla web assets<br/>• <b>Direct DB Query Engine:</b> Native SQL*Net to Oracle 23ai Free, embedded SQLite, &amp; Mock drivers<br/>• <b>Zero Oracle Dependencies:</b> Operates without Oracle Forms Builder, client DLLs, or Windows VMs<br/>• <b>Sibling XML Linking:</b> Automatically pairs binary .fmb with certified companion XML for ground-truth layout<br/>• <b>Masonry Layout Engine:</b> Multi-column dynamic cursor layout eliminates block and item collisions"]:::note
 
     %% ------------------- INPUT LAYER -------------------
     subgraph Inputs["📂 Supported Input Artifacts"]
@@ -35,6 +35,12 @@ flowchart TB
             RosParser["<b>ROS 60050 Stream Reader</b><br/>Direct byte parser (0 JVM / 0 DLLs)<br/>String table &amp; trigger bounds"]:::crate
             BindDetector["<b>Bind Variable Scanner</b><br/>:BLOCK.ITEM pattern discovery"]:::crate
             MasonryEngine["<b>Dynamic Masonry Layout</b><br/>Multi-column height cursors<br/>Collision-free coordinate synthesis"]:::crate
+        end
+
+        subgraph DbCrate["crate: oracle-forms-db"]
+            direction TB
+            SqlGen["<b>SQL Synthesizer</b><br/>Block-to-SQL, WHERE clauses, pagination"]:::crate
+            DbDrivers["<b>Multi-Backend Drivers</b><br/>Oracle 23ai (:1521), SQLite, Mock"]:::crate
         end
     end
 
@@ -63,10 +69,12 @@ flowchart TB
         subgraph CliApp["crate: oracle-forms-cli"]
             CliInspect["<b>inspect command</b><br/>Summary, hierarchy, JSON AST"]:::delivery
             CliDumpSql["<b>dump-sql command</b><br/>Batch export embedded PL/SQL &amp; SQL"]:::delivery
+            CliQuery["<b>query command</b><br/>Live database block queries"]:::delivery
         end
 
         subgraph ServerApp["crate: oracle-forms-server (Port 7070)"]
             AxumService["<b>Axum HTTP Service</b><br/>REST API (/api/samples, /api/modules)"]:::delivery
+            DbEndpoints["<b>Query &amp; DB Test APIs</b><br/>/api/forms/query-block, /api/db/test"]:::delivery
             SiblingResolver["<b>Sibling XML Resolver</b><br/>Matches .fmb with &lt;stem&gt;_fmb.xml"]:::delivery
             EmbeddedAssets["<b>rust-embed Engine</b><br/>Single binary with zero external file deps"]:::delivery
         end
@@ -76,6 +84,7 @@ flowchart TB
             ObjNavigator["<b>Object Navigator</b><br/>Canvases, Blocks, Items, Triggers"]:::ui
             CodeEditor["<b>PL/SQL Syntax Viewer</b><br/>Package &amp; trigger code view"]:::ui
             PropInspector["<b>Property Inspector</b><br/>Dimensions, Database flags, Classes"]:::ui
+            DbToolbar["<b>Live DB Toolbar &amp; Navigator</b><br/>⚡ Query DB, [◀] Rec 1 of 4 [▶]"]:::ui
         end
     end
 
@@ -101,6 +110,11 @@ flowchart TB
     AST ==>|Query / Traversal| CliInspect
     SidecarCache ==>|Dump to disk| CliDumpSql
 
+    AST ==>|Block schemas &amp; WHERE| SqlGen
+    SqlGen --> DbDrivers
+    DbDrivers ==>|Executes query| CliQuery
+    DbDrivers ==>|Executes query| DbEndpoints
+
     AST ==>|Serialized View Payload| AxumService
     SiblingResolver -.->|Prefer certified XML| InXML
     AxumService --- EmbeddedAssets
@@ -110,6 +124,7 @@ flowchart TB
     BrowserUI --- ObjNavigator
     BrowserUI --- CodeEditor
     BrowserUI --- PropInspector
+    BrowserUI --- DbToolbar
 
     Annotation -.- CoreLayer
     Annotation -.- SiblingResolver

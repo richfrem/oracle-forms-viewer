@@ -34,7 +34,7 @@ flowchart TD
         RUN --> LIVE[Live macOS / Windows Desktop FSAL Window]
     end
 
-    subgraph Track2["Track 2: Pure-Native Rust Engine (oracle-forms-viewer)"]
+    subgraph Track2["Track 2: Pure-Native Rust Engine (oracle-forms-workbench)"]
         FMB --> RUST_BIN[oracle-forms-binary<br/>ROS 60050 Stream Parser]
         XML --> RUST_XML[oracle-forms-xml<br/>quick-xml StAX Reader]
         PLD --> RUST_XML
@@ -117,7 +117,6 @@ python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/con
 > **Recommended Alternative (Track 2 Native Rust)**:
 > Oracle Reports `.rdf` files use the exact same `ROS.60050` container format as Forms `.fmb` files! You can inspect and dump reports immediately using the native Rust toolchain with **zero Oracle or WebLogic dependencies**:
 > ```bash
-> cd oracle-forms-viewer
 > cargo run -p oracle-forms-cli -- inspect /path/to/report.rdf
 > cargo run -p oracle-forms-cli -- dump-sql /path/to/report.rdf -o ./extracted-sql
 > ```
@@ -172,7 +171,7 @@ python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/con
 
 ---
 
-## 6. Integration with `oracle-forms-viewer`
+## 6. Integration with Pure-Native Rust Workbench
 
 The container environment connects directly with the pure-native Rust toolchain:
 1. **Certified XML Generation**: `convert_fmb.py` generates certified `*_fmb.xml` files consumed by `oracle-forms-xml` and displayed in `oracle-forms-server` on port 7070.
@@ -210,24 +209,24 @@ Connecting to the database:
 
 1. **Build the 14c container image**:
    ```bash
-   podman build -t forms-converter-14c:latest -f tools/podman-converter/Containerfile.14c tools/podman-converter
+   podman build -t forms-converter-14c:latest -f oracle-reference-stack/Containerfile.14c oracle-reference-stack
    ```
 
-2. **Stage the installers into `tools/podman-converter/installer`**:
+2. **Stage the installers into `oracle-reference-stack/installer`**:
    - `fmw_14.1.2.0.0_infrastructure.jar` (from `V1045135-01.zip`)
    - `fmw_14.1.2.0.0_fr_linux64.bin` (from `V1045121-01.zip`)
 
 3. **Run Stage 1: Fusion Middleware Infrastructure 14c**:
    ```bash
-   podman compose -f tools/podman-converter/compose.yaml run --rm infra-install-14c
+   podman compose -f oracle-reference-stack/compose.yaml run --rm infra-install-14c
    ```
 
 4. **Run Stage 2: Forms and Reports 14c**:
    ```bash
-   podman compose -f tools/podman-converter/compose.yaml run --rm forms-install-14c
+   podman compose -f oracle-reference-stack/compose.yaml run --rm forms-install-14c
    ```
 
 5. **Start WebLogic & Forms Server**:
    ```bash
-   podman compose -f tools/podman-converter/compose.yaml up -d forms-server-14c
+   podman compose -f oracle-reference-stack/compose.yaml up -d forms-server-14c
    ```

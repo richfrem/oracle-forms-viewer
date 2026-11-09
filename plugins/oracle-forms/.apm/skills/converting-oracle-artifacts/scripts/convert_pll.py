@@ -11,11 +11,11 @@ Purpose:
 Layer: Tooling / Container Bridge
 
 Usage Examples:
-    python3 tools/podman-converter/convert_pll.py --check
-    python3 tools/podman-converter/convert_pll.py samples/aglib.pll
-    python3 tools/podman-converter/convert_pll.py samples/aglib.pll -o ./custom/aglib.pld
-    python3 tools/podman-converter/convert_pll.py samples/aglib.pld --compile
-    python3 tools/podman-converter/convert_pll.py samples/aglib.pll --oracle-home /custom/oracle_home
+    python3 oracle-reference-stack/convert_pll.py --check
+    python3 oracle-reference-stack/convert_pll.py samples/aglib.pll
+    python3 oracle-reference-stack/convert_pll.py samples/aglib.pll -o ./custom/aglib.pld
+    python3 oracle-reference-stack/convert_pll.py samples/aglib.pld --compile
+    python3 oracle-reference-stack/convert_pll.py samples/aglib.pll --oracle-home /custom/oracle_home
 
 Supported Object Types:
     - .pll (Oracle PL/SQL Binary Library) -> *.pld plain text script export
@@ -29,8 +29,8 @@ CLI Arguments:
     --oracle-home <path>  : Path to local Oracle Home directory (optional).
 
 Input Files:
-    - tools/podman-converter/Containerfile (Container image definition)
-    - tools/podman-converter/oracle_home/bin/frmcmp_batch (Oracle Forms batch compiler)
+    - oracle-reference-stack/Containerfile (Container image definition)
+    - oracle-reference-stack/oracle_home/bin/frmcmp_batch (Oracle Forms batch compiler)
     - Target library files (.pll or .pld)
 
 Output:

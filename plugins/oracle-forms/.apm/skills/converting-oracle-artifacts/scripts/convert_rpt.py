@@ -17,11 +17,11 @@ Purpose:
 Layer: Tooling / Container Bridge
 
 Usage Examples:
-    python3 tools/podman-converter/convert_rpt.py --check
-    python3 tools/podman-converter/convert_rpt.py samples/invoice.rdf
-    python3 tools/podman-converter/convert_rpt.py samples/invoice.rdf -o ./custom/invoice.xml
-    python3 tools/podman-converter/convert_rpt.py samples/invoice.rdf --format rex
-    python3 tools/podman-converter/convert_rpt.py samples/invoice.rdf --oracle-home /custom/oracle_home
+    python3 oracle-reference-stack/convert_rpt.py --check
+    python3 oracle-reference-stack/convert_rpt.py samples/invoice.rdf
+    python3 oracle-reference-stack/convert_rpt.py samples/invoice.rdf -o ./custom/invoice.xml
+    python3 oracle-reference-stack/convert_rpt.py samples/invoice.rdf --format rex
+    python3 oracle-reference-stack/convert_rpt.py samples/invoice.rdf --oracle-home /custom/oracle_home
 
 Supported Object Types:
     - .rdf (Oracle Reports Binary Definition) -> XML (*_rdf.xml) or ASCII Text (*.rex)
@@ -36,8 +36,8 @@ CLI Arguments:
     --oracle-home <path>  : Path to local Oracle Home directory (optional).
 
 Input Files:
-    - tools/podman-converter/Containerfile (Container image definition)
-    - tools/podman-converter/oracle_home/bin/rwconverter.sh (Oracle Reports converter)
+    - oracle-reference-stack/Containerfile (Container image definition)
+    - oracle-reference-stack/oracle_home/bin/rwconverter.sh (Oracle Reports converter)
     - Target report binary files (.rdf, .rpt, .rex)
 
 Output:
@@ -210,7 +210,7 @@ def build_container_script(file_name: str, stem: str, out_ext: str, dtype: str) 
         f"  echo 'RECOMMENDED SOLUTION (Track 2 Pure-Native Rust Toolchain):'; "
         f"  echo '  Oracle Reports (.rdf) files share the exact same ROS.60050 storage format as Forms (.fmb).'; "
         f"  echo '  You can inspect and dump PL/SQL directly using the pure-native Rust tool:'; "
-        f"  echo '    cd oracle-forms-viewer'; "
+        f"  echo '    cargo run -p oracle-forms-cli -- inspect /path/to/report.rdf'; "
         f"  echo '    cargo run -p oracle-forms-cli -- inspect /path/to/{file_name}'; "
         f"  echo '    cargo run -p oracle-forms-cli -- dump-sql /path/to/{file_name} -o ./extracted-sql'; "
         f"  echo '  (Requires zero JVM, zero WebLogic, zero Oracle runtime, and runs instantaneously!)'; "
