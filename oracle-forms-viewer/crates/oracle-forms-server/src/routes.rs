@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use oracle_forms_core::model::*;
 use crate::assets::static_handler;
 use crate::service::FormsService;
@@ -17,6 +17,8 @@ pub fn app_router(service: FormsService) -> Router {
         .route("/api/module/{module_name}/source", get(get_source))
         .route("/api/module/{module_name}/xml", get(get_xml))
         .route("/api/module/{module_name}/effective-item", get(get_effective_item))
+        .route("/api/db/test", post(test_db_connection))
+        .route("/api/forms/query-block", post(query_form_block))
         .fallback(static_handler)
         .with_state(service)
 }
@@ -143,6 +145,107 @@ async fn get_effective_item(
 
     let eff = service.resolve_effective_item(&module_name, item);
     Json(eff).into_response()
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QueryBlockRequest {
+    module_name: String,
+    block_name: Option<String>,
+    #[serde(default)]
+    backend: oracle_forms_db::DbBackend,
+    host: Option<String>,
+    port: Option<u16>,
+    service_name: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+    limit: Option<usize>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TestDbRequest {
+    #[serde(default)]
+    backend: oracle_forms_db::DbBackend,
+    host: Option<String>,
+    port: Option<u16>,
+    service_name: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TestDbResponse {
+    success: bool,
+    message: String,
+    backend: oracle_forms_db::DbBackend,
+}
+
+async fn test_db_connection(Json(payload): Json<TestDbRequest>) -> Response {
+    let mut config = oracle_forms_db::DbConfig {
+        backend: payload.backend,
+        ..Default::default()
+    };
+    if let Some(h) = payload.host { config.host = Some(h); }
+    if let Some(p) = payload.port { config.port = Some(p); }
+    if let Some(s) = payload.service_name { config.service_name = Some(s); }
+    if let Some(u) = payload.username { config.username = Some(u); }
+    if let Some(pw) = payload.password { config.password = Some(pw); }
+
+    match oracle_forms_db::create_driver(&config) {
+        Ok(driver) => match driver.test_connection().await {
+            Ok(_) => Json(TestDbResponse {
+                success: true,
+                message: format!("Successfully connected to {:?} database listener", payload.backend),
+                backend: payload.backend,
+            }).into_response(),
+            Err(e) => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(TestDbResponse {
+                    success: false,
+                    message: e.to_string(),
+                    backend: payload.backend,
+                }),
+            ).into_response(),
+        },
+        Err(e) => (
+            StatusCode::BAD_REQUEST,
+            Json(TestDbResponse {
+                success: false,
+                message: e.to_string(),
+                backend: payload.backend,
+            }),
+        ).into_response(),
+    }
+}
+
+async fn query_form_block(
+    State(service): State<FormsService>,
+    Json(payload): Json<QueryBlockRequest>,
+) -> Response {
+    let mut config = oracle_forms_db::DbConfig {
+        backend: payload.backend,
+        ..Default::default()
+    };
+    if let Some(h) = payload.host { config.host = Some(h); }
+    if let Some(p) = payload.port { config.port = Some(p); }
+    if let Some(s) = payload.service_name { config.service_name = Some(s); }
+    if let Some(u) = payload.username { config.username = Some(u); }
+    if let Some(pw) = payload.password { config.password = Some(pw); }
+
+    match service.query_block(
+        &payload.module_name,
+        payload.block_name.as_deref(),
+        &config,
+        payload.limit,
+    ).await {
+        Ok(result) => Json(result).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        ).into_response(),
+    }
 }
 
 async fn open_file(
@@ -307,5 +410,55 @@ mod tests {
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let error: ErrorResponse = serde_json::from_slice(&body).unwrap();
         assert!(error.error.contains("upload"), "{}", error.error);
+    }
+
+    #[tokio::test]
+    async fn test_db_test_endpoint() {
+        let cache = std::env::temp_dir().join(format!("forms-test-db-{}", std::process::id()));
+        let service = FormsService::new(&cache);
+        let app = app_router(service);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/db/test")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"backend": "mock"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let resp: TestDbResponse = serde_json::from_slice(&body).unwrap();
+        assert!(resp.success);
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn test_query_block_endpoint() {
+        let cache = std::env::temp_dir().join(format!("forms-query-test-{}", std::process::id()));
+        let service = FormsService::new(&cache);
+        let app = app_router(service);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/forms/query-block")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"moduleName": "orders_fmb.xml", "backend": "mock", "limit": 3}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let resp: oracle_forms_db::QueryResult = serde_json::from_slice(&body).unwrap();
+        assert!(!resp.records.is_empty(), "Should return mock queried records");
+        let _ = std::fs::remove_dir_all(cache);
     }
 }

@@ -36,6 +36,24 @@ enum Commands {
         #[arg(short, long, default_value = "./dumped-plsql")]
         output: PathBuf,
     },
+
+    /// Query the database for a form's data blocks and display live records
+    Query {
+        /// Path to the module file (.fmb, .xml)
+        file: PathBuf,
+
+        /// Specific block to query (defaults to first database block)
+        #[arg(short, long)]
+        block: Option<String>,
+
+        /// Database backend: 'oracle', 'sqlite', or 'mock'
+        #[arg(long, default_value = "oracle")]
+        backend: String,
+
+        /// Maximum records to fetch
+        #[arg(short, long, default_value_t = 10)]
+        limit: usize,
+    },
 }
 
 fn parse_file(file: &Path, cache_dir: &Path) -> Result<ModuleIndex> {
@@ -81,7 +99,8 @@ fn parse_file(file: &Path, cache_dir: &Path) -> Result<ModuleIndex> {
     }
 }
 
-fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
@@ -139,6 +158,73 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             println!("Extracted PL/SQL from {} into {}", file.display(), output.display());
             println!("  Triggers:      {}", index.triggers.len());
             println!("  Program Units: {}", index.program_units.len());
+        }
+        Commands::Query { file, block, backend, limit } => {
+            let temp_cache = std::env::temp_dir().join("forms-cli-cache");
+            let _ = fs::create_dir_all(&temp_cache);
+            let index = parse_file(&file, &temp_cache)?;
+
+            if index.blocks.is_empty() {
+                eprintln!("Error: Module contains no blocks to query.");
+                return Ok(());
+            }
+
+            let target_block = match block {
+                Some(b_name) => index.blocks.into_iter().find(|b| b.name.eq_ignore_ascii_case(&b_name))
+                    .ok_or_else(|| format!("Block '{}' not found in module", b_name))?,
+                None => {
+                    // Default to first block with items or data source
+                    index.blocks.into_iter().find(|b| b.query_data_source_name.is_some() || !b.items.is_empty())
+                        .unwrap()
+                }
+            };
+
+            let backend_type = match backend.to_ascii_lowercase().as_str() {
+                "oracle" => oracle_forms_db::DbBackend::Oracle,
+                "sqlite" => oracle_forms_db::DbBackend::Sqlite,
+                _ => oracle_forms_db::DbBackend::Mock,
+            };
+
+            let mut config = oracle_forms_db::DbConfig {
+                backend: backend_type,
+                ..Default::default()
+            };
+
+            // Test connection; if Oracle fails, fallback gracefully to mock with notice
+            let driver: Box<dyn oracle_forms_db::DatabaseDriver> = match oracle_forms_db::create_driver(&config) {
+                Ok(d) => match d.test_connection().await {
+                    Ok(_) => d,
+                    Err(e) if backend_type == oracle_forms_db::DbBackend::Oracle => {
+                        eprintln!("[Notice] Oracle listener not reachable ({}). Falling back to mock engine.", e);
+                        config.backend = oracle_forms_db::DbBackend::Mock;
+                        oracle_forms_db::create_driver(&config)?
+                    }
+                    Err(e) => return Err(e.into()),
+                },
+                Err(e) => return Err(e.into()),
+            };
+
+            println!("============================================================");
+            println!("  Executing Query on Block: {} (Backend: {:?})", target_block.name, driver.backend());
+            println!("============================================================");
+
+            let res = driver.query_block(&target_block, Some(limit)).await?;
+            println!("  Generated SQL:   {}", res.sql_statement);
+            println!("  Table Name:      {}", res.table_name);
+            println!("  Execution Time:  {} ms", res.execution_time_ms);
+            println!("  Records Fetched: {}", res.records.len());
+            println!("============================================================");
+
+            if res.records.is_empty() {
+                println!("  No records returned.");
+            } else {
+                for (idx, record) in res.records.iter().enumerate() {
+                    println!("\n  [Record #{}]", idx + 1);
+                    for (k, v) in &record.values {
+                        println!("    {:<20} = {}", k, v);
+                    }
+                }
+            }
         }
     }
 

@@ -233,6 +233,57 @@ impl FormsService {
         st.modules.get(&module_name.to_ascii_uppercase()).cloned()
     }
 
+    pub async fn query_block(
+        &self,
+        module_name: &str,
+        block_name: Option<&str>,
+        config: &oracle_forms_db::DbConfig,
+        limit: Option<usize>,
+    ) -> Result<oracle_forms_db::QueryResult> {
+        let module = match self.get_module(module_name) {
+            Some(m) => m,
+            None => {
+                self.load_sample(module_name)
+                    .or_else(|_| self.load_sample(&format!("{}.xml", module_name)))
+                    .or_else(|_| self.load_sample(&format!("{}_fmb.xml", module_name)))
+                    .map_err(|_| FormsError::NotFound(format!("Module '{}' not loaded in session or samples", module_name)))?
+            }
+        };
+
+        let block = match block_name {
+            Some(b_name) => module
+                .blocks
+                .iter()
+                .find(|b| b.name.eq_ignore_ascii_case(b_name))
+                .ok_or_else(|| FormsError::NotFound(format!("Block '{}' not found in module", b_name)))?,
+            None => module
+                .blocks
+                .iter()
+                .find(|b| b.query_data_source_name.is_some() || !b.items.is_empty())
+                .ok_or_else(|| FormsError::NotFound("No queryable blocks found in module".to_string()))?,
+        };
+
+        let mut active_config = config.clone();
+        let driver: Box<dyn oracle_forms_db::DatabaseDriver> = match oracle_forms_db::create_driver(&active_config) {
+            Ok(d) => match d.test_connection().await {
+                Ok(_) => d,
+                Err(e) if active_config.backend == oracle_forms_db::DbBackend::Oracle => {
+                    tracing::warn!("Oracle connection failed: {}. Falling back to mock driver.", e);
+                    active_config.backend = oracle_forms_db::DbBackend::Mock;
+                    oracle_forms_db::create_driver(&active_config)
+                        .map_err(|e| FormsError::Internal(e.to_string()))?
+                }
+                Err(e) => return Err(FormsError::Internal(e.to_string())),
+            },
+            Err(e) => return Err(FormsError::Internal(e.to_string())),
+        };
+
+        driver
+            .query_block(block, limit)
+            .await
+            .map_err(|e| FormsError::Internal(e.to_string()))
+    }
+
     pub fn read_source(&self, module_name: &str, relative_path: &str) -> Option<String> {
         let clean_path = relative_path.trim_start_matches(|c| c == '/' || c == '\\');
         let key = module_name.to_ascii_uppercase();

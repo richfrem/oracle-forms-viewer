@@ -50,6 +50,22 @@
   const bannerDismissBtn = document.getElementById('bannerDismissBtn');
   const bannerSampleBtn = document.getElementById('bannerSampleBtn');
 
+  // DB Query Controls
+  const dbBackendSelect = document.getElementById('dbBackendSelect');
+  const dbQueryBtn = document.getElementById('dbQueryBtn');
+  const recordNavControls = document.getElementById('recordNavControls');
+  const prevRecordBtn = document.getElementById('prevRecordBtn');
+  const nextRecordBtn = document.getElementById('nextRecordBtn');
+  const recordNavBadge = document.getElementById('recordNavBadge');
+
+  const runtimePrevRecordBtn = document.getElementById('runtimePrevRecordBtn');
+  const runtimeNextRecordBtn = document.getElementById('runtimeNextRecordBtn');
+  const runtimeExecuteQueryBtn = document.getElementById('runtimeExecuteQueryBtn');
+
+  // Query engine state
+  const queryRecordsByBlock = new Map();
+  const activeRecordIndexByBlock = new Map();
+
   const treeFilterInput = document.getElementById('treeFilterInput');
   const navigatorTree = document.getElementById('navigatorTree');
   const formsSvg = document.getElementById('formsSvg');
@@ -154,7 +170,46 @@
     });
     document.querySelector('.oracle-action-toolbar').addEventListener('click', (event) => {
       const button = event.target.closest('button');
+      if (!button) return;
+      if (button.id === 'runtimeExecuteQueryBtn' || button.id === 'runtimePrevRecordBtn' || button.id === 'runtimeNextRecordBtn') {
+        return;
+      }
       if (previewEnabled && button) showPreviewDialog(button.title, 'Toolbar action not executed in this local preview.');
+    });
+
+    // Database query and navigation controls
+    if (dbQueryBtn) {
+      dbQueryBtn.addEventListener('click', () => executeBlockQuery());
+    }
+    if (prevRecordBtn) {
+      prevRecordBtn.addEventListener('click', () => navigateRecord('prev'));
+    }
+    if (nextRecordBtn) {
+      nextRecordBtn.addEventListener('click', () => navigateRecord('next'));
+    }
+    if (runtimeExecuteQueryBtn) {
+      runtimeExecuteQueryBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        executeBlockQuery();
+      });
+    }
+    if (runtimePrevRecordBtn) {
+      runtimePrevRecordBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigateRecord('prev');
+      });
+    }
+    if (runtimeNextRecordBtn) {
+      runtimeNextRecordBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigateRecord('next');
+      });
+    }
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey && e.key === 'F11') || e.key === 'F8') {
+        e.preventDefault();
+        executeBlockQuery();
+      }
     });
     fileInput.addEventListener('change', (e) => {
       if (e.target.files.length > 0) {
@@ -380,6 +435,9 @@
     currentPayload = payload;
     selectedObject = null;
     previewSource = null;
+    queryRecordsByBlock.clear();
+    activeRecordIndexByBlock.clear();
+    if (recordNavControls) recordNavControls.classList.add('hidden');
     document.getElementById('previewDialog').close();
     menuSourceModule = payload.summary.moduleName;
     preview.load(payload.moduleIndex);
@@ -783,6 +841,149 @@
     }
   }
 
+  // Database Query Engine & Record Navigation
+  function getActiveBlockName() {
+    if (!currentPayload) return null;
+    if (selectedObject && selectedObject.type === 'ITEM' && selectedObject.block) {
+      return selectedObject.block.name;
+    }
+    const mod = currentPayload.moduleIndex;
+    if (activeCanvas && mod.blocks) {
+      for (const b of mod.blocks) {
+        if (b.items && b.items.some(it => it.canvasName === activeCanvas.name)) {
+          return b.name;
+        }
+      }
+    }
+    if (mod.blocks && mod.blocks.length > 0) {
+      const qb = mod.blocks.find(b => b.queryDataSourceName || b.items.length > 0);
+      return qb ? qb.name : mod.blocks[0].name;
+    }
+    return null;
+  }
+
+  function applyRecordsToBlock(blockName) {
+    const records = queryRecordsByBlock.get(blockName) || [];
+    const activeIdx = activeRecordIndexByBlock.get(blockName) || 0;
+    const mod = currentPayload?.moduleIndex;
+    const block = mod?.blocks.find(b => b.name === blockName);
+    const recsToDisplay = Math.max(1, block?.recordsDisplayed || 1);
+
+    if (records.length === 0) return;
+
+    for (let r = 0; r < recsToDisplay; r++) {
+      const recIndex = activeIdx + r;
+      if (recIndex < records.length) {
+        preview.setRecord(blockName, records[recIndex], r);
+      }
+    }
+  }
+
+  function updateRecordNavigator(blockName) {
+    const records = queryRecordsByBlock.get(blockName) || [];
+    const curIdx = activeRecordIndexByBlock.get(blockName) || 0;
+    const total = records.length;
+
+    if (total > 0) {
+      recordNavControls?.classList.remove('hidden');
+      if (recordNavBadge) recordNavBadge.textContent = `${curIdx + 1} / ${total}`;
+      if (oracleStatusMsg) {
+        oracleStatusMsg.textContent = `Record: ${curIdx + 1}/${total}  Block: ${blockName}`;
+      }
+      if (prevRecordBtn) prevRecordBtn.disabled = (curIdx === 0);
+      if (nextRecordBtn) nextRecordBtn.disabled = (curIdx >= total - 1);
+      if (runtimePrevRecordBtn) runtimePrevRecordBtn.disabled = (curIdx === 0);
+      if (runtimeNextRecordBtn) runtimeNextRecordBtn.disabled = (curIdx >= total - 1);
+    } else {
+      recordNavControls?.classList.add('hidden');
+    }
+  }
+
+  async function executeBlockQuery(targetBlockName = null) {
+    if (!currentPayload) {
+      showBanner('Open a form before querying the database.');
+      return;
+    }
+
+    const blockName = targetBlockName || getActiveBlockName();
+    if (!blockName) {
+      showBanner('No queryable block found in this form module.');
+      return;
+    }
+
+    const backend = dbBackendSelect ? dbBackendSelect.value : 'oracle';
+    if (oracleStatusMsg) {
+      oracleStatusMsg.textContent = `Querying block ${blockName} via ${backend}...`;
+    }
+    if (dbQueryBtn) {
+      dbQueryBtn.disabled = true;
+      dbQueryBtn.textContent = '⏳ Querying...';
+    }
+
+    try {
+      const moduleName = currentPayload.summary.moduleName || currentPayload.moduleIndex.key.name;
+      const res = await fetch('/api/forms/query-block', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          moduleName: moduleName,
+          blockName: blockName,
+          backend: backend,
+          limit: 100,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to execute database query.');
+      }
+
+      queryRecordsByBlock.set(blockName, data.records || []);
+      activeRecordIndexByBlock.set(blockName, 0);
+
+      applyRecordsToBlock(blockName);
+      updateRecordNavigator(blockName);
+
+      if (oracleStatusMsg) {
+        oracleStatusMsg.textContent = `Fetched ${data.totalFetched} records on ${blockName} (${data.backend}) - SQL: ${data.sqlExecuted.substring(0, 45)}...`;
+      }
+
+      renderCanvasSvg();
+    } catch (err) {
+      console.error('Query error:', err);
+      showBanner(`Query failed: ${err.message}`);
+      if (oracleStatusMsg) {
+        oracleStatusMsg.textContent = `Query failed: ${err.message}`;
+      }
+    } finally {
+      if (dbQueryBtn) {
+        dbQueryBtn.disabled = false;
+        dbQueryBtn.textContent = '⚡ Query DB';
+      }
+    }
+  }
+
+  function navigateRecord(direction) {
+    const blockName = getActiveBlockName();
+    if (!blockName) return;
+    const records = queryRecordsByBlock.get(blockName) || [];
+    if (records.length === 0) return;
+
+    let curIdx = activeRecordIndexByBlock.get(blockName) || 0;
+    if (direction === 'next' && curIdx < records.length - 1) {
+      curIdx++;
+    } else if (direction === 'prev' && curIdx > 0) {
+      curIdx--;
+    } else {
+      return;
+    }
+
+    activeRecordIndexByBlock.set(blockName, curIdx);
+    applyRecordsToBlock(blockName);
+    updateRecordNavigator(blockName);
+    renderCanvasSvg();
+  }
+
   // Visual Canvas 2D SVG Rendering
   function renderCanvasSvg() {
     if (!currentPayload || !activeCanvas) {
@@ -1043,9 +1244,34 @@
           `;
         } else if (itemType.includes('display')) {
           // Display Item (flat gray)
+          const bRecords = queryRecordsByBlock.get(block.name);
+          const activeIdx = activeRecordIndexByBlock.get(block.name) || 0;
+          let displayVal = null;
+          if (bRecords && bRecords.length > 0) {
+            const recIdx = isMultiRow ? (activeIdx + r) : activeIdx;
+            if (recIdx < bRecords.length) {
+              const rec = bRecords[recIdx];
+              displayVal = rec[item.name] ?? (item.columnName ? rec[item.columnName] : null);
+              if (displayVal == null) {
+                const iUpper = item.name.toUpperCase();
+                const cUpper = (item.columnName || '').toUpperCase();
+                for (const [k, v] of Object.entries(rec)) {
+                  const kUpper = k.toUpperCase();
+                  if (kUpper === iUpper || (cUpper && kUpper === cUpper)) {
+                    displayVal = v;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          const textToShow = displayVal != null ? String(displayVal) : item.name;
+          const textColor = displayVal != null ? '#111111' : '#555555';
+          const textWeight = displayVal != null ? 'font-weight="600"' : '';
+
           svgHtml += `
             <rect x="${x}" y="${rowY}" width="${w}" height="${h}" fill="#f0ede0" stroke="#b0ac9d" stroke-width="1"/>
-            <text x="${x + 4}" y="${rowY + Math.min(14, h - 4)}" font-family="Segoe UI, Tahoma, sans-serif" font-size="11" fill="#555">${escapeHtml(item.name)}</text>
+            <text x="${x + 4}" y="${rowY + Math.min(14, h - 4)}" font-family="Segoe UI, Tahoma, sans-serif" font-size="11" ${textWeight} fill="${textColor}">${escapeHtml(textToShow)}</text>
           `;
         } else {
           // Text Item / Non-enterable item
@@ -1054,9 +1280,34 @@
           const bgBox = isNonEnterable ? '#f5f4ee' : '#ffffff';
           const strokeBox = isNonEnterable ? '#a6a397' : '#7f9db9';
 
+          const bRecords = queryRecordsByBlock.get(block.name);
+          const activeIdx = activeRecordIndexByBlock.get(block.name) || 0;
+          let displayVal = null;
+          if (bRecords && bRecords.length > 0) {
+            const recIdx = isMultiRow ? (activeIdx + r) : activeIdx;
+            if (recIdx < bRecords.length) {
+              const rec = bRecords[recIdx];
+              displayVal = rec[item.name] ?? (item.columnName ? rec[item.columnName] : null);
+              if (displayVal == null) {
+                const iUpper = item.name.toUpperCase();
+                const cUpper = (item.columnName || '').toUpperCase();
+                for (const [k, v] of Object.entries(rec)) {
+                  const kUpper = k.toUpperCase();
+                  if (kUpper === iUpper || (cUpper && kUpper === cUpper)) {
+                    displayVal = v;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          const textToShow = displayVal != null ? String(displayVal) : item.name;
+          const textColor = displayVal != null ? '#111111' : '#666666';
+          const textWeight = displayVal != null ? 'font-weight="500"' : '';
+
           svgHtml += `
             <rect x="${x}" y="${rowY}" width="${w}" height="${h}" rx="1" fill="${bgBox}" stroke="${strokeBox}" stroke-width="1"/>
-            <text x="${x + 6}" y="${rowY + Math.min(14, h - 4)}" font-family="Segoe UI, Tahoma, sans-serif" font-size="10" ${isNonEnterable ? 'font-style="italic"' : ''} fill="#666">${escapeHtml(item.name)}</text>
+            <text x="${x + 6}" y="${rowY + Math.min(14, h - 4)}" font-family="Segoe UI, Tahoma, sans-serif" font-size="10" ${isNonEnterable ? 'font-style="italic"' : ''} ${textWeight} fill="${textColor}">${escapeHtml(textToShow)}</text>
           `;
           if (isList) {
             svgHtml += `

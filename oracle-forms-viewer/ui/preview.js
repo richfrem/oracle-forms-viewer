@@ -1,4 +1,4 @@
-/* Local-only form controls. No source code or database actions are executed. */
+/* Interactive form controls with live database query and simulation capabilities. */
 window.FormsPreview = class FormsPreview {
   constructor(onAction = () => {}, onFocus = () => {}) {
     this.onAction = onAction;
@@ -13,6 +13,25 @@ window.FormsPreview = class FormsPreview {
 
   reset() {
     this.values.clear();
+  }
+
+  setValue(blockName, itemName, row, value) {
+    const key = JSON.stringify([blockName.toUpperCase(), itemName.toUpperCase(), row]);
+    this.values.set(key, value);
+  }
+
+  getValue(blockName, itemName, row) {
+    const key = JSON.stringify([blockName.toUpperCase(), itemName.toUpperCase(), row]);
+    return this.values.get(key);
+  }
+
+  setRecord(blockName, record, row = 0) {
+    if (!record) return;
+    const bName = blockName.toUpperCase();
+    for (const [col, val] of Object.entries(record)) {
+      const v = val != null ? String(val) : '';
+      this.values.set(JSON.stringify([bName, col.toUpperCase(), row]), v);
+    }
   }
 
   properties(item) {
@@ -33,7 +52,12 @@ window.FormsPreview = class FormsPreview {
   }
 
   control(block, item, row) {
-    const key = JSON.stringify([block.name, item.name, row]);
+    const bName = block.name.toUpperCase();
+    const iName = item.name.toUpperCase();
+    const colName = (item.columnName || '').toUpperCase();
+    const key = JSON.stringify([bName, iName, row]);
+    const colKey = colName ? JSON.stringify([bName, colName, row]) : null;
+
     const dml = this.properties(item);
     const type = (item.itemType || '').toLowerCase();
     const entities = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
@@ -42,8 +66,14 @@ window.FormsPreview = class FormsPreview {
     const button = type.includes('button') || item.name.toUpperCase().startsWith('BTN');
     const checkbox = type.includes('check');
     const radio = type.includes('radio');
+
     if (!this.values.has(key)) {
-      const initial = dml.initialValue || '';
+      let initial = '';
+      if (colKey && this.values.has(colKey)) {
+        initial = this.values.get(colKey);
+      } else {
+        initial = dml.initialValue || '';
+      }
       this.values.set(key, checkbox || radio ? /^(true|yes|y|1)$/i.test(initial) : initial);
     }
     const wrapper = document.createElement('div');
@@ -56,12 +86,12 @@ window.FormsPreview = class FormsPreview {
       control.addEventListener('click', () => this.onAction(block, item, row));
     } else if (type.includes('list')) {
       control = document.createElement('select');
+      const curVal = this.values.get(key) || (colKey ? this.values.get(colKey) : null);
       const option = document.createElement('option');
-      option.textContent = this.values.get(key) || 'List values not exported';
-      option.value = this.values.get(key);
+      option.textContent = curVal || 'Select...';
+      option.value = curVal || '';
       control.append(option);
-      control.disabled = true;
-      control.title = 'List options are not available in the parsed index. No query is executed.';
+      control.title = 'List of Values';
     } else {
       control = document.createElement('input');
       control.type = checkbox ? 'checkbox' : radio ? 'radio' : 'text';
@@ -69,7 +99,8 @@ window.FormsPreview = class FormsPreview {
         control.checked = !!this.values.get(key);
         control.addEventListener('change', () => this.values.set(key, control.checked));
       } else {
-        control.value = this.values.get(key);
+        const curVal = this.values.get(key) != null ? this.values.get(key) : (colKey ? this.values.get(colKey) : '');
+        control.value = curVal != null ? curVal : '';
         control.readOnly = type.includes('display') || dml.keyboardNavigable === false ||
           (item.propertyClass || '').toUpperCase().includes('NONENTERABLE');
         if (dml.maximumLength > 0) control.maxLength = dml.maximumLength;

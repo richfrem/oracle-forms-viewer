@@ -37,6 +37,23 @@
 
         <div class="separator"></div>
 
+        <div class="db-controls" id="dbControls">
+          <label for="dbBackendSelect" style="font-weight: 600; color: #a0c4ff;">DB:</label>
+          <select id="dbBackendSelect" title="Select Database Backend">
+            <option value="oracle">Oracle 23ai (:1521)</option>
+            <option value="sqlite">SQLite (Embedded)</option>
+            <option value="mock">Mock Offline</option>
+          </select>
+          <button id="dbQueryBtn" class="btn btn-sm btn-primary" title="Execute Query on Active Block (Ctrl+F11 / F8)">⚡ Query DB</button>
+          <div id="recordNavControls" class="record-nav-controls hidden">
+            <button id="prevRecordBtn" class="btn btn-sm btn-icon" title="Previous Record (Up Arrow)">◀</button>
+            <span id="recordNavBadge" class="record-nav-badge">1 / 1</span>
+            <button id="nextRecordBtn" class="btn btn-sm btn-icon" title="Next Record (Down Arrow)">▶</button>
+          </div>
+        </div>
+
+        <div class="separator"></div>
+
         <div class="canvas-controls" id="canvasControls">
           <label for="canvasSelect">Canvas:</label>
           <select id="canvasSelect"></select>
@@ -200,12 +217,12 @@
                   <button class="tool-btn" title="Previous Block">⏮️</button>
                   <button class="tool-btn" title="Next Block">⏭️</button>
                   <span class="tool-sep"></span>
-                  <button class="tool-btn" title="Previous Record">🔼</button>
-                  <button class="tool-btn" title="Next Record">🔽</button>
+                  <button class="tool-btn" id="runtimePrevRecordBtn" title="Previous Record">🔼</button>
+                  <button class="tool-btn" id="runtimeNextRecordBtn" title="Next Record">🔽</button>
                   <span class="tool-sep"></span>
-                  <button class="tool-btn" title="Enter Query (F7)">❓</button>
-                  <button class="tool-btn" title="Execute Query (Ctrl+F11)">⚡</button>
-                  <button class="tool-btn" title="Cancel Query">🚫</button>
+                  <button class="tool-btn" id="runtimeEnterQueryBtn" title="Enter Query (F7)">❓</button>
+                  <button class="tool-btn" id="runtimeExecuteQueryBtn" title="Execute Query (Ctrl+F11)">⚡</button>
+                  <button class="tool-btn" id="runtimeCancelQueryBtn" title="Cancel Query">🚫</button>
                 </div>
 
                 <!-- Title Bar (MDI Child Window Title) -->

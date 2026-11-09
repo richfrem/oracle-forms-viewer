@@ -335,6 +335,41 @@ pub struct ItemInfo {
     pub canvas_visible: bool,
 }
 
+impl Default for ItemInfo {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            item_type: None,
+            data_type: None,
+            column_name: None,
+            canvas_name: None,
+            prompt: None,
+            property_class: None,
+            visible: Some(true),
+            required: None,
+            lov_name: None,
+            trigger_names: vec![],
+            inherited: None,
+            dml: None,
+            width: None,
+            height: None,
+            x_position: 0,
+            y_position: 0,
+            tab_page_name: None,
+            label: None,
+            prompt_attachment_edge: default_edge(),
+            prompt_attachment_offset: default_prompt_offset(),
+            prompt_align: default_align(),
+            items_display: 1,
+            distance_between_records: 0,
+            back_color: None,
+            fore_color: None,
+            enabled: true,
+            canvas_visible: true,
+        }
+    }
+}
+
 fn default_edge() -> String { "Start".to_string() }
 fn default_prompt_offset() -> i32 { 5 }
 fn default_align() -> String { "Start".to_string() }
