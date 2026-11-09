@@ -92,10 +92,15 @@ impl SqlGenerator {
             if has_explicit_columns {
                 if let Some(col) = col_name_opt {
                     let col_upper = col.to_ascii_uppercase();
-                    if !selected_columns.contains(&col_upper) {
-                        selected_columns.push(col_upper.clone());
+                    let clean_col = if let Some((_prefix, actual_col)) = col_upper.split_once('.') {
+                        actual_col.to_string()
+                    } else {
+                        col_upper.clone()
+                    };
+                    if !selected_columns.contains(&clean_col) {
+                        selected_columns.push(clean_col.clone());
                     }
-                    column_to_item.push((col_upper, item.name.clone()));
+                    column_to_item.push((clean_col, item.name.clone()));
                 }
             } else {
                 column_to_item.push((item.name.to_ascii_uppercase(), item.name.clone()));
@@ -120,10 +125,23 @@ impl SqlGenerator {
             .map(|w| w.trim())
             .filter(|w| !w.is_empty())
         {
-            let clean_where = where_clause
+            let unescaped_where = where_clause
+                .replace("&amp;#10;", " ")
+                .replace("&amp;#13;", " ")
+                .replace("&#10;", " ")
+                .replace("&#13;", " ")
+                .replace("&quot;", "\"")
+                .replace("&apos;", "'")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace('\n', " ")
+                .replace('\r', " ");
+            let clean_where = unescaped_where
                 .strip_prefix("WHERE ")
-                .or_else(|| where_clause.strip_prefix("where "))
-                .unwrap_or(where_clause);
+                .or_else(|| unescaped_where.strip_prefix("where "))
+                .unwrap_or(&unescaped_where)
+                .trim();
             sql.push_str(&format!(" WHERE {}", clean_where));
         }
 
@@ -135,10 +153,23 @@ impl SqlGenerator {
             .map(|o| o.trim())
             .filter(|o| !o.is_empty())
         {
-            let clean_order = order_clause
+            let unescaped_order = order_clause
+                .replace("&amp;#10;", " ")
+                .replace("&amp;#13;", " ")
+                .replace("&#10;", " ")
+                .replace("&#13;", " ")
+                .replace("&quot;", "\"")
+                .replace("&apos;", "'")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace('\n', " ")
+                .replace('\r', " ");
+            let clean_order = unescaped_order
                 .strip_prefix("ORDER BY ")
-                .or_else(|| order_clause.strip_prefix("order by "))
-                .unwrap_or(order_clause);
+                .or_else(|| unescaped_order.strip_prefix("order by "))
+                .unwrap_or(&unescaped_order)
+                .trim();
             sql.push_str(&format!(" ORDER BY {}", clean_order));
         }
 

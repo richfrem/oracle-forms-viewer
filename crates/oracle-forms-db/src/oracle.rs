@@ -39,8 +39,10 @@ impl DatabaseDriver for OracleDriver {
         let pass = self.config.password.as_deref().unwrap_or("Welcome123#");
         let service = self.config.service_name.as_deref().unwrap_or("FREEPDB1");
 
-        // Format a JSON query script for Oracle Database 23ai
-        let sql_trimmed = sql.trim().trim_end_matches(';');
+        // Format a JSON query script for Oracle Database 23ai.
+        // Flatten any embedded newlines from WHERE/ORDER BY clauses to prevent SQL*Plus line buffer issues.
+        let sql_single_line = sql.replace(['\n', '\r'], " ");
+        let sql_trimmed = sql_single_line.trim().trim_end_matches(';');
         let script = format!(
             "SET PAGESIZE 0 FEEDBACK OFF VERIFY OFF HEADING OFF ECHO OFF TRIMSPOOL ON LINESIZE 32767 LONG 2000000;\n\
              SELECT json_object(*) FROM ({}) Q_WRAP;\n\
