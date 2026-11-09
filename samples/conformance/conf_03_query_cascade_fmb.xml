@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Module version="12.2.1.19.0" xmlns="http://xmlns.oracle.com/Forms">
+  <FormModule Name="CONF_03_QUERY_CASCADE" Title="Query Cascade and Resumable Alert Conformance">
+    <Alert Name="CONFIRM_DELETE" Title="Confirm Cancellation" AlertMessage="Are you sure you want to cancel this order?" Message="Are you sure you want to cancel this order?"/>
+    <Block Name="ORDERS" QueryDataSourceName="ORDERS">
+      <Item Name="ORDER_ID" ItemType="Text Item" DataType="Number"/>
+      <Item Name="ORDER_STATUS" ItemType="Text Item" DataType="Char"/>
+      <Item Name="QUANTITY" ItemType="Text Item" DataType="Number"/>
+      <Item Name="UNIT_PRICE" ItemType="Text Item" DataType="Number"/>
+      <Item Name="TOTAL_AMOUNT" ItemType="Text Item" DataType="Number"/>
+      <Item Name="BTN_DELETE" ItemType="Push Button" Label="Cancel Order">
+        <Trigger Name="WHEN-BUTTON-PRESSED" TriggerText="DECLARE v_button NUMBER; BEGIN v_button := SHOW_ALERT('CONFIRM_DELETE'); IF v_button = ALERT_BUTTON1 THEN :ORDERS.ORDER_STATUS := 'CANCELLED'; MESSAGE('Order cancelled.'); END IF; END;"/>
+      </Item>
+      <Trigger Name="PRE-QUERY" TriggerText="BEGIN :ORDERS.ORDER_STATUS := 'OPEN'; END;"/>
+      <Trigger Name="POST-QUERY" TriggerText="BEGIN :ORDERS.TOTAL_AMOUNT := :ORDERS.QUANTITY * :ORDERS.UNIT_PRICE; END;"/>
+    </Block>
+  </FormModule>
+</Module>

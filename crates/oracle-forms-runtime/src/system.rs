@@ -94,4 +94,45 @@ impl SystemVariables {
             _ => None,
         }
     }
+
+    /// Mutates system variable by canonical name.
+    pub fn set_var(&mut self, name: &str, val: &str) {
+        let clean = name
+            .trim()
+            .trim_start_matches(':')
+            .strip_prefix("SYSTEM.")
+            .unwrap_or(name)
+            .to_ascii_uppercase();
+
+        match clean.as_str() {
+            "CURSOR_ITEM" => self.cursor_item = Some(val.to_string()),
+            "CURSOR_BLOCK" => self.cursor_block = Some(val.to_string()),
+            "CURSOR_RECORD" => {
+                if let Ok(n) = val.parse::<usize>() {
+                    self.cursor_record = n;
+                }
+            }
+            "TRIGGER_ITEM" => self.trigger_item = Some(val.to_string()),
+            "TRIGGER_BLOCK" => self.trigger_block = Some(val.to_string()),
+            "MODE" => {
+                self.mode = if val.eq_ignore_ascii_case("ENTER-QUERY") {
+                    OperationalMode::EnterQuery
+                } else if val.eq_ignore_ascii_case("QUERY") {
+                    OperationalMode::Query
+                } else {
+                    OperationalMode::Normal
+                };
+            }
+            "LAST_QUERY" => self.last_query = Some(val.to_string()),
+            "MESSAGE_LEVEL" => {
+                if let Ok(n) = val.parse::<u8>() {
+                    self.message_level = n;
+                }
+            }
+            "SUPPRESS_WORKING" => {
+                self.suppress_working = val.eq_ignore_ascii_case("TRUE");
+            }
+            _ => {}
+        }
+    }
 }

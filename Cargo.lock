@@ -759,6 +759,7 @@ version = "0.1.0"
 dependencies = [
  "oracle-forms-core",
  "oracle-forms-db",
+ "oracle-forms-plsql",
  "oracle-forms-xml",
  "regex",
  "serde",

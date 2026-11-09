@@ -13,6 +13,7 @@ categories.workspace = true
 [dependencies]
 oracle-forms-core = { workspace = true }
 oracle-forms-db = { workspace = true }
+oracle-forms-plsql = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
