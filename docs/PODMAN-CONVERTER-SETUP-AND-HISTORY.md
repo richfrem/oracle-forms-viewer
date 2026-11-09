@@ -62,7 +62,7 @@ From [Oracle Software Delivery Cloud (eDelivery)](https://edelivery.oracle.com/)
    cd oracle-reference-stack/installer
    unzip -o V983392-01_1of2.zip
    unzip -o V983392-01_2of2.zip
-   cd ../../..
+   cd ../..
    ```
    *Verified Extracted Payloads:*
    - `fmw_12.2.1.4.0_fr_linux64.bin` (2.4 GB executable)
