@@ -12,11 +12,11 @@ Purpose:
 Layer: Tooling / Container Bridge
 
 Usage Examples:
-    python3 tools/podman-converter/convert_fmb.py --check
-    python3 tools/podman-converter/convert_fmb.py example-fmb/form0000.fmb
-    python3 tools/podman-converter/convert_fmb.py example-fmb/form0000.fmb -o example-fmb/custom_output.xml
-    python3 tools/podman-converter/convert_fmb.py example-fmb/formslib.pll
-    python3 tools/podman-converter/convert_fmb.py example-fmb/form0000.fmb --oracle-home /custom/oracle_home
+    python3 oracle-reference-stack/convert_fmb.py --check
+    python3 oracle-reference-stack/convert_fmb.py example-fmb/form0000.fmb
+    python3 oracle-reference-stack/convert_fmb.py example-fmb/form0000.fmb -o example-fmb/custom_output.xml
+    python3 oracle-reference-stack/convert_fmb.py example-fmb/formslib.pll
+    python3 oracle-reference-stack/convert_fmb.py example-fmb/form0000.fmb --oracle-home /custom/oracle_home
 
 Supported Object Types:
     - .fmb (Oracle Forms Binary Module) -> *_fmb.xml via frmf2xml
@@ -31,8 +31,8 @@ CLI Arguments:
     --oracle-home <path>  : Path to local Oracle Home directory (optional).
 
 Input Files:
-    - tools/podman-converter/Containerfile (Container image definition)
-    - tools/podman-converter/oracle_home/ (Optional drop-in directory for Oracle Forms runtime JARs or binaries)
+    - oracle-reference-stack/Containerfile (Container image definition)
+    - oracle-reference-stack/oracle_home/ (Optional drop-in directory for Oracle Forms runtime JARs or binaries)
         * frmxmltools.jar & frmjdapi.jar (Java Forms2XML tools)
         * OR bin/frmf2xml.sh (Full Oracle Forms Linux installation)
     - Target binary files (.fmb, .mmb, .olb)
@@ -115,7 +115,7 @@ def check_podman_readiness() -> int:
             timeout=5,
         )
         if res.returncode != 0:
-            print("NOT_READY: Image 'forms-converter:latest' not found. Build it in tools/podman-converter")
+            print("NOT_READY: Image 'forms-converter:latest' not found. Build it in oracle-reference-stack")
             return 1
     except Exception as err:
         print(f"NOT_READY: Error querying podman image: {err}")
@@ -197,7 +197,7 @@ def build_container_script(file_name: str, stem: str) -> str:
         f"  echo 'Notice: /work/{file_name} mounted successfully inside container.'; "
         f"  echo 'Oracle runtime binaries not yet found in /oracle_home.'; "
         f"  echo 'To enable native frmf2xml conversion, place Oracle Forms Linux binaries or JARs'; "
-        f"  echo 'into tools/podman-converter/oracle_home/'; "
+        f"  echo 'into oracle-reference-stack/oracle_home/'; "
         f"  exit 2; "
         f"fi"
     )

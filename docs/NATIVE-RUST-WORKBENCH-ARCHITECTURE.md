@@ -1,14 +1,14 @@
-# Native Rust Forms Viewer: System Architecture & Implementation Status
+# Native Rust Forms Workbench: System Architecture & Implementation Status
 
-**Document Version:** 2.0 (Post-Implementation Architecture)  
+**Document Version:** 3.0 (Oracle Forms Workbench Architecture)  
 **Status:** Active Implemented System Architecture & Technical Roadmap  
-**Workspace:** `oracle-forms-viewer/` (Pure-Native Rust Cargo Multi-Crate Workspace)
+**Workspace:** Repository Root (Pure-Native Rust Cargo Multi-Crate Workspace)
 
 ---
 
 ## 1. Executive Summary
 
-The Oracle Forms Viewer is a **pure-native, standalone Rust application** that parses, inspects, extracts, and visually renders legacy Oracle Forms (`.fmb`, `.mmb`, `.olb`, Forms2XML exports, `.pld`). 
+The Oracle Forms Workbench is a **pure-native, standalone Rust application** that parses, inspects, extracts, queries live databases, and visually renders legacy Oracle Forms (`.fmb`, `.mmb`, `.olb`, Forms2XML exports, `.pld`). 
 
 It completely replaces the legacy Kotlin/JVM proof-of-concept. The system operates with **zero JVM dependencies, zero Node.js runtime/build dependencies, and zero Oracle runtime client libraries**.
 
@@ -23,11 +23,12 @@ flowchart TD
         PLD[Exported Text Script .pld]
     end
 
-    subgraph RustWorkspace["oracle-forms-viewer (Pure-Native Rust Workspace)"]
+    subgraph RustWorkspace["oracle-forms-workbench (Pure-Native Rust Workspace)"]
         CORE[oracle-forms-core<br/>AST Models, Geometry, Sidecars, SQL Extractor]
         XML_PARSER[oracle-forms-xml<br/>quick-xml StAX Stream & PLD Parser]
         BIN_PARSER[oracle-forms-binary<br/>ROS 60050 Stream & Masonry Layout Engine]
-        CLI[oracle-forms-cli<br/>inspect & dump-sql Tools]
+        DB_ENGINE[oracle-forms-db<br/>SQL Synthesizer & Multi-Backend Query Engine]
+        CLI[oracle-forms-cli<br/>inspect, dump-sql, query Tools]
         SERVER[oracle-forms-server<br/>Axum Web Server :7070 & Embedded UI]
     end
 
@@ -44,27 +45,30 @@ flowchart TD
 
     BIN_PARSER --> CORE
     XML_PARSER --> CORE
+    CORE --> DB_ENGINE
     CORE --> CLI
     CORE --> SERVER
+    DB_ENGINE --> CLI
+    DB_ENGINE --> SERVER
     SERVER --> FRONTEND
 ```
 
-*(A detailed, styled version of this diagram is maintained in [docs/rust-viewer-architecture.mmd](rust-viewer-architecture.mmd)).*
+*(A detailed, styled version of this diagram is maintained in [docs/rust-workbench-architecture.mmd](rust-workbench-architecture.mmd)).*
 
 ---
 
 ## 2. What Was Built (Implemented Architecture)
 
-The active Rust implementation resides in `oracle-forms-viewer/` and is divided into 5 focused crates:
+The active Rust implementation resides directly at the root of the repository and is divided into 6 focused crates:
 
 ```text
-oracle-forms-viewer/
 ├── Cargo.toml                  # Virtual workspace manifest
 ├── crates/
 │   ├── oracle-forms-core/      # Shared AST domain model, sidecars, geometry, SQL extraction
 │   ├── oracle-forms-xml/       # High-performance quick-xml streaming parser & PLD parser
 │   ├── oracle-forms-binary/    # Direct ROS 60050 stream reader & dynamic masonry layout engine
-│   ├── oracle-forms-cli/       # Standalone CLI binary ('inspect', 'dump-sql')
+│   ├── oracle-forms-db/        # Direct DB query engine (Oracle 23ai, SQLite, Mock)
+│   ├── oracle-forms-cli/       # Standalone CLI binary ('inspect', 'dump-sql', 'query')
 │   └── oracle-forms-server/    # Axum HTTP service with embedded browser assets
 ├── ui/                         # Vanilla HTML5, CSS3, and ES6 client (0 Node / 0 npm)
 └── samples/                    # Curated, redistributable test fixtures

@@ -93,7 +93,7 @@ def check_forms_listener() -> bool:
             else:
                 print(f"  - Unexpected response: HTTP {resp.status}")
                 return False
-    except urllib.error.URLError as e:
+    except Exception as e:
         print(f"  - Listener connection failed: {e}")
         return False
 

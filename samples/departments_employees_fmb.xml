@@ -29,13 +29,13 @@
 
     <!-- ==================== DETAIL BLOCK: EMPLOYEES (TABULAR MULTI-RECORD) ==================== -->
     <Block Name="EMPLOYEES" QueryDataSourceName="EMPLOYEES" RecordsDisplayCount="6" OrderByClause="last_name, first_name">
-      <Item Name="EMPLOYEE_ID" ItemType="Text Item" DataType="Number" CanvasName="CV_MAIN" Prompt="Emp ID" XPosition="45" YPosition="225" Width="65" Height="22" PrimaryKey="true" ItemsDisplay="6" DistanceBetweenRecords="28"/>
-      <Item Name="FIRST_NAME" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="First Name" XPosition="120" YPosition="225" Width="105" Height="22" ItemsDisplay="6" DistanceBetweenRecords="28"/>
-      <Item Name="LAST_NAME" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="Last Name" XPosition="235" YPosition="225" Width="115" Height="22" Required="true" ItemsDisplay="6" DistanceBetweenRecords="28"/>
-      <Item Name="EMAIL" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="Email" XPosition="360" YPosition="225" Width="110" Height="22" ItemsDisplay="6" DistanceBetweenRecords="28"/>
-      <Item Name="JOB_ID" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="Job ID" XPosition="480" YPosition="225" Width="85" Height="22" Required="true" ItemsDisplay="6" DistanceBetweenRecords="28"/>
-      <Item Name="SALARY" ItemType="Text Item" DataType="Number" CanvasName="CV_MAIN" Prompt="Salary ($)" XPosition="575" YPosition="225" Width="85" Height="22" ItemsDisplay="6" DistanceBetweenRecords="28"/>
-      <Item Name="COMMISSION_PCT" ItemType="Text Item" DataType="Number" CanvasName="CV_MAIN" Prompt="Comm %" XPosition="670" YPosition="225" Width="75" Height="22" ItemsDisplay="6" DistanceBetweenRecords="28"/>
+      <Item Name="EMPLOYEE_ID" ItemType="Text Item" DataType="Number" CanvasName="CV_MAIN" Prompt="Emp ID" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="45" YPosition="225" Width="65" Height="22" PrimaryKey="true" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+      <Item Name="FIRST_NAME" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="First Name" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="120" YPosition="225" Width="105" Height="22" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+      <Item Name="LAST_NAME" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="Last Name" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="235" YPosition="225" Width="115" Height="22" Required="true" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+      <Item Name="EMAIL" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="Email" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="360" YPosition="225" Width="110" Height="22" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+      <Item Name="JOB_ID" ItemType="Text Item" DataType="Char" CanvasName="CV_MAIN" Prompt="Job ID" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="480" YPosition="225" Width="85" Height="22" Required="true" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+      <Item Name="SALARY" ItemType="Text Item" DataType="Number" CanvasName="CV_MAIN" Prompt="Salary ($)" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="575" YPosition="225" Width="85" Height="22" ItemsDisplay="6" DistanceBetweenRecords="6"/>
+      <Item Name="COMMISSION_PCT" ItemType="Text Item" DataType="Number" CanvasName="CV_MAIN" Prompt="Comm %" PromptAttachmentEdge="Top" PromptAttachmentOffset="8" XPosition="670" YPosition="225" Width="75" Height="22" ItemsDisplay="6" DistanceBetweenRecords="6"/>
 
       <Trigger Name="WHEN-VALIDATE-RECORD" TriggerText="IF :EMPLOYEES.SALARY &lt; 0 THEN&#10;  MESSAGE('Error: Salary cannot be negative.');&#10;  RAISE FORM_TRIGGER_FAILURE;&#10;END IF;"/>
     </Block>

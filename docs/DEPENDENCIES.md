@@ -18,7 +18,7 @@ The repository maintains an intentional, strict boundary between its two operati
                          (Differential Validation & Live Ground Truth)
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Track 2: Pure-Native Rust Workspace (oracle-forms-viewer)                   │
+│ Track 2: Pure-Native Rust Workspace (oracle-forms-workbench)                │
 │ Purpose: Standalone high-performance streaming parser, CLI & Web Viewer     │
 │ Runtime: Pure native Rust (Edition 2021), Axum, vanilla HTML5/SVG           │
 │ Invariant: 0 JVM, 0 Node.js, 0 npm, 0 Oracle runtime libraries              │
@@ -43,7 +43,7 @@ The repository maintains an intentional, strict boundary between its two operati
 ### 2.2 Container Images
 
 #### 1. Oracle Forms 14c Enterprise (`forms-converter-14c:latest`)
-Built via [tools/podman-converter/Containerfile.14c](file:///Users/richardfremmerlid/Projects/oracle-forms-fmb-research/tools/podman-converter/Containerfile.14c):
+Built via [oracle-reference-stack/Containerfile.14c](oracle-reference-stack/Containerfile.14c):
 
 | Component / Package | Version / Source | Architectural Role |
 | :--- | :--- | :--- |
@@ -63,7 +63,7 @@ Pulled from Oracle Container Registry:
 | **Database Listener** | Port 1521 (PDB `FREEPDB1`) | Ground-truth relational backend for live Forms blocks, queries, and transactions. |
 
 #### 3. Legacy Oracle Forms 12c Standalone (`forms-converter:latest`)
-Built via [tools/podman-converter/Containerfile](file:///Users/richardfremmerlid/Projects/oracle-forms-fmb-research/tools/podman-converter/Containerfile):
+Built via [oracle-reference-stack/Containerfile](oracle-reference-stack/Containerfile):
 
 | Component / Package | Version / Source | Architectural Role |
 | :--- | :--- | :--- |
@@ -89,7 +89,7 @@ Mounted on-demand into `/oracle_home:Z`:
 
 ---
 
-## 3. Track 2: Pure-Native Rust Workspace (`oracle-forms-viewer`)
+## 3. Track 2: Pure-Native Rust Workspace (`oracle-forms-workbench`)
 
 ### 3.1 Host Toolchain Requirements
 
@@ -100,7 +100,7 @@ Mounted on-demand into `/oracle_home:Z`:
 
 ### 3.2 Cargo Dependency Bill of Materials
 
-All Rust workspace dependencies are defined in `oracle-forms-viewer/Cargo.toml` and vendorable via `cargo vendor`:
+All Rust workspace dependencies are defined in `Cargo.toml` and vendorable via `cargo vendor`:
 
 | Crate Name | Version | Used By | Purpose / Justification | License |
 | :--- | :--- | :--- | :--- | :--- |
@@ -144,7 +144,7 @@ oracle-forms-core  ◄── oracle-forms-server (depends on core, xml, binary)
 
 | Policy / Constraint | Status | Verification Evidence |
 | :--- | :--- | :--- |
-| **Zero JVM in Rust Workspace** | **PASSED** | No JRE, JDK, Javalin, or JVM bindings exist in `oracle-forms-viewer/`. |
+| **Zero JVM in Rust Workspace** | **PASSED** | No JRE, JDK, Javalin, or JVM bindings exist in the Rust workspace (`crates/`). |
 | **Zero Node.js / NPM Dependencies** | **PASSED** | No `package.json`, `node_modules`, or JS bundlers. Frontend is vanilla HTML/CSS/JS. |
 | **Zero Oracle Client Dependencies** | **PASSED** | The Rust engine compiles and executes without Oracle Client, OCI, or Windows DLLs. |
 | **Air-Gapped / Offline Build Readiness** | **PASSED** | All Rust crates are standard crates.io packages that can be vendored via `cargo vendor`. |

@@ -14,8 +14,8 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Richard Fremmerlid"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/richfrem/oracle-forms-viewer"
-homepage = "https://github.com/richfrem/oracle-forms-viewer"
+repository = "https://github.com/richfrem/oracle-forms-workbench"
+homepage = "https://github.com/richfrem/oracle-forms-workbench"
 keywords = ["oracle-forms", "fmb", "reverse-engineering", "plsql", "parser"]
 categories = ["development-tools", "parser-implementations"]
 

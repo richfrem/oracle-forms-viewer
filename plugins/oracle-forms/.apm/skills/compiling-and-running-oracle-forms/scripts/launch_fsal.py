@@ -27,7 +27,7 @@ CLI Arguments:
     --frmsal-jar <path>   : Custom path to frmsal.jar (optional).
 
 Input Files:
-    - tools/podman-converter/oracle_home_14c/forms/java/frmsal.jar (Official FSAL client)
+    - oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar (Official FSAL client)
     - WebLogic Forms Server active on http://localhost:<port>/forms/frmservlet
 
 Output:
@@ -146,7 +146,7 @@ def main() -> int:
     if args.frmsal_jar:
         frmsal_path = Path(args.frmsal_jar).resolve()
     else:
-        frmsal_path = repo_root / "tools/podman-converter/oracle_home_14c/forms/java/frmsal.jar"
+        frmsal_path = repo_root / "oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar"
 
     if not frmsal_path.exists():
         print(f"Error: frmsal.jar not found at {frmsal_path}", file=sys.stderr)

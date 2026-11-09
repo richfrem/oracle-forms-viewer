@@ -30,25 +30,35 @@ impl FormsService {
         }
     }
 
+    pub fn samples_dir() -> PathBuf {
+        if let Ok(dir) = std::env::var("OFW_SAMPLES_DIR") {
+            return PathBuf::from(dir);
+        }
+        if Path::new("samples").is_dir() {
+            return PathBuf::from("samples");
+        }
+        if Path::new("../../samples").is_dir() {
+            return PathBuf::from("../../samples");
+        }
+        if Path::new("../samples").is_dir() {
+            return PathBuf::from("../samples");
+        }
+        PathBuf::from("samples")
+    }
+
     pub fn get_sample_list(&self) -> Vec<String> {
         let mut list = HashSet::new();
-        let candidate_dirs = [
-            PathBuf::from("samples"),
-            PathBuf::from("../samples"),
-            PathBuf::from("../../samples"),
-        ];
+        let samples_dir = Self::samples_dir();
 
-        for dir in &candidate_dirs {
-            if let Ok(entries) = fs::read_dir(dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                            let ext_lower = ext.to_ascii_lowercase();
-                            if matches!(ext_lower.as_str(), "xml" | "fmb" | "pld" | "mmb" | "olb") {
-                                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                                    list.insert(name.to_string());
-                                }
+        if let Ok(entries) = fs::read_dir(&samples_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+                        let ext_lower = ext.to_ascii_lowercase();
+                        if matches!(ext_lower.as_str(), "xml" | "fmb" | "pld" | "mmb" | "olb") {
+                            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                                list.insert(name.to_string());
                             }
                         }
                     }
@@ -63,9 +73,7 @@ impl FormsService {
 
     pub fn load_sample(&self, sample_name: &str) -> Result<ModuleIndex> {
         let candidate_paths = [
-            PathBuf::from("samples").join(sample_name),
-            PathBuf::from("../samples").join(sample_name),
-            PathBuf::from("../../samples").join(sample_name),
+            Self::samples_dir().join(sample_name),
             PathBuf::from(sample_name),
         ];
 
@@ -149,9 +157,7 @@ impl FormsService {
                 search_dirs.push(parent.to_path_buf());
             }
         }
-        search_dirs.push(PathBuf::from("samples"));
-        search_dirs.push(PathBuf::from("../samples"));
-        search_dirs.push(PathBuf::from("../../samples"));
+        search_dirs.push(Self::samples_dir());
 
         for dir in search_dirs {
             if dir.is_dir() {
@@ -197,10 +203,7 @@ impl FormsService {
                 search_dirs.push(parent.to_path_buf());
             }
         }
-        search_dirs.push(PathBuf::from("samples"));
-        search_dirs.push(PathBuf::from("../samples"));
-        search_dirs.push(PathBuf::from("../../samples"));
-        search_dirs.push(PathBuf::from("oracle-forms-viewer/samples"));
+        search_dirs.push(Self::samples_dir());
 
         for dir in search_dirs {
             if dir.is_dir() {

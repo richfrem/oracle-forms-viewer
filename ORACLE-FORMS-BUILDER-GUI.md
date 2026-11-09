@@ -6,12 +6,12 @@ This guide documents how to launch and run the official, visual **Oracle Forms B
 
 ## 1. Overview & Purpose
 
-The containerized Oracle installation in `tools/podman-converter/` serves two distinct purposes:
+The containerized Oracle installation in `oracle-reference-stack/` serves two distinct purposes:
 
 1. **Batch Conversion Pipeline (`frmf2xml.sh`)**: Headless conversion of binary `.fmb`, `.mmb`, and `.olb` files into canonical XML.
 2. **Interactive Native Forms Builder GUI (`frmbld`)**: The full official visual designer and IDE, enabling you to inspect forms, canvases, layout hierarchies, triggers, and properties exactly as Oracle designed them.
 
-Running the native GUI provides the **ultimate ground-truth reference** when evaluating layout rendering, font metrics, coordinate scaling, and trigger execution against our pure-native Rust viewer (`oracle-forms-viewer`).
+Running the native GUI provides the **ultimate ground-truth reference** when evaluating layout rendering, font metrics, coordinate scaling, and trigger execution against our pure-native Rust workbench (`oracle-forms-workbench`).
 
 ```mermaid
 flowchart LR
@@ -99,7 +99,7 @@ podman run --rm -it \
   -e LD_LIBRARY_PATH="/oracle_home/lib:/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64/server:/usr/lib/jvm/jre-1.8.0-openjdk/lib/amd64" \
   -e FORMS_BUILDER_CLASSPATH="/oracle_home/jlib/frmbld.jar:/oracle_home/jlib/importer.jar:/oracle_home/jlib/debugger.jar:/oracle_home/jlib/utj.jar:/oracle_home/oracle_common/jlib/ewt3.jar:/oracle_home/oracle_common/modules/oracle.bali.share/share.jar:/oracle_home/jlib/dfc.jar:/oracle_home/oracle_common/modules/oracle.help/ohj.jar:/oracle_home/oracle_common/modules/oracle.help/help-share.jar:/oracle_home/oracle_common/modules/oracle.help/oracle_ice.jar:/oracle_home/oracle_common/modules/oracle.bali.jewt/jewt4.jar:/oracle_home/forms/java/frmwebutil.jar:/oracle_home/forms/java/frmall.jar" \
   -e FORMS_PATH="/work:/work/samples:/work/temp/example-fmb:/work/temp/example-fmb/internal-testing" \
-  -v "$(pwd)/tools/podman-converter/oracle_home:/oracle_home:Z" \
+  -v "$(pwd)/oracle-reference-stack/oracle_home:/oracle_home:Z" \
   -v "$(pwd):/work:Z" \
   forms-converter:latest \
   /oracle_home/bin/frmbld
@@ -174,7 +174,7 @@ To run a form interactively with real database transactions against the local Or
    ```
 2. **Compile the form into runtime format (`.fmx`)**:
    ```bash
-   python3 tools/podman-converter/convert_fmb.py samples/simple_module.fmb --compile
+   python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_fmb.py samples/simple_module.fmb --compile
    ```
 3. **Launch the live form via FSAL**:
    ```bash

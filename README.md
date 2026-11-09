@@ -45,16 +45,16 @@ Run compiled forms (`.fmx`) natively on macOS and Windows via Forms Standalone L
 ## Repository Structure
 
 ```text
-├── oracle-forms-viewer/      # [Primary Deliverable] Pure Rust workspace (CLI + Web Viewer)
-│   ├── crates/
-│   │   ├── oracle-forms-core/    # Canonical AST models, sidecars, geometry
-│   │   ├── oracle-forms-xml/     # quick-xml streaming parser (XML & PLD)
-│   │   ├── oracle-forms-binary/  # ROS 60050 stream & heuristic binary extractor
-│   │   ├── oracle-forms-db/      # Direct DB query engine (Oracle 23ai, SQLite, Mock)
-│   │   ├── oracle-forms-cli/     # Standalone CLI (inspect, dump-sql, query)
-│   │   └── oracle-forms-server/  # Axum web server with embedded UI assets
-│   ├── ui/                       # Vanilla HTML/CSS/JS frontend
-│   └── samples/                  # Curated redistributable sample forms
+├── Cargo.toml                # Virtual workspace root
+├── crates/                   # Pure Rust multi-crate workspace
+│   ├── oracle-forms-core/    # Canonical AST models, sidecars, geometry
+│   ├── oracle-forms-xml/     # quick-xml streaming parser (XML & PLD)
+│   ├── oracle-forms-binary/  # ROS 60050 stream & heuristic binary extractor
+│   ├── oracle-forms-db/      # Direct DB query engine (Oracle 23ai, SQLite, Mock)
+│   ├── oracle-forms-cli/     # Standalone CLI (inspect, dump-sql, query)
+│   └── oracle-forms-server/  # Axum web server with embedded UI assets
+├── ui/                       # Vanilla HTML/CSS/JS frontend
+├── samples/                  # Curated redistributable sample forms (XML, PLD, FMB)
 │
 ├── plugins/oracle-forms/     # APM Skills & Automation for Oracle Forms & Reports 14c
 │   ├── .apm/skills/
@@ -63,15 +63,16 @@ Run compiled forms (`.fmx`) natively on macOS and Windows via Forms Standalone L
 │   │   └── compiling-and-running-oracle-forms/ # Headless compiler & live desktop FSAL runner
 │   └── README.md
 │
-├── docs/                     # Architectural specifications & blueprints
-│   ├── NATIVE-RUST-VIEWER-ARCHITECTURE.md        # Active system architecture & implementation status
-│   ├── DEPENDENCIES.md                           # System dependencies & Software Bill of Materials (SBOM)
-│   ├── rust-viewer-architecture.mmd              # Rust workspace architecture diagram
-│   ├── PODMAN-CONVERTER-SETUP-AND-HISTORY.md     # Official Oracle 12c container setup
-│   └── podman-architecture.mmd                   # Container architecture diagram
+├── oracle-reference-stack/   # Official Oracle 12c & 14c Podman stack + 23ai DB (Track 1 ground truth)
 │
-├── samples/                  # Test corpus (claims, orders, simple_module, utils.pld, test_db)
-├── tools/                    # Official Oracle 12c & 14c Podman converter + 23ai DB (Track 1 ground truth)
+├── docs/                     # Architectural specifications & blueprints
+│   ├── NATIVE-RUST-WORKBENCH-ARCHITECTURE.md # Active system architecture & implementation status
+│   ├── DEPENDENCIES.md                       # System dependencies & Software Bill of Materials (SBOM)
+│   ├── rust-workbench-architecture.mmd       # Rust workspace architecture diagram
+│   ├── PODMAN-CONVERTER-SETUP-AND-HISTORY.md # Official Oracle 12c container setup
+│   ├── podman-architecture.mmd               # Container architecture diagram
+│   └── plans/                                # Comprehensive engineering roadmap & RFCs
+│
 ├── temp/                     # [GITIGNORED] Local work files, test binaries, legacy POC
 │
 ├── architecture.md           # System architecture, data pipelines, & crate boundaries
@@ -86,7 +87,6 @@ Run compiled forms (`.fmx`) natively on macOS and Windows via Forms Standalone L
 ### 1. Launch the Native Web Viewer (Port 7070)
 
 ```bash
-cd oracle-forms-viewer
 cargo run -p oracle-forms-server
 ```
 
@@ -98,8 +98,6 @@ Open **[http://127.0.0.1:7070](http://127.0.0.1:7070)** in your browser:
 ### 2. Inspect and Query Forms from the Command Line
 
 ```bash
-cd oracle-forms-viewer
-
 # Query live database records for a block (connects to Oracle 23ai Free :1521)
 cargo run -p oracle-forms-cli -- query samples/test_db_fmb.xml --backend oracle
 
@@ -119,7 +117,6 @@ cargo run -p oracle-forms-cli -- dump-sql samples/orders_fmb.xml -o ./extracted-
 ### 3. Run the Automated Test Suite
 
 ```bash
-cd oracle-forms-viewer
 cargo test
 ```
 
@@ -139,7 +136,7 @@ python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scri
 
 - **[How to Run Native Viewer & CLI](HOW-TO-RUN.md)**: Server configuration, custom ports, CLI commands, and desktop FSAL runner.
 - **[Oracle Forms APM Plugin](plugins/oracle-forms/README.md)**: APM skills for setup, conversion, compilation, and live desktop execution.
-- **[Native Rust Viewer Architecture](docs/NATIVE-RUST-VIEWER-ARCHITECTURE.md)**: Active system architecture, delivered capabilities, and technical roadmap.
+- **[Native Rust Workbench Architecture](docs/NATIVE-RUST-WORKBENCH-ARCHITECTURE.md)**: Active system architecture, delivered capabilities, and technical roadmap.
 - **[System Dependencies & SBOM](docs/DEPENDENCIES.md)**: Complete dependency audit for Rust workspace, Podman container, and host systems.
 - **[Running Official Forms Builder GUI](ORACLE-FORMS-BUILDER-GUI.md)**: Launching native Oracle Forms Builder (`frmbld`) on macOS/Linux via X11 for visual ground-truth comparison.
 - **[Forms & Reports 14c Testing Guide](docs/FORMS-AND-REPORTS-14C-TESTING-GUIDE.md)**: Full verification blueprint for Forms 14c, Reports Server, FSAL live execution, and 23ai Database integration.
@@ -151,4 +148,4 @@ python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scri
 
 ## License
 
-The native `oracle-forms-viewer` workspace is dual-licensed under [MIT](oracle-forms-viewer/LICENSE-MIT) or [Apache-2.0](oracle-forms-viewer/LICENSE-APACHE).
+This project is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE).

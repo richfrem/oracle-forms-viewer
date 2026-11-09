@@ -1,6 +1,6 @@
 # Podman Oracle Forms Converter: Setup, Architecture & Build History
 
-**Location:** `tools/podman-converter/`  
+**Location:** `oracle-reference-stack/`  
 **Host Machine:** macOS (Apple Silicon M1 / ARM64)  
 **Container Architecture:** `linux/amd64` (Rosetta 2 translation under Apple Virtualization Framework)  
 **Target Output Image:** `forms-converter:latest` (Image ID: `acf660e52b02`)  
@@ -17,7 +17,7 @@ The entire purpose of establishing the containerized environment on Apple Silico
 
 ### The Two-Track Strategy: Ground-Truth Validation
 We intentionally maintain **both** conversion and parsing pathways side-by-side:
-1. **Track 1: Official Oracle Native Toolchain (`podman-converter` + `frmf2xml.sh`):**
+1. **Track 1: Official Oracle Native Toolchain (`oracle-reference-stack` + `frmf2xml.sh`):**
    Hosts official Oracle Forms Linux binaries inside the container, producing certified, vendor-standard `*_fmb.xml` exports.
 2. **Track 2: Pure-Kotlin Zero-Dependency Engine (`BinaryFmbParser.kt`):**
    A standalone ROS 60050 stream parser running directly in the JVM that extracts PL/SQL triggers, program units, bind variables, blocks, and items without requiring any Oracle software, licenses, or container runtimes.
@@ -42,14 +42,14 @@ From [Oracle Software Delivery Cloud (eDelivery)](https://edelivery.oracle.com/)
 1. **Git Hygiene (`.gitignore`):**
    The large installer archives and resulting Oracle Home binaries are excluded from version control in `.gitignore`:
    ```text
-   tools/podman-converter/installer/
-   tools/podman-converter/oracle_home/
+   oracle-reference-stack/installer/
+   oracle-reference-stack/oracle_home/
    *.zip
    *.bin
    ```
 2. **Move Archives to Staging Folder:**
    ```bash
-   mv ~/Downloads/V983392-01*.zip tools/podman-converter/installer/
+   mv ~/Downloads/V983392-01*.zip oracle-reference-stack/installer/
    ```
 3. **Verify Archive Contents:**
    - `V983392-01_1of2.zip` contains:
@@ -59,7 +59,7 @@ From [Oracle Software Delivery Cloud (eDelivery)](https://edelivery.oracle.com/)
      * `fmw_12.2.1.4.0_fr_linux64-2.zip` (660 MB companion payload)
 4. **Unpack Archives (Both Parts in Same Folder):**
    ```bash
-   cd tools/podman-converter/installer
+   cd oracle-reference-stack/installer
    unzip -o V983392-01_1of2.zip
    unzip -o V983392-01_2of2.zip
    cd ../../..
@@ -70,7 +70,7 @@ From [Oracle Software Delivery Cloud (eDelivery)](https://edelivery.oracle.com/)
    - `fmw_12214_readme.html`
    *Note: Oracle's `.bin` executable strictly requires `fmw_12.2.1.4.0_fr_linux64-2.zip` to reside in the exact same directory during silent installation.*
 5. **Installer Configuration Files (`oraInst.loc` & `forms_silent.rsp`):**
-   Before running the installer non-interactively, two configuration files must reside in `tools/podman-converter/installer/`:
+   Before running the installer non-interactively, two configuration files must reside in `oracle-reference-stack/installer/`:
    
    - `oraInst.loc` (Central Inventory Pointer targeting `oinstall` group outside Oracle Home):
      ```ini
@@ -94,7 +94,7 @@ From [Oracle Software Delivery Cloud (eDelivery)](https://edelivery.oracle.com/)
    Oracle Universal Installer blocks installation as `root` with the error:
    `The current user is root or has superuser privilege. The Oracle Universal Installer cannot continue.`
    
-   To resolve this, `tools/podman-converter/Containerfile` is configured with an official non-root `oracle` user (UID 1000) and `oinstall` group:
+   To resolve this, `oracle-reference-stack/Containerfile` is configured with an official non-root `oracle` user (UID 1000) and `oinstall` group:
    ```dockerfile
    RUN groupadd -g 1000 oinstall && \
        useradd -u 1000 -g oinstall -m -s /bin/bash oracle && \
@@ -108,8 +108,8 @@ From [Oracle Software Delivery Cloud (eDelivery)](https://edelivery.oracle.com/)
    To open an interactive shell inside the container and inspect the environment:
    ```bash
    podman run -it --rm --platform linux/amd64 \
-     -v "$(pwd)/tools/podman-converter/installer:/installer:Z" \
-     -v "$(pwd)/tools/podman-converter/oracle_home:/oracle_home:Z" \
+     -v "$(pwd)/oracle-reference-stack/installer:/installer:Z" \
+     -v "$(pwd)/oracle-reference-stack/oracle_home:/oracle_home:Z" \
      forms-converter:latest /bin/bash
    ```
    Inside the container shell, verify:
@@ -120,7 +120,7 @@ From [Oracle Software Delivery Cloud (eDelivery)](https://edelivery.oracle.com/)
    ```
 
 8. **Execute Containerized Silent Installation via Compose (`compose.yaml`):**
-   To avoid typing lengthy volume mount and platform arguments, a declarative `compose.yaml` is provided in `tools/podman-converter/`:
+   To avoid typing lengthy volume mount and platform arguments, a declarative `compose.yaml` is provided in `oracle-reference-stack/`:
    ```yaml
    services:
      oracle-install:
@@ -140,11 +140,11 @@ From [Oracle Software Delivery Cloud (eDelivery)](https://edelivery.oracle.com/)
    **Execution Steps:**
    - Rebuild the image with the non-root user:
      ```bash
-     cd tools/podman-converter && podman build --platform linux/amd64 -t forms-converter:latest .
+     cd oracle-reference-stack && podman build --platform linux/amd64 -t forms-converter:latest .
      ```
    - Run the silent installation workload:
      ```bash
-     cd tools/podman-converter && podman compose run --rm oracle-install
+     cd oracle-reference-stack && podman compose run --rm oracle-install
      ```
      *Installation Completed Log:*
      ```text
@@ -155,18 +155,18 @@ From [Oracle Software Delivery Cloud (eDelivery)](https://edelivery.oracle.com/)
 9. **Verify Executables & Toolchain Readiness:**
    - Verify that `$ORACLE_HOME/bin/frmf2xml.sh` exists:
      ```bash
-     ls -la tools/podman-converter/oracle_home/bin/frmf2xml.sh
+     ls -la oracle-reference-stack/oracle_home/bin/frmf2xml.sh
      ```
    - Verify toolchain probe via `convert_fmb.py`:
      ```bash
-     python3 tools/podman-converter/convert_fmb.py --check
+     python3 oracle-reference-stack/convert_fmb.py --check
      # Output: READY
      ```
 
 10. **Verified Conversion Execution:**
     Convert binary form module `rccm0000.fmb` to vendor XML ground truth:
     ```bash
-    python3 tools/podman-converter/convert_fmb.py example-fmb/rccm0000.fmb -o example-fmb/xml-output/rccm0000_oracle.xml
+    python3 oracle-reference-stack/convert_fmb.py example-fmb/rccm0000.fmb -o example-fmb/xml-output/rccm0000_oracle.xml
     ```
     *Verified Execution Log:*
     ```text
@@ -212,7 +212,7 @@ flowchart LR
         
         CLI["<b>CLI Orchestrators</b><br/>• convert_fmb.py<br/>• compose.yaml<br/>• podman CLI"]:::host
 
-        subgraph HostFS["Host Filesystem (oracle-forms-fmb-research)"]
+        subgraph HostFS["Host Filesystem (oracle-forms-workbench)"]
             direction TB
             InstallerDir["📁 <b>tools/.../installer/</b><br/>• fmw_12.2.1.4.0_fr_linux64.bin<br/>• fmw_12.2.1.4.0_fr_linux64-2.zip<br/>• oraInst.loc &amp; forms_silent.rsp"]:::storage
             OracleHomeDir["⭐ <b>tools/.../oracle_home/ [HOSTS TOOLS ON DISK]</b><br/>• forms/templates/scripts/frmf2xml.sh<br/>• jlib/frmxmltools.jar &amp; frmjdapi.jar<br/>• bin/frmbld &amp; bin/frmcmp<br/><i>(3+ GB Persistent Binaries on Host)</i>"]:::oracleStorage
@@ -231,7 +231,7 @@ flowchart LR
             BaseImg -->|FROM| AppImg
         end
 
-        subgraph Pod["Pod: pod_podman-converter"]
+        subgraph Pod["Pod: pod_oracle-reference-stack"]
             direction TB
             InfraContainer["<b>Infra Container</b><br/><i>(Pod Network &amp; Namespace Anchor)</i>"]:::container
 
@@ -309,7 +309,7 @@ x86_64
 
 Navigate to the project's dedicated converter folder:
 ```bash
-cd tools/podman-converter
+cd oracle-reference-stack
 ```
 
 Create the `Containerfile` using the Oracle Linux 8 Slim base image:
@@ -420,18 +420,18 @@ dr-xr-xr-x. 1 root root     40 Nov  7 18:22 ..
 
 ## 6. Step 5: Turnkey Conversion Runner (`convert_fmb.py`)
 
-A single, unified cross-platform Python script (`tools/podman-converter/convert_fmb.py`) serves as the official conversion runner across macOS, Windows, and Linux.
+A single, unified cross-platform Python script (`oracle-reference-stack/convert_fmb.py`) serves as the official conversion runner across macOS, Windows, and Linux.
 
 It uses only Python standard library modules (`pathlib`, `subprocess`, `platform`) with zero external pip dependencies. It automatically handles OS differences, path separators (`/` vs `\`), Windows drive letters, and platform detection.
 
 ### Usage:
 ```bash
 # Test environment readiness:
-python3 tools/podman-converter/convert_fmb.py --check
+python3 oracle-reference-stack/convert_fmb.py --check
 # Output: READY (exit code 0)
 
 # Convert a file:
-python3 tools/podman-converter/convert_fmb.py example-fmb/rccm0000.fmb
+python3 oracle-reference-stack/convert_fmb.py example-fmb/rccm0000.fmb
 ```
 
 *Actual Terminal Output:*
@@ -447,7 +447,7 @@ python3 tools/podman-converter/convert_fmb.py example-fmb/rccm0000.fmb
 Notice: /work/rccm0000.fmb mounted successfully inside container.
 Oracle runtime binaries not yet found in /oracle_home.
 To enable native frmf2xml conversion, place Oracle Forms Linux binaries or JARs
-into tools/podman-converter/oracle_home/
+into oracle-reference-stack/oracle_home/
 ```
 
 ---
@@ -463,7 +463,7 @@ Because the container cannot convert `.fmb` files without proprietary Oracle sof
   - Acts as the central traffic cop whenever a user selects a file in the browser.
   - Checks if the file is already XML &rarr; if yes, sends directly to `FormsXmlParser.kt`.
   - Checks if a pre-converted sibling XML file exists in the directory (e.g. `example-fmb/rccm0000_fmb.xml`) &rarr; if yes, uses that XML.
-  - Probes the container bridge via `python3 tools/podman-converter/convert_fmb.py --check`. If Oracle binaries are dropped in, it uses the container.
+  - Probes the container bridge via `python3 oracle-reference-stack/convert_fmb.py --check`. If Oracle binaries are dropped in, it uses the container.
   - **If no Oracle tools exist**, it gracefully routes the raw `.fmb` file to `BinaryFmbParser.kt`.
 
 ### 2. `BinaryFmbParser.kt` (Zero-Oracle Pure-Kotlin Binary Parser)
@@ -494,7 +494,7 @@ Because the container cannot convert `.fmb` files without proprietary Oracle sof
 
 | Component | Can It Run on macOS Without Oracle Installed? | What It Needs to Work |
 | :--- | :--- | :--- |
-| **`podman-converter`** | **No** (exits code 2 reporting missing binaries) | Requires someone to manually drop `frmxmltools.jar` or an Oracle Forms Linux installation into `tools/podman-converter/oracle_home/`. |
+| **`oracle-reference-stack`** | **No** (exits code 2 reporting missing binaries) | Requires someone to manually drop `frmxmltools.jar` or an Oracle Forms Linux installation into `oracle-reference-stack/oracle_home/`. |
 | **`BinaryFmbParser.kt`** | **Yes** (100% standalone in pure Kotlin) | Needs only the `.fmb` binary file itself. Requires zero Oracle software, zero licenses, and zero container runtimes. |
 | **`FormsXmlParser.kt`** | **Yes** (100% standalone in pure Kotlin) | Needs only the `*_fmb.xml` file. |
 
@@ -505,7 +505,7 @@ Because the container cannot convert `.fmb` files without proprietary Oracle sof
 | Error / Symptom | Root Cause | Permanent Resolution |
 | :--- | :--- | :--- |
 | `Error initialising the Forms Jdapi: no frmjapi in java.library.path` | Oracle Forms Java JNI expects generic `libfrmjapi.so` symlink, `-Djava.library.path=/oracle_home/lib`, and underlying dynamic libraries `libnsl.so.1` and `libXt.so.6`. | Created `libfrmjapi.so -> libfrmjapi.so.0` symlink in `oracle_home/lib/`, added `libnsl` and `libXt` to `Containerfile`, and configured `-Djava.library.path` in `convert_fmb.py` and `frmf2xml.sh`. |
-| `The current user is root or has superuser privilege. The Oracle Universal Installer cannot continue.` | Oracle Universal Installer (OUI) security check explicitly forbids execution as the `root` user. | Updated `tools/podman-converter/Containerfile` to install `shadow-utils`, create non-root user `oracle` (UID 1000) and group `oinstall` (GID 1000), set ownership, and switch context via `USER oracle`. |
+| `The current user is root or has superuser privilege. The Oracle Universal Installer cannot continue.` | Oracle Universal Installer (OUI) security check explicitly forbids execution as the `root` user. | Updated `oracle-reference-stack/Containerfile` to install `shadow-utils`, create non-root user `oracle` (UID 1000) and group `oinstall` (GID 1000), set ownership, and switch context via `USER oracle`. |
 | `[VALIDATION] [ERROR]:INST-07319: Validation of Oracle Home location failed. The location specified already exists and is a nonempty directory` | `oraInst.loc` had `inventory_loc=/oracle_home/oraInventory`. OUI initializes the central inventory folder *before* validating `ORACLE_HOME`, making `/oracle_home` non-empty. | Relocated central inventory in `oraInst.loc` to `inventory_loc=/home/oracle/oraInventory` (inside the `oracle` user's home directory), leaving `/oracle_home` completely empty for OUI. |
 | `Error: parsing reference " ": invalid reference format` | Trailing spaces after shell line-continuation backslashes (`\ `) in interactive terminal commands. | Provide single-line commands or use declarative `compose.yaml` to avoid shell escaping pitfalls. |
 | `WARNING: image platform (linux/amd64) does not match expected platform (linux/arm64)` | Running Intel x86_64 binaries on Apple Silicon ARM64 without explicit platform targeting. | Added `--platform linux/amd64` to all `podman run` and `compose.yaml` declarations to activate Rosetta 2 translation cleanly. |
@@ -529,7 +529,7 @@ Because the container cannot convert `.fmb` files without proprietary Oracle sof
 
 ### 10.1 Why `rwconverter.sh` Is Absent in Track 1
 When executing `convert_rpt.py`, the tool reports that `rwconverter.sh` is missing:
-- **Installer Profile:** During silent installation, `tools/podman-converter/installer/forms_silent.rsp` configured:
+- **Installer Profile:** During silent installation, `oracle-reference-stack/installer/forms_silent.rsp` configured:
   ```ini
   INSTALL_TYPE=Standalone Forms Builder
   ```
@@ -540,7 +540,7 @@ Binary Oracle Reports (`.rdf`) files are **not** an alien format—they are pack
 - The native Rust binary parser (`oracle-forms-binary` and `oracle-forms-cli`) parses `.rdf` files out of the box with **zero JVM, zero WebLogic, and zero Oracle runtime software**.
 - Program units, parameter triggers (`BEFOREPFORM`, `AFTERPFORM`), and formula column functions (`CF_*`) are extracted instantaneously via:
   ```bash
-  cd oracle-forms-viewer
+  cargo run -p oracle-forms-server
   cargo run -p oracle-forms-cli -- inspect /path/to/report.rdf
   cargo run -p oracle-forms-cli -- dump-sql /path/to/report.rdf -o ./extracted-sql
   ```
@@ -580,7 +580,7 @@ Acquired from Oracle Software Delivery Cloud (eDelivery) for `Linux x86-64`:
 - **Part 1**: `V1045135-01.zip` (2.1 GB) $\rightarrow$ `fmw_14.1.2.0.0_infrastructure.jar` (FMW Infrastructure 14.1.2)
 - **Part 2**: `V1045121-01.zip` (1.3 GB) $\rightarrow$ `fmw_14.1.2.0.0_fr_linux64.bin` (Forms and Reports 14.1.2)
 
-Both archives were unpacked into `tools/podman-converter/installer/`.
+Both archives were unpacked into `oracle-reference-stack/installer/`.
 
 ### 12.2 Runtime Environment (`Containerfile.14c`)
 Unlike 12c (which ran on OpenJDK 8), FMW 14c requires **Java 17**:
@@ -609,7 +609,7 @@ Both components install into the same target directory `/oracle_home_14c` using 
    ```
 
 ### 12.4 Installation Verification & Deliverables on Disk
-Both installations completed with exit code 0 (`Percent Complete : 100`). The following core components and binaries are confirmed active in `tools/podman-converter/oracle_home_14c`:
+Both installations completed with exit code 0 (`Percent Complete : 100`). The following core components and binaries are confirmed active in `oracle-reference-stack/oracle_home_14c`:
 - **WebLogic Server 14c**: `wlserver/`
 - **Oracle Common**: `oracle_common/`
 - **Forms Runtime, Compiler & Launcher**:
@@ -629,7 +629,7 @@ Installing the binaries places the engines on disk. To activate HTTP listening p
 
 Oracle provides **`forms_development_template.jar`** specifically for standalone development and testing:
 - **Zero-RCU Architecture**: Leverages Oracle Restricted JRF (Java Required Files), eliminating the requirement for complex RCU database schemas (MDS, OPSS, STB) for local developer workflows. Targets `formsapp#14.1.2`, `em.ear`, and `fads#1.0` directly to `AdminServer` (Port 7001).
-- **Domain Script**: `tools/podman-converter/installer/create_forms_domain.py`:
+- **Domain Script**: `oracle-reference-stack/installer/create_forms_domain.py`:
   ```python
   readTemplate('/oracle_home_14c/wlserver/common/templates/wls/wls.jar')
   addTemplate('/oracle_home_14c/forms/common/templates/wls/forms_development_template.jar')
@@ -643,8 +643,8 @@ Oracle provides **`forms_development_template.jar`** specifically for standalone
   ```bash
   podman run --rm \
     --platform linux/amd64 \
-    -v $(pwd)/tools/podman-converter/installer:/installer:Z \
-    -v $(pwd)/tools/podman-converter/oracle_home_14c:/oracle_home_14c:Z \
+    -v $(pwd)/oracle-reference-stack/installer:/installer:Z \
+    -v $(pwd)/oracle-reference-stack/oracle_home_14c:/oracle_home_14c:Z \
     -e ORACLE_HOME=/oracle_home_14c \
     forms-converter-14c:latest \
     /oracle_home_14c/oracle_common/common/bin/wlst.sh /installer/create_forms_domain.py
@@ -656,8 +656,8 @@ To boot without interactive credential prompts and avoid native library linking 
 1. **Automated Boot Credentials (`boot.properties`)**:
    Create directory and file:
    ```bash
-   mkdir -p tools/podman-converter/oracle_home_14c/user_projects/domains/base_domain/servers/AdminServer/security/
-   cat << 'EOF' > tools/podman-converter/oracle_home_14c/user_projects/domains/base_domain/servers/AdminServer/security/boot.properties
+   mkdir -p oracle-reference-stack/oracle_home_14c/user_projects/domains/base_domain/servers/AdminServer/security/
+   cat << 'EOF' > oracle-reference-stack/oracle_home_14c/user_projects/domains/base_domain/servers/AdminServer/security/boot.properties
    username=weblogic
    password=Welcome123#
    EOF
@@ -669,15 +669,15 @@ To boot without interactive credential prompts and avoid native library linking 
    
    Create `setUserOverrides.sh` in the domain's `bin/` directory:
    ```bash
-   cat << 'EOF' > tools/podman-converter/oracle_home_14c/user_projects/domains/base_domain/bin/setUserOverrides.sh
+   cat << 'EOF' > oracle-reference-stack/oracle_home_14c/user_projects/domains/base_domain/bin/setUserOverrides.sh
    #!/bin/sh
    export LD_LIBRARY_PATH=/oracle_home_14c/lib:/oracle_home_14c/oracle_common/lib:${LD_LIBRARY_PATH}
    EOF
-   chmod +x tools/podman-converter/oracle_home_14c/user_projects/domains/base_domain/bin/setUserOverrides.sh
+   chmod +x oracle-reference-stack/oracle_home_14c/user_projects/domains/base_domain/bin/setUserOverrides.sh
    ```
 
 3. **Global Dynamic Linker Configuration (`/etc/ld.so.conf.d/oracle_forms.conf`)**:
-   Bake into `tools/podman-converter/Containerfile.14c`:
+   Bake into `oracle-reference-stack/Containerfile.14c`:
    ```dockerfile
    RUN printf "/oracle_home_14c/lib\n/oracle_home_14c/oracle_common/lib\n" > /etc/ld.so.conf.d/oracle_forms.conf
    ```
@@ -690,7 +690,7 @@ podman run -d \
   --platform linux/amd64 \
   -p 7001:7001 \
   -p 9001:9001 \
-  -v $(pwd)/tools/podman-converter/oracle_home_14c:/oracle_home_14c:Z \
+  -v $(pwd)/oracle-reference-stack/oracle_home_14c:/oracle_home_14c:Z \
   -v $(pwd)/samples:/work:Z \
   -e ORACLE_HOME=/oracle_home_14c \
   -e DOMAIN_HOME=/oracle_home_14c/user_projects/domains/base_domain \
@@ -750,12 +750,12 @@ podman run -d `
   container-registry.oracle.com/database/free:latest-lite
 
 # 2. Build the Forms 14c image
-podman build -t forms-converter-14c:latest -f tools/podman-converter/Containerfile.14c tools/podman-converter
+podman build -t forms-converter-14c:latest -f oracle-reference-stack/Containerfile.14c oracle-reference-stack
 
 # 3. Stage 1: Install FMW Infrastructure 14c
 podman run --rm `
-  -v ${PWD}/tools/podman-converter/installer:/installer:Z `
-  -v ${PWD}/tools/podman-converter/oracle_home_14c:/oracle_home_14c:Z `
+  -v ${PWD}/oracle-reference-stack/installer:/installer:Z `
+  -v ${PWD}/oracle-reference-stack/oracle_home_14c:/oracle_home_14c:Z `
   forms-converter-14c:latest `
   java -jar /installer/fmw_14.1.2.0.0_infrastructure.jar `
     -silent -ignoreSysPrereqs `
@@ -764,8 +764,8 @@ podman run --rm `
 
 # 4. Stage 2: Install Forms and Reports 14c
 podman run --rm `
-  -v ${PWD}/tools/podman-converter/installer:/installer:Z `
-  -v ${PWD}/tools/podman-converter/oracle_home_14c:/oracle_home_14c:Z `
+  -v ${PWD}/oracle-reference-stack/installer:/installer:Z `
+  -v ${PWD}/oracle-reference-stack/oracle_home_14c:/oracle_home_14c:Z `
   forms-converter-14c:latest `
   /installer/fmw_14.1.2.0.0_fr_linux64.bin `
     -silent -ignoreSysPrereqs `

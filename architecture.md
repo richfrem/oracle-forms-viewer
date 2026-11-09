@@ -26,7 +26,7 @@ flowchart TD
         F14 --> FSAL[Forms Standalone Launcher FSAL Live Execution via run_form.py]
     end
 
-    subgraph Track2["Track 2: Pure Native Rust Engine (oracle-forms-viewer)"]
+    subgraph Track2["Track 2: Pure Native Rust Engine (oracle-forms-workbench)"]
         INPUT[Any Input: .fmb, .xml, .pld, .mmb, .olb] --> DISPATCH{Format Detection}
         DISPATCH -->|XML Export| QXML[oracle-forms-xml<br/>quick-xml StAX Reader]
         DISPATCH -->|PL/SQL Library| PLD[oracle-forms-xml<br/>PldParser]
@@ -50,10 +50,9 @@ flowchart TD
 
 ## 2. The Rust Multi-Crate Workspace
 
-The core deliverable is housed in `oracle-forms-viewer/`, partitioned into 6 modular crates:
+The native Rust engine is housed directly at the root of the repository, partitioned into 6 modular crates:
 
 ```text
-oracle-forms-viewer/
 ├── Cargo.toml                            # Virtual workspace root
 ├── crates/
 │   ├── oracle-forms-core/                # Shared domain models, sidecars, geometry
@@ -115,7 +114,7 @@ The frontend embedded in `oracle-forms-server` uses vanilla JavaScript, CSS, and
 
 ---
 
-## 5. Track 1 Container Architecture (`tools/podman-converter`)
+## 5. Track 1 Container Architecture (`oracle-reference-stack/`)
 
 The Track 1 environment provides the official Oracle runtime, ground-truth XML exports, Reports conversion, and Forms Builder visual verification without requiring a Windows VM or remote server.
 
@@ -126,7 +125,7 @@ To avoid version coupling, the environment supports running both **Oracle Forms 
 |---|---|---|
 | **Architecture** | `linux/amd64` (Rosetta 2 emulation) | `linux/amd64` (Rosetta 2 emulation) |
 | **Java Runtime** | OpenJDK 1.8.0 Headless | OpenJDK 17 Devel (`java-17-openjdk`) |
-| **Target Directory** | `tools/podman-converter/oracle_home` | `tools/podman-converter/oracle_home_14c` |
+| **Target Directory** | `oracle-reference-stack/oracle_home` | `oracle-reference-stack/oracle_home_14c` |
 | **Scope** | Lightweight Standalone Forms Builder (~3.5 GB) | Full FMW Infrastructure + Forms & Reports Deployment |
 | **Primary Use** | Ultra-fast batch XML/PLD conversion & `frmbld` GUI | Live WebLogic Forms Runtime (`WLS_FORMS`), AdminServer & Reports |
 | **Ports** | None (X11 display only) | `7001` (AdminServer), `9001` (`WLS_FORMS`) |
