@@ -81,7 +81,7 @@
 
 ---
 
-### Milestone C: PL/SQL Front-End & Code Intelligence
+### Milestone C: PL/SQL Front-End & Code Intelligence ✅
 - **Objective**: Build resilient PL/SQL parser and static code analysis reports.
 - **Tasks**:
   1. Scaffold `crates/oracle-forms-plsql/`.
@@ -90,7 +90,8 @@
   4. Symbol table resolving across Form Program Units, attached `.pll` libraries, and `.mmb` menus.
   5. Generate call graph, event map, item cross-reference, and executability coverage report.
 - **Verification Gate**:
-  - Successfully parses 100% of PL/SQL extracted from sample corpus (`orders_fmb.xml`, `claims_fmb.xml`, `utils.pld`).
+  - Successfully parses 100% of PL/SQL extracted from sample corpus (`orders_fmb.xml`, `claims_fmb.xml`, `customers_fmb.xml`, `test_db_fmb.xml`, `utils.pld`).
+  - Unit and integration tests pass with zero warnings.
 
 ---
 
