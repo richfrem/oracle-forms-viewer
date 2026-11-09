@@ -65,6 +65,7 @@ impl PldParser {
                 unit_type,
                 line_count,
                 first_line,
+                source_text: Some(lines[header.line_idx..end_line_idx].join("\n")),
                 inherited: None,
                 text_encoding: Default::default(),
                 text_ref: Some(SourceRef::new(&pld_path, start_line, end_line)),

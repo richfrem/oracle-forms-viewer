@@ -608,6 +608,7 @@ impl FormsXmlParser {
                     text_encoding: body.encoding,
                     text_ref: Some(text_ref),
                     xml_ref: None,
+                    source_text: Some(text.clone()),
                 });
             }
             "ProgramUnit" => {
@@ -633,6 +634,7 @@ impl FormsXmlParser {
                     text_encoding: body.encoding,
                     text_ref: Some(text_ref),
                     xml_ref: None,
+                    source_text: Some(text),
                 });
             }
             "AttachedLibrary" => {

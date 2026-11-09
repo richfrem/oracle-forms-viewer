@@ -505,6 +505,8 @@ pub struct TriggerInfo {
     pub text_encoding: TextEncoding,
     pub text_ref: Option<SourceRef>,
     pub xml_ref: Option<SourceRef>,
+    #[serde(default)]
+    pub source_text: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -544,6 +546,8 @@ pub struct ProgramUnitInfo {
     pub text_encoding: TextEncoding,
     pub text_ref: Option<SourceRef>,
     pub xml_ref: Option<SourceRef>,
+    #[serde(default)]
+    pub source_text: Option<String>,
 }
 
 fn default_prog_type() -> ProgramUnitType { ProgramUnitType::Unknown }

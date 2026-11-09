@@ -741,6 +741,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "oracle-forms-plsql"
+version = "0.1.0"
+dependencies = [
+ "oracle-forms-core",
+ "oracle-forms-xml",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
 name = "oracle-forms-runtime"
 version = "0.1.0"
 dependencies = [

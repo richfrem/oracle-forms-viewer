@@ -1,0 +1,22 @@
+[package]
+name = "oracle-forms-plsql"
+description = "Pure-native resilient PL/SQL lexer, parser, AST models, and static code intelligence engine for Oracle Forms Workbench"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+oracle-forms-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+regex = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+oracle-forms-xml = { workspace = true }
