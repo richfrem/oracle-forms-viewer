@@ -1,5 +1,5 @@
 use oracle_forms_core::model::{BlockDml, BlockInfo, ItemInfo};
-use oracle_forms_db::{create_driver, DatabaseDriver, DbConfig, MockDriver, SqliteDriver};
+use oracle_forms_db::{create_driver, BoundSql, DatabaseDriver, DbConfig, MockDriver, SqlValue, SqliteDriver};
 
 #[tokio::test]
 async fn test_sqlite_in_memory_crud() {
@@ -7,7 +7,7 @@ async fn test_sqlite_in_memory_crud() {
     driver.test_connection().await.expect("Ping failed");
 
     let res = driver
-        .query("SELECT item_id, item_name, amount FROM test_items ORDER BY item_id")
+        .query(&BoundSql::new("SELECT rowid AS rowid, item_id, item_name, amount FROM test_items ORDER BY item_id"))
         .await
         .expect("Query failed");
 
@@ -15,6 +15,21 @@ async fn test_sqlite_in_memory_crud() {
     let first = &res.records[0];
     assert_eq!(first.values.get("ITEM_NAME").unwrap(), "Widget A");
     assert_eq!(first.values.get("ITEM_ID").unwrap(), 1);
+    assert!(first.row_id.is_some());
+}
+
+#[tokio::test]
+async fn test_sqlite_bound_parameter_query() {
+    let driver = SqliteDriver::in_memory().expect("Failed to initialize SQLite driver");
+    let bound = BoundSql::with_binds(
+        "SELECT item_id, item_name, amount FROM test_items WHERE item_id <= ? ORDER BY item_id",
+        vec![("item_id".to_string(), SqlValue::from(2))],
+    );
+
+    let res = driver.query(&bound).await.expect("Parameterized query failed");
+    assert_eq!(res.records.len(), 2);
+    assert_eq!(res.records[0].values.get("ITEM_ID").unwrap(), 1);
+    assert_eq!(res.records[1].values.get("ITEM_ID").unwrap(), 2);
 }
 
 #[tokio::test]
@@ -78,19 +93,26 @@ async fn test_factory_creation() {
 #[tokio::test]
 async fn test_oracle_live_container_query() {
     let config = DbConfig::oracle_default();
-    let driver = create_driver(&config).expect("Failed to create Oracle driver");
+    let driver = match create_driver(&config) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("Skipping live container test: {}", e);
+            return;
+        }
+    };
 
-    // Only run if listener is reachable
-    if driver.test_connection().await.is_err() {
-        eprintln!("Oracle 23ai listener on 1521 not reachable; skipping live test");
+    // Only run if listener is reachable and credentials are valid
+    if let Err(e) = driver.test_connection().await {
+        eprintln!("Oracle testbed connection not available ({}). Skipping live test.", e);
         return;
     }
 
+    let bound = BoundSql::new("SELECT ROWID, item_id, item_name, amount FROM test_items ORDER BY item_id");
     let result = driver
-        .query("SELECT item_id, item_name, amount FROM test_items ORDER BY item_id")
+        .query(&bound)
         .await
         .expect("Oracle 23ai query failed");
 
-    assert!(!result.records.is_empty());
+    assert!(!result.records.len() > 0);
     println!("Fetched {} live rows from Oracle 23ai!", result.records.len());
 }

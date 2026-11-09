@@ -320,7 +320,7 @@ fn extract_complete_code_block(chunk: &str) -> String {
 
     let end_named_rx = Regex::new(r"(?i)\bEND\s+[A-Za-z0-9_$]+\s*;").unwrap();
     if let Some(m) = end_named_rx.find(chunk) {
-        return clean_code_string(&chunk[0..m.end()].trim());
+        return clean_code_string(chunk[0..m.end()].trim());
     }
 
     let limit = 300.min(chunk.len());
@@ -346,6 +346,6 @@ fn is_readable_text(s: &str) -> bool {
     if s.trim().is_empty() {
         return false;
     }
-    let printable = s.chars().filter(|&c| (c >= ' ' && c <= '~') || c == '\n' || c == '\r' || c == '\t').count();
+    let printable = s.chars().filter(|&c| (' '..='~').contains(&c) || c == '\n' || c == '\r' || c == '\t').count();
     (printable as f64 / s.len() as f64) > 0.90
 }

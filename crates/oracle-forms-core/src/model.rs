@@ -401,6 +401,26 @@ pub struct BlockInfo {
     pub record_orientation: String,
 }
 
+impl Default for BlockInfo {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            query_data_source_name: None,
+            property_class: None,
+            items: Vec::new(),
+            trigger_names: Vec::new(),
+            inherited: None,
+            source_ref: None,
+            dml: None,
+            data_source_column_count: 0,
+            relations: Vec::new(),
+            records_displayed: 1,
+            distance_between_records: 0,
+            record_orientation: "Vertical".to_string(),
+        }
+    }
+}
+
 fn default_orientation() -> String { "Vertical".to_string() }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
