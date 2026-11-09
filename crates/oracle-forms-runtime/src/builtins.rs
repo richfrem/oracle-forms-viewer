@@ -138,9 +138,20 @@ impl BuiltinRegistry {
                 session.clear_form();
                 BuiltinResult::Void
             }
+            "COMMIT" | "COMMIT_FORM" => {
+                if let Err(e) = session.commit() {
+                    return BuiltinResult::Failure(e.to_string());
+                }
+                BuiltinResult::Void
+            }
             "DO_KEY" => {
                 if let Some(arg) = args.first().and_then(|v| v.as_str()) {
                     session.trace_log.push(format!("DO_KEY: {}", arg));
+                    if arg.eq_ignore_ascii_case("COMMIT_FORM") {
+                        if let Err(e) = session.commit() {
+                            return BuiltinResult::Failure(e.to_string());
+                        }
+                    }
                 }
                 BuiltinResult::Void
             }

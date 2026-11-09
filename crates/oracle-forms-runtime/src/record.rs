@@ -51,6 +51,7 @@ pub struct FormRecord {
     pub initial_values: HashMap<String, serde_json::Value>,
     pub item_validation: HashMap<String, ValidationStatus>,
     pub row_id: Option<String>,
+    pub is_locked: bool,
 }
 
 impl Default for FormRecord {
@@ -69,6 +70,7 @@ impl FormRecord {
             initial_values: HashMap::new(),
             item_validation: HashMap::new(),
             row_id: None,
+            is_locked: false,
         }
     }
 
@@ -84,6 +86,7 @@ impl FormRecord {
             values,
             item_validation: HashMap::new(),
             row_id,
+            is_locked: false,
         }
     }
 
