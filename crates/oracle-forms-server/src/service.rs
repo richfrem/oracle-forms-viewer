@@ -249,6 +249,7 @@ impl FormsService {
                 self.load_sample(module_name)
                     .or_else(|_| self.load_sample(&format!("{}.xml", module_name)))
                     .or_else(|_| self.load_sample(&format!("{}_fmb.xml", module_name)))
+                    .or_else(|_| self.load_sample(&format!("{}.fmb", module_name)))
                     .map_err(|_| FormsError::NotFound(format!("Module '{}' not loaded in session or samples", module_name)))?
             }
         };

@@ -938,14 +938,18 @@
         throw new Error(data.error || 'Failed to execute database query.');
       }
 
-      queryRecordsByBlock.set(blockName, data.records || []);
+      const records = (data.records || []).map(r => (r && typeof r === 'object' && r.values) ? r.values : r);
+      queryRecordsByBlock.set(blockName, records);
       activeRecordIndexByBlock.set(blockName, 0);
 
       applyRecordsToBlock(blockName);
       updateRecordNavigator(blockName);
 
+      const count = data.totalCount ?? records.length;
+      const sqlText = data.sqlStatement || data.sqlExecuted || '';
+      const sqlSnippet = sqlText ? ` - SQL: ${sqlText.substring(0, 45)}...` : '';
       if (oracleStatusMsg) {
-        oracleStatusMsg.textContent = `Fetched ${data.totalFetched} records on ${blockName} (${data.backend}) - SQL: ${data.sqlExecuted.substring(0, 45)}...`;
+        oracleStatusMsg.textContent = `Fetched ${count} records on ${blockName} (${backend})${sqlSnippet}`;
       }
 
       renderCanvasSvg();

@@ -28,7 +28,8 @@ window.FormsPreview = class FormsPreview {
   setRecord(blockName, record, row = 0) {
     if (!record) return;
     const bName = blockName.toUpperCase();
-    for (const [col, val] of Object.entries(record)) {
+    const rowData = (record && typeof record === 'object' && record.values) ? record.values : record;
+    for (const [col, val] of Object.entries(rowData)) {
       const v = val != null ? String(val) : '';
       this.values.set(JSON.stringify([bName, col.toUpperCase(), row]), v);
     }
