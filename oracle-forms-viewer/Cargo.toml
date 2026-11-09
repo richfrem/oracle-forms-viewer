@@ -3,6 +3,7 @@ members = [
     "crates/oracle-forms-core",
     "crates/oracle-forms-xml",
     "crates/oracle-forms-binary",
+    "crates/oracle-forms-db",
     "crates/oracle-forms-cli",
     "crates/oracle-forms-server",
 ]
@@ -22,6 +23,7 @@ categories = ["development-tools", "parser-implementations"]
 oracle-forms-core = { path = "crates/oracle-forms-core" }
 oracle-forms-xml = { path = "crates/oracle-forms-xml" }
 oracle-forms-binary = { path = "crates/oracle-forms-binary" }
+oracle-forms-db = { path = "crates/oracle-forms-db" }
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -17,6 +17,12 @@ pub enum FormsError {
     #[error("Invalid module format: {0}")]
     InvalidFormat(String),
 
+    #[error("Internal error: {0}")]
+    Internal(String),
+
+    #[error("Database error: {0}")]
+    Database(String),
+
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 }
