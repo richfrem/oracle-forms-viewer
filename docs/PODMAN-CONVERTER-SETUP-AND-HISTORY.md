@@ -510,6 +510,18 @@ Because the container cannot convert `.fmb` files without proprietary Oracle sof
 | `Error: parsing reference " ": invalid reference format` | Trailing spaces after shell line-continuation backslashes (`\ `) in interactive terminal commands. | Provide single-line commands or use declarative `compose.yaml` to avoid shell escaping pitfalls. |
 | `WARNING: image platform (linux/amd64) does not match expected platform (linux/arm64)` | Running Intel x86_64 binaries on Apple Silicon ARM64 without explicit platform targeting. | Added `--platform linux/amd64` to all `podman run` and `compose.yaml` declarations to activate Rosetta 2 translation cleanly. |
 | `Error: Oracle Reports converter (rwconverter.sh) is not installed in /oracle_home/bin` | The Oracle Home was installed with `INSTALL_TYPE=Standalone Forms Builder`, which deliberately excludes Oracle Reports because 12c treats Reports as a WebLogic deployment. | Documented that Track 1 reports conversion requires separate WebLogic FMW Infrastructure. Directed reports inspection to Track 2 (Native Rust engine), which parses ROS.60050 `.rdf` files natively with zero dependencies. |
+| `The OpenJDK JVM is not supported on this platform.` | Oracle Universal Installer (OUI) for Fusion Middleware enforces an explicit vendor check (`java.vendor == "Oracle Corporation"`), blocking OpenJDK. | Replaced OpenJDK with official Oracle JDK 17 (`jdk-17.0.12_linux-x64_bin.tar.gz`) in `Containerfile.14c`, unpacked to `/usr/lib/jvm/jdk-17.0.12`, satisfying the vendor check without bypass hacks. |
+| `libfrmjapi.so.0: libaio.so.1: cannot open shared object file: No such file or directory` | Oracle Forms 14c native JDAPI dynamic library (`libfrmjapi.so.0`) links against the Linux asynchronous I/O library (`libaio.so.1`). | Added `libaio` package to `Containerfile.14c`. |
+| `Config option "DomainName" is not valid for updating a domain` | In offline WLST, calling `setOption('DomainName', ...)` or `setOption('OverwriteDomain', ...)` after reading base template `wls.jar` throws an invalid config option exception. | Omit `setOption('DomainName')` during offline template creation; the domain name is intrinsically determined by the target output path passed to `writeDomain(...)`. |
+| `Authentication denied: Boot identity not valid` | Renaming the domain away from the default template name (`base_domain`) desynchronizes the embedded LDAP realm user directory path (`/Security/base_domain/User/weblogic`), causing WebLogic startup authentication to reject `boot.properties`. | Retain canonical domain name `base_domain` when provisioning via `create_forms_domain.py`, and stage `boot.properties` in `servers/AdminServer/security/`. |
+| `java.lang.UnsatisfiedLinkError: /oracle_home_14c/lib/libifopmnwrp.so.0: libopmnperf.so: cannot open shared object file: No such file or directory` (BEA-149231) | Forms application lifecycle listener (`FormsappLifeCycleListener.postStart`) invokes native JNI `libifopmnwrp.so.0`, which dynamically links to `libopmnperf.so` in `/oracle_home_14c/oracle_common/lib`. Standard WebLogic `setDomainEnv.sh` does not include `oracle_common/lib` in `LD_LIBRARY_PATH`. | 1) Created domain hook `${DOMAIN_HOME}/bin/setUserOverrides.sh` exporting `LD_LIBRARY_PATH=/oracle_home_14c/lib:/oracle_home_14c/oracle_common/lib:${LD_LIBRARY_PATH}`.<br>2) Created `/etc/ld.so.conf.d/oracle_forms.conf` containing `/oracle_home_14c/lib` and `/oracle_home_14c/oracle_common/lib` and ran `ldconfig` (persisted into `Containerfile.14c`). |
+| `FRM-93500: unexpected error while attempting to create the runtime process` / `NullPointerException: Cannot invoke "String.indexOf(int)" because "value" is null` | Forms 14c development domain runs `formsapp` directly on `AdminServer`. When `forms.instance` system property is absent, `FormsappConfigUtils.getFormsInstanceName()` queries JMX for a `SystemComponent` attached to `AdminServer` and returns `null`. Under Java 17, `ProcessBuilder.environment().put("FORMS_INSTANCE_NAME", null)` invokes `validateValue(value)` which calls `value.indexOf('\0')` and throws NPE. | Added `EXTRA_JAVA_PROPERTIES="-Dforms.instance=forms1 ${EXTRA_JAVA_PROPERTIES}"` to `${DOMAIN_HOME}/bin/setUserOverrides.sh`. |
+| `frmweb: error while loading shared libraries: libiplsn.so.0: cannot open shared object file: No such file or directory` | Oracle ships the 16 Forms web runtime libraries (`libiplsn.a`, `libibfrmw.a`, `libiffw.a`, `libifcw.a`, etc.) as static `.a` archives in `$ORACLE_HOME/lib/` and expects GNU `gcc`, `binutils`, and `ar` to build `.so.0` shared libraries during the installation relinking step via `$ORACLE_HOME/bin/genshlib`. The slim container image omitted build tools. | Added `gcc`, `binutils`, and `make` to `Containerfile.14c`, and ran `$ORACLE_HOME/bin/genshlib` for all 16 runtime libraries. |
+| `Error opening Oracle*Terminal file fmrweb` | When launching a runtime session, `frmweb` requires the Oracle Terminal key mapping resource file (`fmrweb.res`), which was staged under `forms/templates/resource/US/` rather than the default lookup path `$ORACLE_HOME/forms/admin/resource/US/`. | Copied templates from `forms/templates/resource/` to `forms/admin/resource/` and `forms/`, and configured `ORACLE_PATH=/oracle_home_14c/forms:/oracle_home_14c/forms/admin/resource/US` in `default.env`. |
+| `Welcome to WebLogic Server 14.1.2: The original administration console is no longer supported and has been removed` | In WebLogic 14.1.2, Oracle removed the legacy in-browser `/console` web application to improve container security, replacing it with the desktop **WebLogic Remote Console** (or Hosted WebLogic Remote Console). | Download the desktop app from [oracle/weblogic-remote-console Releases](https://github.com/oracle/weblogic-remote-console/releases) (official macOS `.dmg` available for Apple Silicon and Intel). Connect to `http://localhost:7001` with `weblogic` / `Welcome123#`. For direct Forms listener status checks, use `http://localhost:7001/forms/frmservlet/admin`. |
+| `Unexpected end of file from server` when launching FSAL on port 9001 | In our streamlined single-container development environment, the Forms application is deployed directly to the WebLogic `AdminServer` running on port **7001**. Port `9001` is reserved for dedicated `WLS_FORMS` managed server clusters. | Connect FSAL to port 7001: `-url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx"`. |
+| `FRM-30174: Checked and Unchecked check box values must be distinct` during `frmcmp_batch` build | In `simple_module_fmb.xml`, item `CHECK_BOX286` had no `CheckedValue` or `UncheckedValue` specified, causing compiler validation to fail. | Added `CheckedValue="Y" UncheckedValue="N"` to `CHECK_BOX286` in `simple_module_fmb.xml`, regenerated the `.fmb` via `XML2Forms`, and compiled cleanly to `simple_module.fmx`. |
+| Native Oracle Forms **Logon** dialog appears when launching form | If the form is invoked without pre-supplied `userid` or if the TNS network identifier is unresolved from the client, the Forms runtime engine displays the native GUI database authentication dialog. | Enter `forms_user` for Username, `Welcome123#` for Password, and `10.88.0.93:1521/FREEPDB1` (the 23ai container IP) for Database. |
 
 ---
 
@@ -532,3 +544,235 @@ Binary Oracle Reports (`.rdf`) files are **not** an alien format—they are pack
   cargo run -p oracle-forms-cli -- inspect /path/to/report.rdf
   cargo run -p oracle-forms-cli -- dump-sql /path/to/report.rdf -o ./extracted-sql
   ```
+
+---
+
+## 11. Oracle Database 23ai Free Tier: Native ARM64 Verification
+
+To enable end-to-end execution of live forms with real database transactions, an Oracle Database 23ai Free container was stood up directly on Apple Silicon.
+
+### 11.1 Native ARM64 Deployment
+Because Oracle publishes official native `linux/arm64` container images for 23ai Free, the database engine runs with **zero Rosetta 2 translation overhead**:
+
+```bash
+podman run -d \
+  --name oracle23ai-lite \
+  -p 1521:1521 \
+  -e ORACLE_PWD=Welcome1 \
+  container-registry.oracle.com/database/free:latest-lite
+```
+
+### 11.2 Initial Verification & Test Schema Setup
+1. **Container Health**: Container `oracle23ai-lite` initialized in < 45 seconds, mounting pluggable database `FREEPDB1`.
+2. **Tablespace Creation**: Created dedicated `USERS` tablespace (`users01.dbf`) and assigned it as the database default.
+3. **Developer Account**: Created `forms_user` / `Welcome123#` with `CONNECT`, `RESOURCE`, and `DBA` roles.
+4. **Table Verification**: Created `test_items (item_id, item_name, amount, created_at)` and successfully inserted and committed test records.
+5. **Interactive & Automated Testing**: Added `test_db.sh` and `DATABASE-TEST-GUIDE.md` under `temp/` (gitignored).
+
+---
+
+## 12. Oracle Forms 14c & FMW Infrastructure (14.1.2.0.0) Setup
+
+To provide official Reports conversion (`rwconverter.sh`) and live WebLogic Forms deployment (`WLS_FORMS`), an Oracle Fusion Middleware 14c environment was established alongside the 12c installation.
+
+### 12.1 Installer Part Numbers & Staging
+Acquired from Oracle Software Delivery Cloud (eDelivery) for `Linux x86-64`:
+- **Part 1**: `V1045135-01.zip` (2.1 GB) $\rightarrow$ `fmw_14.1.2.0.0_infrastructure.jar` (FMW Infrastructure 14.1.2)
+- **Part 2**: `V1045121-01.zip` (1.3 GB) $\rightarrow$ `fmw_14.1.2.0.0_fr_linux64.bin` (Forms and Reports 14.1.2)
+
+Both archives were unpacked into `tools/podman-converter/installer/`.
+
+### 12.2 Runtime Environment (`Containerfile.14c`)
+Unlike 12c (which ran on OpenJDK 8), FMW 14c requires **Java 17**:
+- **Base**: `container-registry.oracle.com/os/oraclelinux:8-slim` (`--platform=linux/amd64`)
+- **JDK**: `java-17-openjdk-devel`
+- **Native Libraries**: `motif`, `libX11`, `libXt`, `libXtst`, `libXp`, `libXrender`, `glibc-devel`
+- **User**: Non-root `oracle:oinstall` (UID/GID 1000)
+- **Mount Points**: `/oracle_home_14c` and `/work`
+
+### 12.3 Two-Stage Silent Installation Procedure
+Both components install into the same target directory `/oracle_home_14c` using Central Inventory at `/home/oracle/oraInventory`:
+
+1. **Stage 1: FMW Infrastructure 14c**:
+   ```bash
+   java -jar /installer/fmw_14.1.2.0.0_infrastructure.jar \
+     -silent -ignoreSysPrereqs \
+     -responseFile /installer/infra14c_silent.rsp \
+     -invPtrLoc /installer/oraInst.loc
+   ```
+2. **Stage 2: Forms and Reports 14c**:
+   ```bash
+   /installer/fmw_14.1.2.0.0_fr_linux64.bin \
+     -silent -ignoreSysPrereqs \
+     -responseFile /installer/forms14c_silent.rsp \
+     -invPtrLoc /installer/oraInst.loc
+   ```
+
+### 12.4 Installation Verification & Deliverables on Disk
+Both installations completed with exit code 0 (`Percent Complete : 100`). The following core components and binaries are confirmed active in `tools/podman-converter/oracle_home_14c`:
+- **WebLogic Server 14c**: `wlserver/`
+- **Oracle Common**: `oracle_common/`
+- **Forms Runtime, Compiler & Launcher**:
+  - `bin/frmbld` (Interactive Forms Builder IDE)
+  - `bin/frmcmp_batch` (Batch compiler for `.fmb` -> `.fmx`)
+  - `bin/frmweb` (Forms Web runtime engine)
+  - `bin/frmf2xml.sh` (Batch Forms2XML converter)
+  - `forms/java/frmsal.jar` (Forms Standalone Launcher for native macOS/Windows client GUI)
+- **Reports Runtime, Compiler & Server**:
+  - `bin/rwconverter.sh` (Reports batch converter for `.rdf` -> XML / `.rex`)
+  - `bin/rwbuilder.sh` (Reports Designer IDE)
+  - `bin/rwserver.sh` (Reports Server engine)
+  - `bin/rwrun.sh` (Batch PDF generator)
+
+### 12.5 WebLogic Domain Provisioning (`base_domain`)
+Installing the binaries places the engines on disk. To activate HTTP listening ports `7001` (AdminServer with Forms & EM) and `9001` (`WLS_FORMS` / `WLS_REPORTS`), WebLogic requires an application domain.
+
+Oracle provides **`forms_development_template.jar`** specifically for standalone development and testing:
+- **Zero-RCU Architecture**: Leverages Oracle Restricted JRF (Java Required Files), eliminating the requirement for complex RCU database schemas (MDS, OPSS, STB) for local developer workflows. Targets `formsapp#14.1.2`, `em.ear`, and `fads#1.0` directly to `AdminServer` (Port 7001).
+- **Domain Script**: `tools/podman-converter/installer/create_forms_domain.py`:
+  ```python
+  readTemplate('/oracle_home_14c/wlserver/common/templates/wls/wls.jar')
+  addTemplate('/oracle_home_14c/forms/common/templates/wls/forms_development_template.jar')
+  cd('/Security/base_domain/User/weblogic')
+  cmo.setPassword('Welcome123#')
+  setOption('OverwriteDomain', 'true')
+  writeDomain('/oracle_home_14c/user_projects/domains/base_domain')
+  closeTemplate()
+  ```
+- **Execution Command**:
+  ```bash
+  podman run --rm \
+    --platform linux/amd64 \
+    -v $(pwd)/tools/podman-converter/installer:/installer:Z \
+    -v $(pwd)/tools/podman-converter/oracle_home_14c:/oracle_home_14c:Z \
+    -e ORACLE_HOME=/oracle_home_14c \
+    forms-converter-14c:latest \
+    /oracle_home_14c/oracle_common/common/bin/wlst.sh /installer/create_forms_domain.py
+  ```
+
+### 12.6 Critical Post-Domain Configuration (Required for Unattended Boot)
+To boot without interactive credential prompts and avoid native library linking failures:
+
+1. **Automated Boot Credentials (`boot.properties`)**:
+   Create directory and file:
+   ```bash
+   mkdir -p tools/podman-converter/oracle_home_14c/user_projects/domains/base_domain/servers/AdminServer/security/
+   cat << 'EOF' > tools/podman-converter/oracle_home_14c/user_projects/domains/base_domain/servers/AdminServer/security/boot.properties
+   username=weblogic
+   password=Welcome123#
+   EOF
+   ```
+   *(WebLogic automatically encrypts these plaintext credentials using DemoTrust / DemoIdentity keystores upon first boot).*
+
+2. **Native Library Path Hook (`setUserOverrides.sh`)**:
+   Forms 14c native listener (`libifopmnwrp.so.0`) dynamically loads `libopmnperf.so` located in `oracle_common/lib`. WebLogic's default `setDomainEnv.sh` does not include `oracle_common/lib` in `LD_LIBRARY_PATH`. Without this hook, `formsapp` fails to activate with `UnsatisfiedLinkError: libopmnperf.so: cannot open shared object file` (BEA-149231).
+   
+   Create `setUserOverrides.sh` in the domain's `bin/` directory:
+   ```bash
+   cat << 'EOF' > tools/podman-converter/oracle_home_14c/user_projects/domains/base_domain/bin/setUserOverrides.sh
+   #!/bin/sh
+   export LD_LIBRARY_PATH=/oracle_home_14c/lib:/oracle_home_14c/oracle_common/lib:${LD_LIBRARY_PATH}
+   EOF
+   chmod +x tools/podman-converter/oracle_home_14c/user_projects/domains/base_domain/bin/setUserOverrides.sh
+   ```
+
+3. **Global Dynamic Linker Configuration (`/etc/ld.so.conf.d/oracle_forms.conf`)**:
+   Bake into `tools/podman-converter/Containerfile.14c`:
+   ```dockerfile
+   RUN printf "/oracle_home_14c/lib\n/oracle_home_14c/oracle_common/lib\n" > /etc/ld.so.conf.d/oracle_forms.conf
+   ```
+
+### 12.7 Running the Live Forms & WebLogic Server Container
+Start the container exposing WebLogic AdminServer (`7001`) and Managed Forms Server (`9001`):
+```bash
+podman run -d \
+  --name forms-server-14c \
+  --platform linux/amd64 \
+  -p 7001:7001 \
+  -p 9001:9001 \
+  -v $(pwd)/tools/podman-converter/oracle_home_14c:/oracle_home_14c:Z \
+  -v $(pwd)/samples:/work:Z \
+  -e ORACLE_HOME=/oracle_home_14c \
+  -e DOMAIN_HOME=/oracle_home_14c/user_projects/domains/base_domain \
+  forms-converter-14c:latest \
+  /oracle_home_14c/user_projects/domains/base_domain/bin/startWebLogic.sh
+```
+
+Monitor startup progress:
+```bash
+podman logs -f forms-server-14c
+# Server reaches <Server state changed to RUNNING.> in ~1.5 - 2 minutes under Rosetta 2
+```
+
+Verify WebLogic Administration Console:
+```bash
+curl -I http://localhost:7001/console
+# Returns: HTTP/1.1 307 Temporary Redirect (Location: http://localhost:7001/console/welcome)
+```
+
+---
+
+## 13. Windows Reproduction Runbook (Podman on Windows 11 / WSL2 / Podman Desktop)
+
+This section provides the exact step-by-step instructions to reproduce the entire environment (Oracle DB 23ai Free, Forms 12c, and Forms 14c) on **Windows 11 or Windows 10** using Podman.
+
+### 13.1 Prerequisites on Windows
+1. **Enable WSL2**:
+   ```powershell
+   wsl --install
+   ```
+2. **Install Podman for Windows**:
+   - Download the Windows installer from [podman.io](https://podman.io) or install via `winget`:
+     ```powershell
+     winget install RedHat.Podman
+     ```
+   - Initialize and start the Podman machine:
+     ```powershell
+     podman machine init
+     podman machine start
+     ```
+3. **Native Execution Speed**:
+   Because most Windows PCs are x86_64, `--platform linux/amd64` runs **natively with zero CPU translation overhead** (unlike Apple Silicon which uses Rosetta 2).
+
+### 13.2 Display Forwarding on Windows (Forms Builder GUI)
+- **Windows 11**: Includes **WSLg** natively. X11 display forwarding works out of the box with `DISPLAY=:0`. No third-party X-server is needed!
+- **Windows 10**: Install **VcXsrv Windows X Server**, launch with *"Disable access control"* checked, and forward display via `DISPLAY=host.docker.internal:0` or your host IP.
+
+### 13.3 Windows PowerShell Execution Commands
+Run from the repository root in PowerShell:
+
+```powershell
+# 1. Start Oracle Database 23ai Free
+podman run -d `
+  --name oracle23ai-lite `
+  -p 1521:1521 `
+  -e ORACLE_PWD=Welcome1 `
+  container-registry.oracle.com/database/free:latest-lite
+
+# 2. Build the Forms 14c image
+podman build -t forms-converter-14c:latest -f tools/podman-converter/Containerfile.14c tools/podman-converter
+
+# 3. Stage 1: Install FMW Infrastructure 14c
+podman run --rm `
+  -v ${PWD}/tools/podman-converter/installer:/installer:Z `
+  -v ${PWD}/tools/podman-converter/oracle_home_14c:/oracle_home_14c:Z `
+  forms-converter-14c:latest `
+  java -jar /installer/fmw_14.1.2.0.0_infrastructure.jar `
+    -silent -ignoreSysPrereqs `
+    -responseFile /installer/infra14c_silent.rsp `
+    -invPtrLoc /installer/oraInst.loc
+
+# 4. Stage 2: Install Forms and Reports 14c
+podman run --rm `
+  -v ${PWD}/tools/podman-converter/installer:/installer:Z `
+  -v ${PWD}/tools/podman-converter/oracle_home_14c:/oracle_home_14c:Z `
+  forms-converter-14c:latest `
+  /installer/fmw_14.1.2.0.0_fr_linux64.bin `
+    -silent -ignoreSysPrereqs `
+    -responseFile /installer/forms14c_silent.rsp `
+    -invPtrLoc /installer/oraInst.loc
+```
+
+*Tip for Windows: You can also open Ubuntu in WSL2 (`wsl`) and execute the exact same Linux bash commands as macOS.*
+
+

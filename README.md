@@ -23,6 +23,12 @@ database-related properties.
 
 ![Raw XML slice and property inspector for the selected claim ID field](docs/screenshots/xml-property-inspector.png)
 
+### Live Forms 14c Desktop Execution (FSAL + Oracle 23ai Database)
+
+Run compiled forms (`.fmx`) natively on macOS and Windows via Forms Standalone Launcher (FSAL) backed by Oracle WebLogic 14c and Oracle Database 23ai Free.
+
+![Live Oracle Forms 14c desktop application executing dynamic database query](docs/screenshots/forms-14c-live-db-query-gadget-b.jpg)
+
 ---
 
 ## Repository Structure
@@ -38,6 +44,13 @@ database-related properties.
 │   ├── ui/                       # Vanilla HTML/CSS/JS frontend
 │   └── samples/                  # Curated redistributable sample forms
 │
+├── plugins/oracle-forms/     # APM Skills & Automation for Oracle Forms & Reports 14c
+│   ├── .apm/skills/
+│   │   ├── setting-up-oracle-testbed/       # Automated Podman 23ai & Forms 14c setup
+│   │   ├── converting-oracle-artifacts/     # Forms2XML, XML2Forms, PLL, and Reports converters
+│   │   └── compiling-and-running-oracle-forms/ # Headless compiler & live desktop FSAL runner
+│   └── README.md
+│
 ├── docs/                     # Architectural specifications & blueprints
 │   ├── NATIVE-RUST-VIEWER-ARCHITECTURE.md        # Active system architecture & implementation status
 │   ├── DEPENDENCIES.md                           # System dependencies & Software Bill of Materials (SBOM)
@@ -45,8 +58,8 @@ database-related properties.
 │   ├── PODMAN-CONVERTER-SETUP-AND-HISTORY.md     # Official Oracle 12c container setup
 │   └── podman-architecture.mmd                   # Container architecture diagram
 │
-├── samples/                  # Test corpus (claims, orders, simple_module, utils.pld)
-├── tools/                    # Official Oracle 12c Podman converter (Track 1 ground truth)
+├── samples/                  # Test corpus (claims, orders, simple_module, utils.pld, test_db)
+├── tools/                    # Official Oracle 12c & 14c Podman converter + 23ai DB (Track 1 ground truth)
 ├── temp/                     # [GITIGNORED] Local work files, test binaries, legacy POC
 │
 ├── architecture.md           # System architecture, data pipelines, & crate boundaries
@@ -92,14 +105,26 @@ cd oracle-forms-viewer
 cargo test
 ```
 
+### 4. Run Forms Live via Desktop FSAL (Oracle 14c + 23ai DB)
+
+```bash
+# Health-check the testbed:
+python3 plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/scripts/health_check.py
+
+# Convert, compile, and launch any form immediately in a desktop window:
+python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/run_form.py samples/test_db.fmb
+```
+
 ---
 
 ## Key Documentation Links
 
-- **[How to Run Native Viewer & CLI](HOW-TO-RUN.md)**: Server configuration, custom ports, CLI commands, and troubleshooting.
+- **[How to Run Native Viewer & CLI](HOW-TO-RUN.md)**: Server configuration, custom ports, CLI commands, and desktop FSAL runner.
+- **[Oracle Forms APM Plugin](plugins/oracle-forms/README.md)**: APM skills for setup, conversion, compilation, and live desktop execution.
 - **[Native Rust Viewer Architecture](docs/NATIVE-RUST-VIEWER-ARCHITECTURE.md)**: Active system architecture, delivered capabilities, and technical roadmap.
 - **[System Dependencies & SBOM](docs/DEPENDENCIES.md)**: Complete dependency audit for Rust workspace, Podman container, and host systems.
 - **[Running Official Forms Builder GUI](ORACLE-FORMS-BUILDER-GUI.md)**: Launching native Oracle Forms Builder (`frmbld`) on macOS/Linux via X11 for visual ground-truth comparison.
+- **[Forms & Reports 14c Testing Guide](docs/FORMS-AND-REPORTS-14C-TESTING-GUIDE.md)**: Full verification blueprint for Forms 14c, Reports Server, FSAL live execution, and 23ai Database integration.
 - **[System Architecture](architecture.md)**: Data pipelines, crate contracts, coordinate math, and sequence diagrams.
 - **[Agent Guidelines](AGENTS.md)**: Rules and invariants for automated coding agents.
 - **[Official Oracle 12c Toolchain](docs/PODMAN-CONVERTER-SETUP-AND-HISTORY.md)**: Podman Rosetta 2 setup for certified baseline XML generation.

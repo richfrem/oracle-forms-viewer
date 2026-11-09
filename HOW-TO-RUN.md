@@ -161,3 +161,76 @@ kill -9 $(lsof -t -i:7070) 2>/dev/null || true; cd oracle-forms-viewer && cargo 
 ```bash
 kill -9 $(lsof -t -i:7070) 2>/dev/null || true; cargo run -p oracle-forms-server
 ```
+
+---
+
+## 7. Running Forms Live via Desktop FSAL (Track 1 Container Testbed)
+
+In addition to the database-free native Rust viewer, this repository includes an official Oracle Forms 14c + WebLogic + Oracle Database 23ai Free testbed running via Podman containers. Forms run as native desktop applications via the **Forms Standalone Launcher (FSAL)** without needing XQuartz, X11 forwarding, or browser plugins.
+
+### Prerequisites
+
+1. **Podman Containers Running**:
+   - `oracle23ai-lite` on port 1521
+   - `forms-server-14c` on port 7001
+2. **Java Runtime on Host**: Java 8, 11, 17, or 21+ (`java -version`).
+3. **Python 3**: For running the APM automation scripts.
+
+### 1. Verify Testbed Health
+
+Run the automated health check:
+```bash
+python3 plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/scripts/health_check.py
+```
+Expected output:
+```text
+=== Oracle Testbed Health Check ===
+[1/3] Checking Podman containers...
+  - Oracle Database 23ai: RUNNING (ok)
+  - Oracle Forms 14c Server: RUNNING (ok)
+[2/3] Checking Forms Listener Servlet (Port 7001)...
+  - Forms Listener Servlet: UP AND RUNNING (ok)
+[3/3] Checking Database Connection & Query (FREEPDB1)...
+  - Database Query test_items: SUCCESS (ok)
+
+All systems operational! Ready to compile and run Forms.
+```
+
+### 2. One-Command Form Runner (`run_form.py`)
+
+Convert (if XML), compile (`.fmb` -> `.fmx`), and launch any form immediately in a native desktop window:
+
+```bash
+# Run the database-connected test form:
+python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/run_form.py samples/test_db.fmb
+
+# Or run with automatic database logon (bypasses logon dialog):
+python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/run_form.py samples/test_db.fmb --auto-login
+
+# Run a custom XML form:
+python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/run_form.py samples/simple_module_fmb.xml
+```
+
+### 3. Step-by-Step Manual Workflow
+
+If you prefer to compile and launch separately:
+
+#### Step A: Headless Batch Compile
+```bash
+python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/compile_form.py samples/test_db.fmb
+```
+
+#### Step B: Launch Desktop FSAL Client
+```bash
+python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/launch_fsal.py test_db.fmx
+```
+
+### 4. Database Logon Credentials
+
+When prompted by the native Forms **Logon** dialog:
+- **Username**: `forms_user`
+- **Password**: `Welcome123#`
+- **Database**: `FREEPDB1`
+
+Click **Connect** to load the form and execute live PL/SQL triggers against Oracle Database 23ai.
+

@@ -10,12 +10,12 @@ The repository maintains an intentional, strict boundary between its two operati
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ Track 1: Containerized Oracle Toolchain (tools/podman-converter)            │
-│ Purpose: Official Oracle 12c ground-truth baseline & Forms Builder GUI     │
-│ Runtime: Podman (linux/amd64), Rosetta 2, OpenJDK 8, Motif/X11, Oracle 12c  │
+│ Track 1: Containerized Oracle Toolchain & Testbed (tools/ & plugins/)        │
+│ Purpose: Official Oracle 12c & 14c baseline, WebLogic 14c, DB 23ai, FSAL    │
+│ Runtime: Podman, OpenJDK 8/17, Oracle 12c/14c, WebLogic, 23ai Free (ARM64)  │
 └─────────────────────────────────────────────────────────────────────────────┘
                                       │
-                         (Differential Validation)
+                         (Differential Validation & Live Ground Truth)
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ Track 2: Pure-Native Rust Workspace (oracle-forms-viewer)                   │
@@ -33,14 +33,36 @@ The repository maintains an intentional, strict boundary between its two operati
 
 | Dependency | Minimum Version | Purpose | Installation / Source |
 | :--- | :--- | :--- | :--- |
-| **Python** | 3.8+ | Host runner scripts (`convert_fmb.py`, `convert_pll.py`, `convert_rpt.py`, `run_forms_builder.py`). Uses **standard library only** (zero PyPI packages). | System Python or Homebrew |
+| **Python** | 3.8+ | Host runner and APM automation scripts (`run_form.py`, `compile_form.py`, `launch_fsal.py`, `convert_fmb.py`, `health_check.py`). Uses **standard library only** (zero PyPI packages). | System Python or Homebrew |
+| **Java Runtime (JRE/JDK)** | 8, 11, 17, or 21+ | Host runtime executing Forms Standalone Launcher client (`frmsal.jar`) for live desktop form rendering. | System Java or `brew install openjdk` |
 | **Podman** | 4.0+ | Container virtualization engine. | `brew install podman` or Podman Desktop |
 | **Rosetta 2** | macOS 11+ | Binary translation allowing Apple Silicon ARM64 machines to execute `linux/amd64` container images. | Built-in macOS (`softwareupdate --install-rosetta`) |
 | **XQuartz** | 2.8+ | Host X11 window server on macOS for rendering the visual Oracle Forms Builder IDE (`frmbld`). | `brew install --cask xquartz` |
 | **X11 / Xorg** | Any modern | Native X11 server on Linux for Forms Builder display forwarding. | Native Linux distribution package |
 
-### 2.2 Container Image (`forms-converter:latest`)
+### 2.2 Container Images
 
+#### 1. Oracle Forms 14c Enterprise (`forms-converter-14c:latest`)
+Built via [tools/podman-converter/Containerfile.14c](file:///Users/richardfremmerlid/Projects/oracle-forms-fmb-research/tools/podman-converter/Containerfile.14c):
+
+| Component / Package | Version / Source | Architectural Role |
+| :--- | :--- | :--- |
+| **Base OS** | `oraclelinux:8-slim` (`linux/amd64`) | Official Oracle Linux 8 minimal container base. |
+| **Java Runtime** | `java-17-openjdk-headless`<br/>`java-17-openjdk-devel` | Required by WebLogic Server 14.1.2 and Forms 14c. |
+| **Motif & X11** | `motif` (`libXm.so.4`), `libXp`, `libX11`, `libXext`, `libXrender`, `libXtst`, `libXt` | Windowing and visual widget rendering libraries. |
+| **C Toolchain & Linker** | `gcc`, `binutils`, `glibc-devel`, `libnsl` | Required for Oracle `genshlib` generation of native runtime shared libraries (`libiplsn.so.0`, etc.). |
+| **Installed FMW Stack** | Oracle Forms 14.1.2 Enterprise (`oracle_home_14c/`) | WebLogic Server 14.1.2 (`AdminServer` on port 7001), Forms Listener Servlet, and Reports Server. |
+
+#### 2. Oracle Database 23ai Free (`oracle23ai-lite`)
+Pulled from Oracle Container Registry:
+
+| Component / Package | Version / Source | Architectural Role |
+| :--- | :--- | :--- |
+| **Container Image** | `container-registry.oracle.com/database/free:latest-lite` | Multi-arch official Oracle Database 23ai Free. |
+| **Native Architecture** | **Native ARM64 (`aarch64`)** on Apple Silicon; `amd64` on x86_64 | Runs bare-metal native without Rosetta 2 emulation overhead. |
+| **Database Listener** | Port 1521 (PDB `FREEPDB1`) | Ground-truth relational backend for live Forms blocks, queries, and transactions. |
+
+#### 3. Legacy Oracle Forms 12c Standalone (`forms-converter:latest`)
 Built via [tools/podman-converter/Containerfile](file:///Users/richardfremmerlid/Projects/oracle-forms-fmb-research/tools/podman-converter/Containerfile):
 
 | Component / Package | Version / Source | Architectural Role |
@@ -51,7 +73,7 @@ Built via [tools/podman-converter/Containerfile](file:///Users/richardfremmerlid
 | **C Runtime & Linker** | `glibc-devel`, `libnsl` | Native JNI and network service linkers for Oracle binaries. |
 | **System Utilities** | `tar`, `gzip`, `shadow-utils`, `which` | Unpacking, user management (`oracle:oinstall`, UID 1000), and path lookup. |
 
-### 2.3 Oracle Runtime Binaries (`oracle_home/`)
+### 2.3 Oracle Runtime Binaries (`oracle_home/` & `oracle_home_14c/`)
 
 Mounted on-demand into `/oracle_home:Z`:
 

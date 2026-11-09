@@ -1,0 +1,45 @@
+FROM --platform=linux/amd64 container-registry.oracle.com/os/oraclelinux:8-slim
+
+# Oracle Fusion Middleware 14c requires Oracle JDK 17, X11/Motif libraries, libaio, and build tools for relinking
+RUN microdnf install -y \
+    tar \
+    gzip \
+    make \
+    binutils \
+    gcc \
+    libX11 \
+    libXext \
+    libXrender \
+    libXtst \
+    libXt \
+    libXp \
+    libnsl \
+    libaio \
+    motif \
+    glibc-devel \
+    shadow-utils \
+    procps-ng \
+    hostname \
+    which \
+    && microdnf clean all
+
+# Install official Oracle JDK 17 (required by Oracle Universal Installer vendor check)
+COPY installer/jdk-17.0.12_linux-x64_bin.tar.gz /tmp/
+RUN mkdir -p /usr/lib/jvm && \
+    tar -xzf /tmp/jdk-17.0.12_linux-x64_bin.tar.gz -C /usr/lib/jvm/ && \
+    rm -f /tmp/jdk-17.0.12_linux-x64_bin.tar.gz
+
+ENV JAVA_HOME=/usr/lib/jvm/jdk-17.0.12
+ENV PATH=$JAVA_HOME/bin:$PATH
+
+# Pre-configure dynamic library paths for Oracle Forms & Reports shared objects
+RUN printf "/oracle_home_14c/lib\n/oracle_home_14c/oracle_common/lib\n" > /etc/ld.so.conf.d/oracle_forms.conf
+
+# Create official non-root Oracle user and group
+RUN groupadd -g 1000 oinstall && \
+    useradd -u 1000 -g oinstall -m -s /bin/bash oracle && \
+    mkdir -p /oracle_home_14c /work && \
+    chown -R oracle:oinstall /oracle_home_14c /work
+
+USER oracle
+WORKDIR /work

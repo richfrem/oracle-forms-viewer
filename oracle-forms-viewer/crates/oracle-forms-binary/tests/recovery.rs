@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use oracle_forms_binary::BinaryFmbParser;
 use oracle_forms_core::model::{ModuleKey, ModuleType};
 
-fn resolve_fmb(name: &str) -> PathBuf {
+fn resolve_fmb(name: &str) -> Option<PathBuf> {
     let prefixes = ["", ".", "..", "../..", "../../..", "../../../.."];
     let subdirs = ["temp/example-fmb/internal-testing", "example-fmb/internal-testing", "example-fmb/samples", "example-fmb", "samples"];
     for p in &prefixes {
@@ -14,16 +14,22 @@ fn resolve_fmb(name: &str) -> PathBuf {
                 PathBuf::from(p).join(s).join(name)
             };
             if candidate.is_file() {
-                return candidate;
+                return Some(candidate);
             }
         }
     }
-    panic!("FMB file {} not found in candidate paths", name);
+    None
 }
 
 #[test]
 fn test_direct_binary_fmb_parsing() {
-    let fmb_file = resolve_fmb("rccm0000.fmb");
+    let fmb_file = match resolve_fmb("rccm0000.fmb") {
+        Some(f) => f,
+        None => {
+            eprintln!("Skipping test_direct_binary_fmb_parsing: proprietary fixture rccm0000.fmb not present in temp/example-fmb");
+            return;
+        }
+    };
     let temp_cache = std::env::temp_dir().join("test_fmb_cache");
     let _ = fs::create_dir_all(&temp_cache);
 
@@ -67,7 +73,8 @@ fn test_direct_binary_fmb_parsing() {
 
 #[test]
 fn test_simple_module_binary_parsing() {
-    let fmb_file = resolve_fmb("simple_module.fmb");
+    let fmb_file = resolve_fmb("simple_module.fmb")
+        .expect("simple_module.fmb must exist in samples/");
     let temp_cache = std::env::temp_dir().join("test_simple_fmb_cache");
     let _ = fs::create_dir_all(&temp_cache);
 

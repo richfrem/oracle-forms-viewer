@@ -1,66 +1,76 @@
-flowchart LR
+flowchart TB
     classDef host fill:#f8fafc,stroke:#64748b,stroke-width:2px,color:#0f172a;
     classDef vm fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d;
     classDef storage fill:#eff6ff,stroke:#3b82f6,stroke-width:1.5px,color:#1e3a8a;
-    classDef container fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f;
+    classDef container fill:#fef3c7,stroke:#d97706,stroke-width:2px,color:#78350f;
+    classDef db fill:#ecfdf5,stroke:#059669,stroke-width:2px,color:#064e3b;
     classDef mount fill:#ffffff,stroke:#94a3b8,stroke-dasharray:4 2,color:#334155;
     classDef oracleStorage fill:#fff1f2,stroke:#e11d48,stroke-width:2.5px,color:#881337;
-    classDef execution fill:#ede9fe,stroke:#7c3aed,stroke-width:2.5px,color:#4c1d95;
-    classDef note fill:#fffbeb,stroke:#f59e0b,stroke-width:2px,stroke-dasharray:4 3,color:#92400e;
+    classDef execution fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#4c1d95;
 
-    %% ------------------- ANNOTATION -------------------
-    Annotation["📌 <b>Which Container Hosts the Installation?</b><br/>• <b>Installer Runner:</b> Ephemeral <code>oracle-install</code> container executed OUI via <code>compose.yaml</code><br/>• <b>Storage Location:</b> The 2.8 GB install is <b>NOT</b> trapped inside a container layer;<br/>  it is written through <code>/oracle_home:Z</code> to the <b>Host Filesystem</b> for permanent zero-copy access<br/>• <b>Conversion Runner:</b> On-demand ephemeral container mounts <code>oracle_home/</code> to run <code>frmf2xml</code>"]:::note
-
-    %% ------------------- HOST SYSTEM -------------------
-    subgraph Host["🖥️ macOS Host (Apple Silicon ARM64)"]
+    subgraph Host["Host Machine (macOS ARM64 / Windows 11 / Linux)"]
         direction TB
         
-        CLI["<b>CLI Orchestrators</b><br/>• convert_fmb.py<br/>• compose.yaml<br/>• podman CLI"]:::host
+        subgraph HostTools["APM Skills & CLI Runners (plugins/oracle-forms/)"]
+            RUNNER["run_form.py (Auto Convert, Compile, & Launch)"]:::host
+            COMPILER["compile_form.py (Batch frmcmp_batch)"]:::host
+            CONVERTER["convert_fmb.py / convert_pll.py / convert_rpt.py"]:::host
+            HEALTH["health_check.py (3-Stage Testbed Validator)"]:::host
+        end
 
-        subgraph HostFS["Host Filesystem (oracle-forms-fmb-research)"]
-            direction TB
-            InstallerDir["📁 <b>tools/.../installer/</b><br/>• fmw_12.2.1.4.0_fr_linux64.bin<br/>• fmw_12.2.1.4.0_fr_linux64-2.zip<br/>• oraInst.loc &amp; forms_silent.rsp"]:::storage
-            OracleHomeDir["⭐ <b>tools/.../oracle_home/ [HOSTS TOOLS ON DISK]</b><br/>• forms/templates/scripts/frmf2xml.sh<br/>• jlib/frmxmltools.jar &amp; frmjdapi.jar<br/>• bin/frmbld &amp; bin/frmcmp<br/><i>(3+ GB Persistent Binaries on Host)</i>"]:::oracleStorage
-            WorkDir["📁 <b>example-fmb/</b><br/>• Input: module.fmb<br/>• Output: module_fmb.xml"]:::storage
+        subgraph HostFS["Host Filesystem Bind Mounts"]
+            WorkDir["samples/ (Modules, FMB, FMX, XML)"]:::storage
+            OH14["tools/podman-converter/oracle_home_14c/ (FMW 14.1.2)"]:::oracleStorage
+            FSAL_JAR["oracle_home_14c/forms/java/frmsal.jar"]:::storage
+        end
+
+        subgraph DesktopApp["Native Desktop Client"]
+            FSAL_PROC["Java Runtime: Forms Standalone Launcher (FSAL)"]:::execution
+            GUI_WIN["Native Forms Window (Logon & 2D Vector Canvas)"]:::execution
         end
     end
 
-    %% ------------------- PODMAN VM -------------------
-    subgraph PodmanVM["🐧 Podman Machine (Linux VM / Rosetta 2 x86_64)"]
+    subgraph PodmanNet["Podman Bridge Network (oracle-net)"]
         direction TB
 
-        subgraph ImageRegistry["Local Image Store"]
+        subgraph Forms14cContainer["Container: forms-server-14c (linux/amd64 via Rosetta 2)"]
             direction TB
-            BaseImg["<b>Base Image</b><br/>oraclelinux:8-slim (119 MB)"]:::storage
-            AppImg["<b>Built Image: forms-converter:latest</b> (495 MB)<br/>• OpenJDK 8 Headless<br/>• X11 &amp; Motif (libX11, libXt, libXp, motif)<br/>• libnsl, glibc-devel | User: oracle (UID 1000)"]:::storage
-            BaseImg -->|FROM| AppImg
+            WLS["WebLogic 14.1.2 AdminServer (Port 7001)"]:::container
+            SERVLET["Forms Listener Servlet (/forms/frmservlet)"]:::container
+            FRMCMP["Headless Batch Compiler (bin/frmcmp_batch)"]:::container
+            F2XML["Forms2XML Engine (bin/frmf2xml.sh)"]:::container
+            RPT["Reports Converter (bin/rwconverter.sh)"]:::container
         end
 
-        subgraph Pod["Pod: pod_podman-converter"]
+        subgraph DB23aiContainer["Container: oracle23ai-lite (Native ARM64 / aarch64)"]
             direction TB
-            InfraContainer["<b>Infra Container</b><br/><i>(Pod Network &amp; Namespace Anchor)</i>"]:::container
-
-            subgraph ActiveContainer["Ephemeral Workload Container (oracle-install / converter)"]
-                direction TB
-                RuntimeEnv["⚡ <b>Runtime Context [RUNS UTILITIES IN MEMORY]</b><br/>Executes Java 8 Forms2XML via Rosetta 2<br/>User: oracle (UID 1000) | WORKDIR: /work"]:::execution
-                
-                subgraph MountPoints["Volume Mount Points"]
-                    MountInstaller["/installer:Z (ro)"]:::mount
-                    MountHome["/oracle_home:Z (rw)"]:::mount
-                    MountWork["/work:Z (rw)"]:::mount
-                end
-            end
+            DB_ENGINE["Oracle Database 23ai Free Engine"]:::db
+            LISTENER["TNS Listener (Port 1521)"]:::db
+            PDB["Pluggable Database: FREEPDB1"]:::db
+            USER_SCHEMA["Test Schema: forms_user / test_items"]:::db
         end
     end
 
-    %% ------------------- CONNECTIONS -------------------
-    CLI ==>|Dispatches commands| InfraContainer
-    AppImg -.->|Instantiates| RuntimeEnv
-    InfraContainer ---|Shares netns| RuntimeEnv
+    %% Bind Mounts
+    WorkDir -.->|Mounted at /work:Z| Forms14cContainer
+    OH14 -.->|Mounted at /oracle_home_14c:Z| Forms14cContainer
 
-    InstallerDir ===>|ro bind mount| MountInstaller
-    OracleHomeDir ===>|rw bind mount| MountHome
-    WorkDir ===>|rw bind mount| MountWork
+    %% Orchestration & Compilation
+    RUNNER -->|Executes batch compile| FRMCMP
+    RUNNER -->|Launches client| FSAL_PROC
+    COMPILER -->|Executes| FRMCMP
+    CONVERTER -->|Executes| F2XML
+    FSAL_JAR -.->|Loaded by| FSAL_PROC
 
-    Annotation -...->|Explains Storage| OracleHomeDir
-    Annotation -...->|Explains Lifecycle| ActiveContainer
+    %% Client-Server Communication
+    FSAL_PROC -->|Renders UI| GUI_WIN
+    FSAL_PROC <==>|HTTP :7001 Forms Session Protocol| SERVLET
+    SERVLET --- WLS
+
+    %% Database Communication
+    WLS <==>|SQL*Net TCP :1521 (FREEPDB1)| LISTENER
+    LISTENER --- DB_ENGINE
+    DB_ENGINE --- PDB
+    PDB --- USER_SCHEMA
+
+    HEALTH -.->|Probes Containers, HTTP 7001, & SQL 1521| HostTools
