@@ -1,0 +1,26 @@
+[
+  {
+    "query": "Test parity between the Rust oracle-forms-workbench and Fusion Middleware forms server",
+    "should_trigger": true
+  },
+  {
+    "query": "Verify ofw_demo_employees_fmb.xml compiles on WebLogic 14c and queries in the native rust app",
+    "should_trigger": true
+  },
+  {
+    "query": "Check if our forms run the same on FSAL and the web viewer",
+    "should_trigger": true
+  },
+  {
+    "query": "Compare query latency between Oracle Forms 14c and oracle-thin",
+    "should_trigger": true
+  },
+  {
+    "query": "What is the capital of France?",
+    "should_trigger": false
+  },
+  {
+    "query": "How do I format an ext4 partition on Linux?",
+    "should_trigger": false
+  }
+]
