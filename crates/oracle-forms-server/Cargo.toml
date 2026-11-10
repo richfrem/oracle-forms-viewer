@@ -11,6 +11,7 @@ oracle-forms-core = { workspace = true }
 oracle-forms-xml = { workspace = true }
 oracle-forms-binary = { workspace = true }
 oracle-forms-db = { workspace = true }
+oracle-forms-runtime = { workspace = true }
 axum = { workspace = true }
 tokio = { workspace = true }
 tower-http = { workspace = true }

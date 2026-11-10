@@ -92,11 +92,19 @@
   const runDiffBtn = document.getElementById('runDiffBtn');
   const diffContainer = document.getElementById('diffContainer');
 
+  const reportSelect = document.getElementById('reportSelect');
+  const reportBackendSelect = document.getElementById('reportBackendSelect');
+  const runReportBtn = document.getElementById('runReportBtn');
+  const printReportBtn = document.getElementById('printReportBtn');
+  const reportPreviewFrame = document.getElementById('reportPreviewFrame');
+  const reportDataTree = document.getElementById('reportDataTree');
+
   // Initialize
   document.addEventListener('DOMContentLoaded', () => {
     setupTabSwitching();
     setupControls();
     loadSampleList();
+    loadReportsList();
     // Pre-load default sample
     loadSample('orders_fmb.xml');
   });
@@ -304,6 +312,22 @@
           showBanner("Diff calculation failed: " + err.message);
         }
       });
+    }
+
+    if (runReportBtn) {
+      runReportBtn.addEventListener('click', executeReport);
+    }
+
+    if (printReportBtn) {
+      printReportBtn.addEventListener('click', () => {
+        if (reportPreviewFrame && reportPreviewFrame.contentWindow) {
+          reportPreviewFrame.contentWindow.print();
+        }
+      });
+    }
+
+    if (reportSelect) {
+      reportSelect.addEventListener('change', executeReport);
     }
 
     sampleSelect.addEventListener('change', () => {
@@ -2229,5 +2253,101 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  // Reports Engine Functions
+  async function loadReportsList() {
+    if (!reportSelect) return;
+    try {
+      const res = await fetch('/api/reports');
+      if (res.ok) {
+        const reports = await res.json();
+        reportSelect.innerHTML = reports.map(r => `<option value="${r.file_name}">${r.name} - ${r.title}</option>`).join('');
+      }
+    } catch (e) {
+      console.warn("Could not load reports list:", e);
+    }
+  }
+
+  async function executeReport() {
+    if (!reportSelect) return;
+    const reportName = reportSelect.value;
+    const backend = reportBackendSelect?.value || 'mock';
+    if (!reportName) return;
+
+    if (reportDataTree) {
+      reportDataTree.innerHTML = '<div class="empty-state">Running report...</div>';
+    }
+
+    try {
+      const res = await fetch('/api/reports/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          report_name: reportName,
+          backend: backend,
+          parameters: {}
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Report execution failed');
+      }
+
+      const data = await res.json();
+
+      if (reportPreviewFrame) {
+        reportPreviewFrame.srcdoc = data.html;
+      }
+
+      renderReportDataTree(data.execution);
+    } catch (err) {
+      if (reportDataTree) {
+        reportDataTree.innerHTML = `<div class="empty-state" style="color:#f85149;">Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+  }
+
+  function renderReportDataTree(execution) {
+    if (!reportDataTree) return;
+    let html = '';
+
+    html += '<div class="report-summary-box">';
+    html += `<h5>📊 ${escapeHtml(execution.report_name)} (${escapeHtml(execution.unit)})</h5>`;
+    const sumKeys = Object.keys(execution.report_summaries || {});
+    if (sumKeys.length === 0) {
+      html += '<div class="report-sum-row"><span class="report-sum-label">No grand summaries</span></div>';
+    } else {
+      for (const k of sumKeys) {
+        const val = execution.report_summaries[k];
+        html += `<div class="report-sum-row"><span class="report-sum-label">${escapeHtml(k)}:</span> <span class="report-sum-value">${typeof val === 'number' ? val.toLocaleString(undefined, {minimumFractionDigits: 2}) : val}</span></div>`;
+      }
+    }
+    html += '</div>';
+
+    const groupKeys = Object.keys(execution.group_records || {});
+    for (const g of groupKeys) {
+      const recs = execution.group_records[g] || [];
+      html += '<div class="report-group-box">';
+      html += `<h5>Group: ${escapeHtml(g)} (${recs.length} records)</h5>`;
+      if (recs.length > 0) {
+        const sampleRec = recs[0];
+        const cols = Object.keys(sampleRec.values || {}).slice(0, 4);
+        html += `<div style="color:#8b949e;font-size:10px;margin-bottom:6px;">Columns: ${cols.join(', ')}</div>`;
+        for (let i = 0; i < Math.min(recs.length, 3); i++) {
+          const r = recs[i];
+          const summaryEntries = Object.entries(r.group_summaries || {});
+          let sumText = summaryEntries.length > 0 ? ` [${summaryEntries.map(([k, v]) => `${k}=${v}`).join(', ')}]` : '';
+          html += `<div style="font-family:var(--font-mono);font-size:10px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Row ${i+1}: ${JSON.stringify(r.values)}${sumText}</div>`;
+        }
+        if (recs.length > 3) {
+          html += `<div style="color:#6e7681;font-size:10px;">... and ${recs.length - 3} more records</div>`;
+        }
+      }
+      html += '</div>';
+    }
+
+    reportDataTree.innerHTML = html;
   }
 })();

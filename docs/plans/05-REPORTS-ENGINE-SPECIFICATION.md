@@ -1,8 +1,8 @@
-# 05: Oracle Reports Engine (Research Spike Specification)
+# 05: Oracle Reports Engine (Research Spike & Architecture Specification)
 
-> **Document Status**: Research Spike Specification (Phase G)  
+> **Document Status**: Research Spike Completed / Architecture Approved (Phase G)  
 > **Target Persona**: Analyst / Modernizer  
-> **Key Objective**: Investigate the feasibility of decoding Oracle Reports `.rdf` binary streams versus Reports XML exports before committing to rendering engine development.
+> **Key Objective**: Deliver native report ingestion, data model evaluation, and responsive HTML5 paged media rendering for Oracle Reports definitions.
 
 ---
 
@@ -15,42 +15,58 @@ SET_REPORT_OBJECT_PROPERTY(report_id, REPORT_OTHER, 'p_order_id=' || :orders.ord
 report_job_id := RUN_REPORT_OBJECT(report_id);
 ```
 
-While adding a lightweight reports preview capability would provide value for modernization analysis, binary `.rdf` files present distinct reverse-engineering challenges compared to `.fmb` files.
+While adding a lightweight reports preview capability provides critical modernization insights, binary `.rdf` files present distinct reverse-engineering challenges compared to `.fmb` files.
 
 ---
 
-## 2. Research Spike Protocol (Step 1 Gate)
+## 2. Research Spike Findings & Assessment (Step 1 Gate)
 
-Before scheduling any rendering or calculation engine development, Phase G commences with an **investigative research spike**:
+The Phase G research spike evaluated two primary ingestion paths:
 
-### Step 1: Ingestion Feasibility Assessment
-1. **Binary Container Analysis (`.rdf`)**:
-   - Verify whether `.rdf` binary streams follow identical ROS 60050 chunk structures as `.fmb` files.
-   - Determine whether query data models, group definitions, and repeating frame layouts can be recovered from raw byte streams without proprietary Oracle Reports Builder libraries.
-2. **Reports XML Exports**:
-   - Test Oracle 12c/14c `rwconverter` headless XML exports for Reports (`stype=rdffile dtype=xmlfile`).
-   - Assess whether Reports XML provides a complete, lossless data model and layout tree.
-3. **Go / No-Go Gate**:
-   - If binary `.rdf` decoding proves excessively brittle, restrict the supported ingestion format to **Reports XML**, or document `.rdf` conversion via the existing testbed skill (`converting-oracle-artifacts/scripts/convert_rpt.py`).
+### 2.1 Binary Container Analysis (`.rdf` and `.tdf`)
+- **Container Format**: Direct inspection of Oracle Reports template binaries (e.g. `rwbeige.tdf`, `rwblue.tdf`) confirms that Oracle Reports binaries share the exact **`ROS.60050`** compound storage header format with Oracle Forms `.fmb` and `.olb` files.
+- **PL/SQL & String Recovery**: Our existing `oracle-forms-binary` heuristic scanner successfully extracts embedded Program Units and functions (e.g., `NEW_PAGE`, `BACK`, `FORWARD`, `PAGENUM` from `rwbeige.tdf`).
+- **Layout & Data Model Limitations**: Unlike Forms FMBs where item geometries and block properties follow consistent property-ID tuples, Reports layout matrices (repeating frames, elastic sizing, cross-product matrix groupings, page anchors) are encoded in internal C-runtime memory structures (`librw.so`). Without proprietary Oracle Reports Builder libraries, deserializing raw binary layout streams is brittle and prone to structural drift.
+
+### 2.2 Reports XML Exports (`reports.dtd`)
+- **Schema Completeness**: Oracle publishes a complete, standardized Document Type Definition (`reports.dtd`) spanning 1,688 lines.
+- **Lossless Representation**: Reports XML completely captures:
+  - `<dataSource>` queries with full SQL `SELECT` statements.
+  - Hierarchical `<group>` models with `<dataItem>` types, scale, and precision.
+  - Inter-query `<link>` elements with `parentGroup`, `parentColumn`, `childQuery`, `childColumn`, and `condition`.
+  - Summary columns (`<summary>` with functions `sum`, `average`, `count`, `min`, `max`, `percentOfTotal`, and `reset` boundaries: `report`, `page`, or group).
+  - Formula columns (`<formula>` with computation source expressions).
+  - Complete `<layout>` trees with `<section>`, `<body>`, `<margin>`, `<repeatingFrame>` (print direction `down`/`across`), `<frame>`, `<field>` (format masks, sources), and `<geometryInfo>` coordinates (`x`, `y`, `width`, `height`).
+
+### 2.3 Spike Conclusion & Go / No-Go Decision
+- **Decision**: **Pure-native Reports XML parsing** in `oracle-forms-xml` with AST in `oracle-forms-core`, paired with:
+  1. Direct binary text/code extraction heuristics for `.rdf` via `oracle-forms-binary`.
+  2. Batch converter bridge via `plugins/oracle-forms/.../convert_rpt.py` utilizing the containerized Oracle Home for headless `.rdf` $\leftrightarrow$ XML conversion.
+  3. Native Rust Data Model Evaluator & HTML5 Paged Media Renderer in `oracle-forms-runtime`.
 
 ---
 
-## 3. Reports Engine Pipeline (Subject to Spike Validation)
+## 3. Reports Engine Pipeline
 
-Assuming Step 1 proves feasible:
-
-### 3.1 Data Model Evaluation
-1. **Query Execution**: Executes report SQL queries via `oracle-forms-db`.
-2. **Data Groups**: Builds hierarchical master-detail groups (e.g. `G_ORDERS` master group, `G_ORDER_ITEMS` detail group).
+### 3.1 Data Model Evaluation (`ReportDataEvaluator`)
+1. **Query Execution**: Executes report SQL queries via `DatabaseDriver` (Oracle 23ai testbed, SQLite, or Mock).
+2. **Data Groups & Linking**: Resolves master-detail relationships across queries (e.g., `G_DEPT` master linked to `G_EMP` detail by `DEPARTMENT_ID`).
 3. **Formula & Summary Columns**:
-   - `Formula Columns` (`CF_`): Evaluated per record.
-   - `Summary Columns` (`CS_`): Running sums, counts, and averages reset per group.
+   - `Formula Columns` (`CF_`): Evaluated per record row.
+   - `Summary Columns` (`CS_`): Accumulates running sums, counts, averages, and percentages of total, resetting cleanly at designated group or report boundaries.
 
-### 3.2 Layout Model Engine
-- **Repeating Frames (`R_`)**: Dynamic vertical repetition per record.
-- **Fields (`F_`)**: Bound to group columns with currency and date format masks.
-- **Boilerplate (`B_`)**: Static labels, borders, and embedded graphics.
+### 3.2 Layout Model Engine (`ReportRenderer`)
+- **Repeating Frames (`R_`)**: Dynamic vertical repetition per record row, preserving hierarchical nesting.
+- **Fields (`F_`)**: Bound to group columns or summaries with currency (`$#,##0.00`), integer, and date format masks.
+- **Boilerplate (`B_`)**: Static report headers, column labels, borders, and company titles.
 
-### 3.3 Output Renderers
-- **HTML5 Paged Media**: Semantic HTML5 tables utilizing CSS Paged Media (`@page { size: letter portrait; margin: 0.5in; }`).
-- **Vectorized PDF**: Direct PDF output via `printpdf` with embedded standard fonts.
+### 3.3 Output Rendering
+- **HTML5 Paged Media**: Semantic HTML5 document utilizing CSS Paged Media:
+  ```css
+  @page {
+    size: letter portrait;
+    margin: 0.5in;
+    @bottom-right { content: "Page " counter(page); }
+  }
+  ```
+- **Print & PDF Support**: Direct browser print dialog triggering (`window.print()`), responsive preview iframe in web viewer, and standalone CLI HTML export.

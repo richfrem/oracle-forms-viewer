@@ -22,6 +22,9 @@ pub fn app_router(service: FormsService) -> Router {
         .route("/api/forms/export-xml", post(export_form_xml))
         .route("/api/forms/diff", post(diff_forms))
         .route("/api/forms/module/{module_name}/item", post(update_form_item))
+        .route("/api/reports", get(get_reports))
+        .route("/api/reports/run", post(run_report_endpoint))
+        .route("/api/reports/{name}/html", get(get_report_html))
         .fallback(static_handler)
         .with_state(service)
 }
@@ -489,6 +492,69 @@ async fn open_file(
         .into_response()
 }
 
+async fn get_reports(State(service): State<FormsService>) -> impl IntoResponse {
+    let reports = service.get_report_samples();
+    Json(reports)
+}
+
+#[derive(Deserialize)]
+struct RunReportRequest {
+    report_name: String,
+    backend: Option<String>,
+    parameters: Option<std::collections::HashMap<String, String>>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct RunReportResponse {
+    report: oracle_forms_core::report::ReportDefinition,
+    execution: oracle_forms_runtime::ReportExecutionResult,
+    html: String,
+}
+
+async fn run_report_endpoint(
+    State(service): State<FormsService>,
+    Json(req): Json<RunReportRequest>,
+) -> Response {
+    let backend = req.backend.unwrap_or_else(|| "mock".to_string());
+    let params = req.parameters.unwrap_or_default();
+
+    match service.run_report(&req.report_name, &backend, &params).await {
+        Ok((report, execution, html)) => Json(RunReportResponse {
+            report,
+            execution,
+            html,
+        })
+        .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+async fn get_report_html(
+    AxumPath(name): AxumPath<String>,
+    Query(query): Query<std::collections::HashMap<String, String>>,
+    State(service): State<FormsService>,
+) -> Response {
+    let backend = query.get("backend").cloned().unwrap_or_else(|| "mock".to_string());
+    match service.run_report(&name, &backend, &query).await {
+        Ok((_report, _exec, html)) => (
+            StatusCode::OK,
+            [("Content-Type", "text/html; charset=utf-8")],
+            html,
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::NOT_FOUND,
+            [("Content-Type", "text/html; charset=utf-8")],
+            format!("<h1>Error Running Report</h1><p>{}</p>", e),
+        )
+            .into_response(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -668,6 +734,58 @@ mod tests {
             resp.get("summary").and_then(|s| s.get("moduleName")).and_then(|v| v.as_str()),
             Some("ORDERS")
         );
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn test_reports_list_endpoint() {
+        let cache = std::env::temp_dir().join(format!("forms-reports-list-test-{}", std::process::id()));
+        let service = FormsService::new(&cache);
+        let app = app_router(service);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/reports")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let resp: Vec<crate::service::ReportSampleItem> = serde_json::from_slice(&body).unwrap();
+        assert!(resp.iter().any(|r| r.name == "ORDERS_SUMMARY"));
+        assert!(resp.iter().any(|r| r.name == "DEPT_SALARIES"));
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn test_run_report_endpoint() {
+        let cache = std::env::temp_dir().join(format!("forms-run-report-test-{}", std::process::id()));
+        let service = FormsService::new(&cache);
+        let app = app_router(service);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/reports/run")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"report_name": "orders_summary_report.xml", "backend": "mock"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let resp: RunReportResponse = serde_json::from_slice(&body).unwrap();
+        assert_eq!(resp.report.name, "ORDERS_SUMMARY");
+        assert!(resp.html.contains("<!DOCTYPE html>"));
+        assert!(resp.html.contains("Customer Orders Summary Report"));
         let _ = std::fs::remove_dir_all(cache);
     }
 }

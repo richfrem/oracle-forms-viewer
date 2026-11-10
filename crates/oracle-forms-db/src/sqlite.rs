@@ -57,17 +57,50 @@ impl SqliteDriver {
 
             CREATE TABLE IF NOT EXISTS orders (
                 order_id INTEGER PRIMARY KEY,
+                customer_id INTEGER DEFAULT 101,
                 customer_name TEXT NOT NULL,
                 order_date TEXT,
                 status TEXT DEFAULT 'ACTIVE',
-                total_amount REAL
+                order_status TEXT DEFAULT 'ACTIVE',
+                total_amount REAL,
+                order_total REAL
             );
 
-            INSERT OR IGNORE INTO orders (order_id, customer_name, order_date, status, total_amount) VALUES
-                (1001, 'Acme Industrial', '2026-01-15', 'ACTIVE', 1250.00),
-                (1002, 'Globex Corporation', '2026-02-01', 'ACTIVE', 4300.50),
-                (1003, 'Soylent Corp', '2026-02-18', 'CLOSED', 890.00),
-                (1004, 'Initech LLC', '2026-03-05', 'ACTIVE', 620.25);
+            INSERT OR IGNORE INTO orders (order_id, customer_id, customer_name, order_date, status, order_status, total_amount, order_total) VALUES
+                (1001, 101, 'Acme Industrial', '2026-01-15', 'ACTIVE', 'COMPLETED', 1250.00, 1250.00),
+                (1002, 102, 'Globex Corporation', '2026-02-01', 'ACTIVE', 'PENDING', 4300.50, 4300.50),
+                (1003, 103, 'Soylent Corp', '2026-02-18', 'CLOSED', 'CANCELLED', 890.00, 890.00),
+                (1004, 104, 'Initech LLC', '2026-03-05', 'ACTIVE', 'PROCESSING', 620.25, 620.25);
+
+            CREATE TABLE IF NOT EXISTS departments (
+                department_id INTEGER PRIMARY KEY,
+                department_name TEXT NOT NULL,
+                location_id INTEGER
+            );
+
+            INSERT OR IGNORE INTO departments (department_id, department_name, location_id) VALUES
+                (10, 'Administration', 1700),
+                (20, 'Marketing', 1800),
+                (30, 'Purchasing', 1700),
+                (60, 'Information Technology', 1400);
+
+            CREATE TABLE IF NOT EXISTS employees (
+                employee_id INTEGER PRIMARY KEY,
+                first_name TEXT,
+                last_name TEXT NOT NULL,
+                salary REAL,
+                department_id INTEGER
+            );
+
+            INSERT OR IGNORE INTO employees (employee_id, first_name, last_name, salary, department_id) VALUES
+                (100, 'Steven', 'King', 24000.00, 10),
+                (101, 'Neena', 'Kochhar', 17000.00, 10),
+                (102, 'Lex', 'De Haan', 17000.00, 10),
+                (201, 'Michael', 'Hartstein', 13000.00, 20),
+                (202, 'Pat', 'Fay', 6000.00, 20),
+                (114, 'Den', 'Raphaely', 11000.00, 30),
+                (103, 'Alexander', 'Hunold', 9000.00, 60),
+                (104, 'Bruce', 'Ernst', 6000.00, 60);
 
             CREATE TABLE IF NOT EXISTS items (
                 item_id INTEGER PRIMARY KEY,
