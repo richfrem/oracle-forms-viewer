@@ -76,6 +76,28 @@ CLI never fall back to mock data.
 
 ## 3. Using the Web Workbench
 
+### Running a Form Live (triggers + PL/SQL)
+
+**▶ Run Form** starts a live session: the form's triggers, program units and attached
+`.pld` libraries run on the server, against the database chosen in the **DB** selector.
+
+1. Open a form (e.g. `test_db_fmb.xml`).
+2. Choose a backend. For Oracle, enter the DB user and password in the toolbar (sent only
+   to this local server, never stored). `SQLite` / `Mock` need no credentials.
+3. Click **▶ Run Form**. Startup triggers run; push buttons fire `WHEN-BUTTON-PRESSED`,
+   leaving an edited field fires `WHEN-VALIDATE-ITEM`, `SHOW_ALERT` opens a real dialog.
+4. Sessions are **read-only** by default (queries run; DML, locks and commits are refused).
+   Tick **Allow writes** before starting to enable `💾 Commit`.
+5. Open **Session trace** under the canvas to see every trigger, SQL statement and built-in.
+
+Anything the runtime cannot do (e.g. `HOST`, `OLE2`, `CALL_FORM`, LOVs, timers) stops the
+trigger with a clear "Not supported" message instead of silently skipping it.
+
+**Export XML** returns the original Forms2XML file with only your layout edits applied
+(lossless). Forms opened from a binary `.fmb` can only be exported as a labelled summary.
+
+
+
 Once the server is running at `http://127.0.0.1:7070`:
 
 1. **Open Sample Forms**:

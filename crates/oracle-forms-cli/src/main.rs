@@ -289,7 +289,23 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         Commands::ExportXml { file, output } => {
             let cache_dir = std::env::temp_dir().join("forms_export_cache");
             let module = parse_file(&file, &cache_dir)?;
-            let xml = oracle_forms_xml::FormsXmlWriter::write_string(&module);
+            let is_xml_source = file.extension().map(|e| e.eq_ignore_ascii_case("xml")).unwrap_or(false);
+            let xml = if is_xml_source {
+                // Already Forms2XML: the original is the lossless export.
+                fs::read_to_string(&file).map_err(|e| FormsError::Internal(format!("Failed to read {}: {}", file.display(), e)))?
+            } else {
+                eprintln!(
+                    "WARNING: summary export. The XML is regenerated from the parsed model and omits \
+                     properties the Workbench does not model. Use Oracle's frmf2xml (oracle-reference-stack) \
+                     for a complete conversion."
+                );
+                let body = oracle_forms_xml::FormsXmlWriter::write_string(&module);
+                let note = "<!-- SUMMARY EXPORT: regenerated from the Workbench's parsed model; unmodelled properties are omitted. -->\n";
+                match body.find("?>") {
+                    Some(i) => format!("{}\n{}{}", &body[..i + 2], note, body[i + 2..].trim_start()),
+                    None => format!("{}{}", note, body),
+                }
+            };
 
             if let Some(out_path) = output {
                 if let Some(parent) = out_path.parent() {

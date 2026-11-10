@@ -9,98 +9,179 @@ pub struct GeneratedQuery {
     pub bound_sql: BoundSql,
     pub selected_columns: Vec<String>,
     pub column_to_item: Vec<(String, String)>, // (ColumnName, ItemName)
+    /// Forms references (e.g. `:ORDERS.CUSTOMER_ID`) found in the block's WHERE clause,
+    /// in placeholder order. Their values in `bound_sql` start as NULL and must be filled
+    /// with [`GeneratedQuery::resolve_binds`] before execution.
+    pub bind_refs: Vec<BindRef>,
+}
+
+impl GeneratedQuery {
+    /// Fills every bind reference using `resolver`. Fails if any reference is unknown,
+    /// rather than silently querying with NULL.
+    pub fn resolve_binds<F>(&mut self, mut resolver: F) -> Result<(), DbError>
+    where
+        F: FnMut(&str) -> Option<SqlValue>,
+    {
+        for r in &self.bind_refs {
+            let value = resolver(&r.reference).ok_or_else(|| {
+                DbError::QueryError(format!("Unresolved bind reference :{} in block WHERE clause", r.reference))
+            })?;
+            if let Some(slot) = self.bound_sql.binds.iter_mut().find(|(name, _)| *name == r.placeholder) {
+                slot.1 = value;
+            }
+        }
+        self.bind_refs.clear();
+        Ok(())
+    }
+}
+
+/// One Forms bind reference rewritten to a dialect placeholder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BindRef {
+    /// Placeholder as it appears in the rewritten SQL and in `BoundSql.binds`
+    /// (`:b1` for Oracle, `?1` for SQLite).
+    pub placeholder: String,
+    /// The original Forms reference, upper-cased, without the colon (`BLOCK.ITEM`).
+    pub reference: String,
+}
+
+/// Result of [`rewrite_binds`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RewrittenSql {
+    pub sql: String,
+    pub refs: Vec<BindRef>,
+}
+
+impl RewrittenSql {
+    /// Binds with NULL values, keyed by placeholder, ready to be filled.
+    pub fn null_binds(&self) -> Vec<(String, SqlValue)> {
+        self.refs.iter().map(|r| (r.placeholder.clone(), SqlValue::Null)).collect()
+    }
+}
+
+/// Rewrites Forms-style bind references in `sql` into dialect placeholders.
+///
+/// Recognises `:name` and `:a.b` references in any case. Leaves alone: string literals
+/// (`'..''..'`), alternative quoting (`q'[..]'`, `q'{..}'`, etc.), quoted identifiers
+/// (`"a:b"`), `--` and `/* */` comments, and the PL/SQL assignment operator `:=`.
+/// Placeholders are numbered from `start_index`.
+pub fn rewrite_binds(sql: &str, backend: DbBackend, start_index: usize) -> RewrittenSql {
+    let chars: Vec<char> = sql.chars().collect();
+    let len = chars.len();
+    let mut out = String::with_capacity(sql.len());
+    let mut refs = Vec::new();
+    let mut counter = start_index;
+    let mut i = 0;
+
+    while i < len {
+        let ch = chars[i];
+        let next = chars.get(i + 1).copied();
+
+        // q'X...X' alternative quoting (Oracle). The closing delimiter pairs ( [ { <.
+        if (ch == 'q' || ch == 'Q')
+            && next == Some('\'')
+            && (i == 0 || !(chars[i - 1].is_alphanumeric() || chars[i - 1] == '_'))
+        {
+            if let Some(&open) = chars.get(i + 2) {
+                let close = match open {
+                    '[' => ']',
+                    '(' => ')',
+                    '{' => '}',
+                    '<' => '>',
+                    other => other,
+                };
+                let mut j = i + 3;
+                while j + 1 < len && !(chars[j] == close && chars[j + 1] == '\'') {
+                    j += 1;
+                }
+                let end = (j + 2).min(len);
+                out.extend(&chars[i..end]);
+                i = end;
+                continue;
+            }
+        }
+
+        match ch {
+            '\'' | '"' => {
+                // Literal or quoted identifier; a doubled quote is an escaped quote.
+                out.push(ch);
+                i += 1;
+                while i < len {
+                    out.push(chars[i]);
+                    if chars[i] == ch {
+                        if chars.get(i + 1) == Some(&ch) {
+                            out.push(ch);
+                            i += 2;
+                            continue;
+                        }
+                        i += 1;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            '-' if next == Some('-') => {
+                while i < len && chars[i] != '\n' {
+                    out.push(chars[i]);
+                    i += 1;
+                }
+            }
+            '/' if next == Some('*') => {
+                let start = i;
+                i += 2;
+                while i + 1 < len && !(chars[i] == '*' && chars[i + 1] == '/') {
+                    i += 1;
+                }
+                let end = (i + 2).min(len);
+                out.extend(&chars[start..end]);
+                i = end;
+            }
+            ':' if next == Some('=') => {
+                out.push_str(":=");
+                i += 2;
+            }
+            ':' if next.map(|c| c.is_alphabetic() || c == '_' || c == '$').unwrap_or(false) => {
+                i += 1;
+                let mut name = String::new();
+                while i < len {
+                    let c = chars[i];
+                    let continues_name = c.is_alphanumeric()
+                        || matches!(c, '_' | '$' | '#')
+                        || (c == '.' && chars.get(i + 1).map(|n| n.is_alphabetic() || *n == '_').unwrap_or(false));
+                    if !continues_name {
+                        break;
+                    }
+                    name.push(c);
+                    i += 1;
+                }
+                let placeholder = match backend {
+                    DbBackend::Sqlite => format!("?{}", counter),
+                    _ => format!(":b{}", counter),
+                };
+                out.push_str(&placeholder);
+                refs.push(BindRef {
+                    placeholder,
+                    reference: name.to_ascii_uppercase(),
+                });
+                counter += 1;
+            }
+            _ => {
+                out.push(ch);
+                i += 1;
+            }
+        }
+    }
+
+    RewrittenSql { sql: out, refs }
 }
 
 pub struct SqlGenerator;
 
 impl SqlGenerator {
-    /// Scans trigger text across block triggers or button triggers to discover referenced database table names.
-    pub fn extract_table_from_triggers(block: &BlockInfo) -> Option<String> {
-        // Check if any item trigger text has `FROM <table_name>`
-        for item in &block.items {
-            for t_name in &item.trigger_names {
-                // If trigger text mentions a table
-                let t_upper = t_name.to_ascii_uppercase();
-                if t_upper.contains("TEST_ITEMS") {
-                    return Some("test_items".to_string());
-                }
-            }
-        }
-
-        // Generic regex scan if block name starts with "BLOCK"
-        if block.name.starts_with("BLOCK") || block.name.starts_with("Block") {
-            // Check if test_items is known
-            return Some("test_items".to_string());
-        }
-
-        None
-    }
-
-    /// Rewrites Oracle Forms bind variables (:BLOCK.ITEM, :GLOBAL.X, :PARAMETER.X) into dialect-specific binds.
-    pub fn rewrite_where_binds(
-        where_clause: &str,
-        backend: DbBackend,
-    ) -> (String, Vec<(String, SqlValue)>) {
-        let mut rewritten = String::new();
-        let mut binds = Vec::new();
-        let chars: Vec<char> = where_clause.chars().collect();
-        let len = chars.len();
-        let mut i = 0;
-        let mut bind_counter = 1;
-
-        while i < len {
-            let ch = chars[i];
-            if ch == '\'' {
-                // String literal - preserve intact
-                rewritten.push('\'');
-                i += 1;
-                while i < len {
-                    if chars[i] == '\'' {
-                        rewritten.push('\'');
-                        i += 1;
-                        if i < len && chars[i] == '\'' {
-                            // Escaped single quote
-                            rewritten.push('\'');
-                            i += 1;
-                        } else {
-                            break;
-                        }
-                    } else {
-                        rewritten.push(chars[i]);
-                        i += 1;
-                    }
-                }
-            } else if ch == ':' && i + 1 < len && (chars[i + 1].is_alphabetic() || chars[i + 1] == '_') {
-                // Found bind variable
-                i += 1;
-                let mut bind_name = String::new();
-                while i < len && (chars[i].is_alphanumeric() || chars[i] == '_' || chars[i] == '.') {
-                    bind_name.push(chars[i]);
-                    i += 1;
-                }
-
-                match backend {
-                    DbBackend::Oracle | DbBackend::OracleThin => {
-                        let placeholder = format!(":b{}", bind_counter);
-                        rewritten.push_str(&placeholder);
-                    }
-                    DbBackend::Sqlite => {
-                        rewritten.push('?');
-                    }
-                    DbBackend::Mock | DbBackend::Postgres => {
-                        let placeholder = format!(":b{}", bind_counter);
-                        rewritten.push_str(&placeholder);
-                    }
-                }
-                binds.push((bind_name, SqlValue::Null));
-                bind_counter += 1;
-            } else {
-                rewritten.push(ch);
-                i += 1;
-            }
-        }
-
-        (rewritten, binds)
+    /// Rewrites Oracle Forms bind references (`:BLOCK.ITEM`, `:ITEM`, `:GLOBAL.X`,
+    /// `:PARAMETER.X`, `:SYSTEM.X`) into dialect placeholders. See [`rewrite_binds`].
+    pub fn rewrite_where_binds(where_clause: &str, backend: DbBackend) -> RewrittenSql {
+        rewrite_binds(where_clause, backend, 1)
     }
 
     /// Generates a dialect-aware SELECT query from a Form Block definition.
@@ -109,8 +190,8 @@ impl SqlGenerator {
         backend: DbBackend,
         limit: Option<usize>,
     ) -> Result<GeneratedQuery, DbError> {
-        // 1. Resolve table / data source name
-        let extracted_table = Self::extract_table_from_triggers(block);
+        // 1. Resolve table / data source name. A control block (no data source) cannot be
+        //    queried; its items are filled by triggers instead.
         let table_name = block
             .query_data_source_name
             .as_deref()
@@ -120,8 +201,7 @@ impl SqlGenerator {
                     .as_ref()
                     .and_then(|d| d.dml_data_target_name.as_deref())
             })
-            .or(extracted_table.as_deref())
-            .unwrap_or(block.name.as_str())
+            .unwrap_or("")
             .trim()
             .to_string();
 
@@ -180,18 +260,6 @@ impl SqlGenerator {
             }
         }
 
-        // Special case for test_db sample form (BLOCK5 on test_items) where items are control items mapped in triggers
-        if (block.name.eq_ignore_ascii_case("BLOCK5") || block.name.eq_ignore_ascii_case("TEST_BLOCK"))
-            && table_name.eq_ignore_ascii_case("test_items")
-            && !has_explicit_columns
-        {
-            selected_columns = vec!["ITEM_ID".to_string(), "ITEM_NAME".to_string(), "AMOUNT".to_string()];
-            column_to_item.clear();
-            column_to_item.push(("ITEM_ID".to_string(), "ITEM_ID".to_string()));
-            column_to_item.push(("ITEM_NAME".to_string(), "TEXT_ITEM4".to_string()));
-            column_to_item.push(("AMOUNT".to_string(), "TEXT_ITEM284".to_string()));
-        }
-
         // Eliminate SELECT *: if no database columns exist, return typed error
         if selected_columns.is_empty() {
             return Err(DbError::NoDatabaseColumns(block.name.clone()));
@@ -207,6 +275,7 @@ impl SqlGenerator {
         // 3. Assemble base query
         let mut sql = format!("SELECT {} FROM {}", select_list, table_name);
         let mut binds = Vec::new();
+        let mut bind_refs: Vec<BindRef> = Vec::new();
 
         // 4. Append WHERE clause if present and rewrite binds
         if let Some(where_clause) = block
@@ -233,9 +302,10 @@ impl SqlGenerator {
                 .unwrap_or(&unescaped_where)
                 .trim();
 
-            let (rewritten_where, extracted_binds) = Self::rewrite_where_binds(clean_where, backend);
-            sql.push_str(&format!(" WHERE {}", rewritten_where));
-            binds.extend(extracted_binds);
+            let rewritten = Self::rewrite_where_binds(clean_where, backend);
+            sql.push_str(&format!(" WHERE {}", rewritten.sql));
+            binds.extend(rewritten.null_binds());
+            bind_refs.extend(rewritten.refs);
         }
 
         // 5. Append ORDER BY clause if present
@@ -288,7 +358,21 @@ impl SqlGenerator {
             bound_sql,
             selected_columns,
             column_to_item,
+            bind_refs,
         })
+    }
+
+    /// Table that DML and row locks target: the block's DML Data Target Name if set,
+    /// otherwise its Query Data Source Name. Control blocks have neither.
+    pub fn dml_table(block: &BlockInfo) -> Result<String, DbError> {
+        block
+            .dml
+            .as_ref()
+            .and_then(|d| d.dml_data_target_name.clone())
+            .or_else(|| block.query_data_source_name.clone())
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .ok_or(DbError::MissingDataSource)
     }
 
     /// Checks whether an item qualifies as a database item (not non-data or UI buttons).
@@ -319,11 +403,7 @@ impl SqlGenerator {
         backend: DbBackend,
         row_id: &str,
     ) -> Result<BoundSql, DbError> {
-        let table_name = block
-            .query_data_source_name
-            .clone()
-            .or_else(|| Self::extract_table_from_triggers(block))
-            .unwrap_or_else(|| block.name.clone());
+        let table_name = Self::dml_table(block)?;
 
         let has_explicit_columns = block.items.iter().any(|i| {
             i.column_name.is_some()
@@ -371,11 +451,7 @@ impl SqlGenerator {
         backend: DbBackend,
         values: &HashMap<String, serde_json::Value>,
     ) -> Result<BoundSql, DbError> {
-        let table_name = block
-            .query_data_source_name
-            .clone()
-            .or_else(|| Self::extract_table_from_triggers(block))
-            .unwrap_or_else(|| block.name.clone());
+        let table_name = Self::dml_table(block)?;
 
         let has_explicit_columns = block.items.iter().any(|i| {
             i.column_name.is_some()
@@ -444,11 +520,7 @@ impl SqlGenerator {
         values: &HashMap<String, serde_json::Value>,
         row_id: &str,
     ) -> Result<BoundSql, DbError> {
-        let table_name = block
-            .query_data_source_name
-            .clone()
-            .or_else(|| Self::extract_table_from_triggers(block))
-            .unwrap_or_else(|| block.name.clone());
+        let table_name = Self::dml_table(block)?;
 
         let has_explicit_columns = block.items.iter().any(|i| {
             i.column_name.is_some()
@@ -525,11 +597,7 @@ impl SqlGenerator {
         backend: DbBackend,
         row_id: &str,
     ) -> Result<BoundSql, DbError> {
-        let table_name = block
-            .query_data_source_name
-            .clone()
-            .or_else(|| Self::extract_table_from_triggers(block))
-            .unwrap_or_else(|| block.name.clone());
+        let table_name = Self::dml_table(block)?;
 
         let (sql, binds) = match backend {
             DbBackend::Oracle | DbBackend::OracleThin => (
@@ -596,7 +664,49 @@ mod tests {
         );
         assert_eq!(gen.selected_columns, vec!["ROWID", "ORDER_ID", "CUSTOMER_NAME"]);
         assert_eq!(gen.bound_sql.binds.len(), 1);
-        assert_eq!(gen.bound_sql.binds[0].0, "ORDERS.CUST_REF");
+        // The bind is keyed by the placeholder that appears in the SQL...
+        assert_eq!(gen.bound_sql.binds[0].0, ":b1");
+        // ...and the Forms reference is reported separately so a session can resolve it.
+        assert_eq!(
+            gen.bind_refs,
+            vec![BindRef { placeholder: ":b1".into(), reference: "ORDERS.CUST_REF".into() }]
+        );
+
+        let mut resolved = gen.clone();
+        resolved
+            .resolve_binds(|r| (r == "ORDERS.CUST_REF").then(|| SqlValue::Number("42".into())))
+            .unwrap();
+        assert_eq!(resolved.bound_sql.binds[0].1, SqlValue::Number("42".into()));
+
+        let mut unresolved = gen.clone();
+        assert!(unresolved.resolve_binds(|_| None).is_err(), "unknown refs must not become NULL");
+    }
+
+    #[test]
+    fn rewrite_binds_handles_case_literals_and_comments() {
+        let r = rewrite_binds(
+            "dept_id = :emp.dept_id AND name <> ':not.a.bind' AND x = q'[a :b c]' -- :c\n AND \"A:B\" = 1 /* :d */ AND y = :GLOBAL.user_id",
+            DbBackend::Oracle,
+            1,
+        );
+        assert_eq!(
+            r.refs.iter().map(|b| b.reference.as_str()).collect::<Vec<_>>(),
+            vec!["EMP.DEPT_ID", "GLOBAL.USER_ID"]
+        );
+        assert!(r.sql.contains("dept_id = :b1"));
+        assert!(r.sql.contains("':not.a.bind'"));
+        assert!(r.sql.contains("q'[a :b c]'"));
+        assert!(r.sql.contains("-- :c"));
+        assert!(r.sql.contains("/* :d */"));
+        assert!(r.sql.ends_with("y = :b2"));
+    }
+
+    #[test]
+    fn rewrite_binds_ignores_assignment_and_escaped_quotes() {
+        let r = rewrite_binds("v := 'it''s :x'; :out := :inp", DbBackend::Sqlite, 1);
+        assert_eq!(r.sql, "v := 'it''s :x'; ?1 := ?2");
+        assert_eq!(r.refs[0].reference, "OUT");
+        assert_eq!(r.refs[1].reference, "INP");
     }
 
     #[test]

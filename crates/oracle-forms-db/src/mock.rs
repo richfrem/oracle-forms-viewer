@@ -30,33 +30,8 @@ impl DatabaseDriver for MockDriver {
         block: &BlockInfo,
         limit: Option<usize>,
     ) -> Result<QueryResult, DbError> {
-        // Special case for our sample test_db (BLOCK5 with TEXT_ITEM4 and TEXT_ITEM284)
-        if block.name.eq_ignore_ascii_case("BLOCK5") || block.name.eq_ignore_ascii_case("TEST_BLOCK") {
-            let mut result = self.sqlite.query(&BoundSql::new("SELECT item_id, item_name, amount FROM test_items ORDER BY item_id")).await?;
-            result.block_name = block.name.clone();
-            result.table_name = "TEST_ITEMS".to_string();
-
-            // Populate form item names directly:
-            // TEXT_ITEM4 receives item_name (e.g. 'Widget A', 'Gadget B')
-            // TEXT_ITEM284 receives amount (e.g. 10.5, 99.5)
-            for record in &mut result.records {
-                if let Some(item_name_val) = record.values.get("ITEM_NAME").cloned() {
-                    record.values.insert("TEXT_ITEM4".to_string(), item_name_val);
-                }
-                if let Some(amount_val) = record.values.get("AMOUNT").cloned() {
-                    record.values.insert("TEXT_ITEM284".to_string(), amount_val);
-                }
-            }
-
-            if let Some(lim) = limit {
-                result.records.truncate(lim);
-                result.total_count = result.records.len();
-            }
-
-            return Ok(result);
-        }
-
-        // Standard block resolution via SQLite
+        // Query the seeded SQLite tables; if the block's table is not one of them,
+        // synthesize clearly-labelled sample rows (this is the Mock backend).
         match self.sqlite.query_block(block, limit).await {
             Ok(res) if !res.records.is_empty() => Ok(res),
             _ => {
@@ -110,5 +85,31 @@ impl DatabaseDriver for MockDriver {
 
     fn backend(&self) -> DbBackend {
         DbBackend::Mock
+    }
+
+    // The mock is backed by an in-memory SQLite database, so it supports real
+    // transactions too; DML against the seeded tables behaves like a real database.
+    fn supports_transactions(&self) -> bool {
+        true
+    }
+
+    async fn execute(&self, stmt: &BoundSql) -> Result<u64, DbError> {
+        self.sqlite.execute(stmt).await
+    }
+
+    async fn savepoint(&self, name: &str) -> Result<(), DbError> {
+        self.sqlite.savepoint(name).await
+    }
+
+    async fn rollback_to_savepoint(&self, name: &str) -> Result<(), DbError> {
+        self.sqlite.rollback_to_savepoint(name).await
+    }
+
+    async fn commit(&self) -> Result<(), DbError> {
+        self.sqlite.commit().await
+    }
+
+    async fn rollback(&self) -> Result<(), DbError> {
+        self.sqlite.rollback().await
     }
 }

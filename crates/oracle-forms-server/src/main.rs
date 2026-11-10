@@ -1,5 +1,6 @@
 mod assets;
 mod routes;
+mod runtime_sessions;
 mod security;
 mod service;
 
@@ -45,6 +46,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(_) => IpAddr::V4(Ipv4Addr::LOCALHOST),
     };
     let security_cfg = SecurityConfig::from_env();
+
+    // Expire idle form sessions.
+    let reaper = service.sessions.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+        loop {
+            tick.tick().await;
+            reaper.reap_idle();
+        }
+    });
 
     let app = app_router_with_security(service, security_cfg.clone())
         .layer(TraceLayer::new_for_http());

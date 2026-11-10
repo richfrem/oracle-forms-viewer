@@ -609,6 +609,7 @@ impl FormsXmlParser {
                     text_ref: Some(text_ref),
                     xml_ref: None,
                     source_text: Some(text.clone()),
+                    execution_hierarchy: get_attr(e, "ExecuteHierarchy").or_else(|| get_attr(e, "ExecutionHierarchy")),
                 });
             }
             "ProgramUnit" => {
@@ -686,6 +687,16 @@ impl FormsXmlParser {
                 alerts.push(AlertInfo {
                     name: name.clone().unwrap_or_default(),
                     message: get_attr(e, "AlertMessage").or_else(|| get_attr(e, "Message")),
+                    title: get_attr(e, "Title"),
+                    button1_label: get_attr(e, "Button1Label"),
+                    button2_label: get_attr(e, "Button2Label"),
+                    button3_label: get_attr(e, "Button3Label"),
+                    default_button: get_attr(e, "DefaultAlertButton").and_then(|b| match b.trim() {
+                        "Button 1" | "0" => Some(1),
+                        "Button 2" | "1" => Some(2),
+                        "Button 3" | "2" => Some(3),
+                        _ => None,
+                    }),
                 });
             }
             "ModuleParameter" => {

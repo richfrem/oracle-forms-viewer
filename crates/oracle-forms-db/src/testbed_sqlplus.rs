@@ -292,6 +292,12 @@ impl DatabaseDriver for TestbedSqlplusDriver {
         limit: Option<usize>,
     ) -> Result<QueryResult, DbError> {
         let generated = SqlGenerator::generate_select(block, DbBackend::Oracle, limit)?;
+        if let Some(first) = generated.bind_refs.first() {
+            return Err(DbError::QueryError(format!(
+                "Block {} WHERE clause references :{}; run the query from a form session so it can be resolved",
+                block.name, first.reference
+            )));
+        }
         let mut result = self.query(&generated.bound_sql).await?;
         result.block_name = block.name.clone();
         result.table_name = generated.table_name;

@@ -128,36 +128,45 @@ impl TriggerResolver {
             }];
         }
 
-        // Apply Execution Hierarchy ordering
-        match hierarchy {
-            ExecutionHierarchy::Override => {
-                // Only execute the lowest defined level (Item > Block > Form)
-                if let Some(first) = candidates.into_iter().next() {
-                    vec![first]
-                } else {
-                    vec![]
+        // Apply Execution Hierarchy. The property lives on each trigger: the most specific
+        // trigger runs; if its hierarchy is BEFORE the next-higher-level trigger runs
+        // first, if AFTER it runs afterwards, and that trigger's own setting decides
+        // whether the chain continues. OVERRIDE (the default) stops the chain.
+        // `candidates` is ordered most specific (item) to least specific (form).
+        let effective = |t: &ResolvedTrigger| -> ExecutionHierarchy {
+            t.trigger_info
+                .as_ref()
+                .and_then(|i| i.execution_hierarchy.as_deref())
+                .map(|h| match h.trim().to_ascii_uppercase().as_str() {
+                    "BEFORE" => ExecutionHierarchy::Before,
+                    "AFTER" => ExecutionHierarchy::After,
+                    _ => ExecutionHierarchy::Override,
+                })
+                .unwrap_or(hierarchy)
+        };
+        let mut chain: std::collections::VecDeque<ResolvedTrigger> = std::collections::VecDeque::new();
+        let mut iter = candidates.into_iter();
+        let Some(first) = iter.next() else { return vec![] };
+        let mut mode = effective(&first);
+        chain.push_back(first);
+        for parent in iter {
+            match mode {
+                ExecutionHierarchy::Override => break,
+                ExecutionHierarchy::Before => {
+                    let next_mode = effective(&parent);
+                    chain.push_front(parent);
+                    mode = next_mode;
+                }
+                ExecutionHierarchy::After => {
+                    let next_mode = effective(&parent);
+                    chain.push_back(parent);
+                    mode = next_mode;
                 }
             }
-            ExecutionHierarchy::Before => {
-                // Higher-level executes before lower-level: Form -> Block -> Item
-                candidates.sort_by_key(|t| match t.level {
-                    TriggerLevel::Form => 0,
-                    TriggerLevel::Block => 1,
-                    TriggerLevel::Item => 2,
-                    TriggerLevel::Menu => 3,
-                });
-                candidates
-            }
-            ExecutionHierarchy::After => {
-                // Higher-level executes after lower-level: Item -> Block -> Form
-                candidates.sort_by_key(|t| match t.level {
-                    TriggerLevel::Item => 0,
-                    TriggerLevel::Block => 1,
-                    TriggerLevel::Form => 2,
-                    TriggerLevel::Menu => 3,
-                });
-                candidates
-            }
         }
+        chain.into_iter().map(|mut t| {
+            t.hierarchy = effective(&t);
+            t
+        }).collect()
     }
 }

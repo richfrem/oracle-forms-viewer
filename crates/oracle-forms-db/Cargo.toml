@@ -13,8 +13,9 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 async-trait = "0.1"
-rusqlite = { version = "0.32", features = ["bundled"] }
-oracledb = "26.0.0-beta.5"
+rusqlite = { version = "0.32", features = ["bundled", "functions"] }
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+oracledb = "=26.0.0-beta.5"  # beta: pinned exactly (UPL-1.0 OR Apache-2.0, published by Oracle)
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }

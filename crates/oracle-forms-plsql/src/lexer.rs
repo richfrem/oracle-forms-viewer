@@ -82,6 +82,12 @@ pub struct Token {
     pub text: String,
     pub line: usize,
     pub col: usize,
+    /// Character offset of the first character of this token in [`Lexer::source`].
+    #[serde(default)]
+    pub start: usize,
+    /// Character offset one past the last character of this token.
+    #[serde(default)]
+    pub end: usize,
 }
 
 pub struct Lexer<'a> {
@@ -168,8 +174,21 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    /// The XML-unescaped source the token offsets refer to.
+    pub fn source(&self) -> String {
+        self.chars.iter().collect()
+    }
+
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace_and_comments();
+        let start = self.pos;
+        let mut tok = self.next_token_inner();
+        tok.start = start;
+        tok.end = self.pos;
+        tok
+    }
+
+    fn next_token_inner(&mut self) -> Token {
 
         let start_line = self.line;
         let start_col = self.col;
@@ -182,6 +201,8 @@ impl<'a> Lexer<'a> {
                     text: String::new(),
                     line: start_line,
                     col: start_col,
+                    start: 0,
+                    end: 0,
                 }
             }
         };
@@ -203,6 +224,8 @@ impl<'a> Lexer<'a> {
                 text,
                 line: start_line,
                 col: start_col,
+                start: 0,
+                end: 0,
             };
         }
 
@@ -228,6 +251,28 @@ impl<'a> Lexer<'a> {
                 text,
                 line: start_line,
                 col: start_col,
+                start: 0,
+                end: 0,
+            };
+        }
+
+        // 2b. Quoted identifier: "Name" (kept case-sensitive)
+        if ch == '"' {
+            self.advance();
+            let mut text = String::new();
+            while let Some(c) = self.advance() {
+                if c == '"' {
+                    break;
+                }
+                text.push(c);
+            }
+            return Token {
+                kind: TokenKind::Identifier(text.clone()),
+                text,
+                line: start_line,
+                col: start_col,
+                start: 0,
+                end: 0,
             };
         }
 
@@ -247,6 +292,8 @@ impl<'a> Lexer<'a> {
                 text,
                 line: start_line,
                 col: start_col,
+                start: 0,
+                end: 0,
             };
         }
 
@@ -308,6 +355,8 @@ impl<'a> Lexer<'a> {
                 text,
                 line: start_line,
                 col: start_col,
+                start: 0,
+                end: 0,
             };
         }
 
@@ -368,6 +417,8 @@ impl<'a> Lexer<'a> {
             text,
             line: start_line,
             col: start_col,
+            start: 0,
+            end: 0,
         }
     }
 
