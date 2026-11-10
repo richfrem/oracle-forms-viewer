@@ -2,6 +2,8 @@ pub mod builtins;
 pub mod interpreter;
 pub mod master_detail;
 pub mod record;
+pub mod report_evaluator;
+pub mod report_renderer;
 pub mod session;
 pub mod system;
 pub mod trigger;
@@ -13,6 +15,8 @@ pub use interpreter::{
 };
 pub use master_detail::MasterDetailLink;
 pub use record::{BlockBuffer, FormRecord, FormsRecordStatus, ValidationStatus};
+pub use report_evaluator::{ReportDataEvaluator, ReportExecutionResult, ReportRecord};
+pub use report_renderer::ReportRenderer;
 pub use session::{AlertDefinition, FormSession, RuntimeError, ValidationHook};
 pub use system::{OperationalMode, SystemVariables};
 pub use trigger::{ExecutionHierarchy, ResolvedTrigger, TriggerResolver, TriggerResult};

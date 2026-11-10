@@ -479,6 +479,94 @@ impl FormsService {
         let modified = self.get_or_load_module(modified_name)?;
         Ok(oracle_forms_core::diff::FormDiffer::diff(&base, &modified))
     }
+
+    pub fn get_report_samples(&self) -> Vec<ReportSampleItem> {
+        let mut list = Vec::new();
+        let samples_dir = Self::samples_dir();
+        if let Ok(entries) = fs::read_dir(&samples_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    if file_name.ends_with("_report.xml") || file_name.ends_with("_rdf.xml") {
+                        if let Ok(report) = oracle_forms_xml::ReportsXmlParser::parse_file(&path) {
+                            list.push(ReportSampleItem {
+                                name: report.name.clone(),
+                                file_name: file_name.to_string(),
+                                title: report.title.unwrap_or(report.name),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        list.sort_by(|a, b| a.name.cmp(&b.name));
+        list
+    }
+
+    pub fn load_report(&self, name_or_file: &str) -> Result<oracle_forms_core::report::ReportDefinition> {
+        let samples_dir = Self::samples_dir();
+        let candidates = [
+            samples_dir.join(name_or_file),
+            samples_dir.join(format!("{}.xml", name_or_file)),
+            samples_dir.join(format!("{}_report.xml", name_or_file.to_ascii_lowercase())),
+            samples_dir.join(format!("{}_report.xml", name_or_file.to_ascii_uppercase())),
+            PathBuf::from(name_or_file),
+        ];
+
+        for path in &candidates {
+            if path.is_file() {
+                return oracle_forms_xml::ReportsXmlParser::parse_file(path);
+            }
+        }
+
+        Err(FormsError::NotFound(format!("Report definition '{}' not found", name_or_file)))
+    }
+
+    pub async fn run_report(
+        &self,
+        name_or_file: &str,
+        backend_str: &str,
+        params: &HashMap<String, String>,
+    ) -> Result<(oracle_forms_core::report::ReportDefinition, oracle_forms_runtime::ReportExecutionResult, String)> {
+        let report = self.load_report(name_or_file)?;
+
+        let backend = match backend_str.to_ascii_lowercase().as_str() {
+            "oracle" => oracle_forms_db::DbBackend::Oracle,
+            "sqlite" => oracle_forms_db::DbBackend::Sqlite,
+            _ => oracle_forms_db::DbBackend::Mock,
+        };
+
+        let mut config = oracle_forms_db::DbConfig {
+            backend,
+            ..Default::default()
+        };
+
+        let driver = match oracle_forms_db::create_driver(&config) {
+            Ok(d) => match d.test_connection().await {
+                Ok(_) => d,
+                Err(_) if backend == oracle_forms_db::DbBackend::Oracle => {
+                    config.backend = oracle_forms_db::DbBackend::Mock;
+                    oracle_forms_db::create_driver(&config)
+                        .map_err(|e| FormsError::Database(e.to_string()))?
+                }
+                Err(e) => return Err(FormsError::Database(e.to_string())),
+            },
+            Err(e) => return Err(FormsError::Database(e.to_string())),
+        };
+
+        let result = oracle_forms_runtime::ReportDataEvaluator::evaluate(&report, &*driver, params).await?;
+        let html = oracle_forms_runtime::ReportRenderer::render_html(&report, &result);
+
+        Ok((report, result, html))
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ReportSampleItem {
+    pub name: String,
+    pub file_name: String,
+    pub title: String,
 }
 
 struct ClassChain {

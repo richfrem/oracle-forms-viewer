@@ -77,6 +77,39 @@ enum Commands {
         #[arg(short, long)]
         output: Option<PathBuf>,
     },
+
+    /// Parse, evaluate, and render Oracle Reports (.xml) to HTML5
+    Report {
+        #[command(subcommand)]
+        action: ReportAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum ReportAction {
+    /// Inspect an Oracle Report XML definition (queries, groups, summaries)
+    Inspect {
+        /// Path to report XML file
+        file: PathBuf,
+
+        /// Output full definition as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Run report against a database backend and render paged HTML5
+    Run {
+        /// Path to report XML file
+        file: PathBuf,
+
+        /// Database backend: 'oracle', 'sqlite', or 'mock'
+        #[arg(long, default_value = "mock")]
+        backend: String,
+
+        /// Destination path for generated HTML report (defaults to stdout if omitted)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
 }
 
 fn parse_file(file: &Path, cache_dir: &Path) -> Result<ModuleIndex> {
@@ -282,6 +315,113 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 println!("{}", xml);
             }
         }
+
+        Commands::Report { action } => match action {
+            ReportAction::Inspect { file, json } => {
+                let report = oracle_forms_xml::ReportsXmlParser::parse_file(&file)?;
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&report)?);
+                } else {
+                    println!("============================================================");
+                    println!("  Oracle Report Definition: {}", report.name);
+                    println!("============================================================");
+                    println!("  Title:       {}", report.title.as_deref().unwrap_or("None"));
+                    println!("  DTD Version: {}", report.dtd_version.as_deref().unwrap_or("Unknown"));
+                    println!("  Units:       {}", report.unit_of_measurement.as_deref().unwrap_or("inch"));
+                    println!("  Queries:     {}", report.data.data_sources.len());
+                    println!("  Links:       {}", report.data.links.len());
+                    println!("  Sections:    {}", report.layout.sections.len());
+                    println!("============================================================");
+
+                    for ds in &report.data.data_sources {
+                        println!("\n  [Data Source: {}]", ds.name);
+                        println!("    SQL: {}", ds.select_sql);
+                        for grp in &ds.groups {
+                            println!("    Group: {} (Items: {}, Summaries: {}, Formulas: {})",
+                                grp.name, grp.data_items.len(), grp.summaries.len(), grp.formulas.len());
+                            for item in &grp.data_items {
+                                println!("      - Column: {} ({})", item.name, item.datatype);
+                            }
+                            for sum in &grp.summaries {
+                                println!("      - Summary: {} (Func: {:?}, Source: {}, Reset: {:?})",
+                                    sum.name, sum.function, sum.source, sum.reset);
+                            }
+                            for form in &grp.formulas {
+                                println!("      - Formula: {} ({:?})", form.name, form.source);
+                            }
+                        }
+                    }
+
+                    for link in &report.data.links {
+                        println!("\n  [Data Link: {}]", link.name.as_deref().unwrap_or("UNNAMED"));
+                        println!("    Parent: {}.{} -> Child: {}.{}",
+                            link.parent_group, link.parent_column, link.child_query, link.child_column);
+                    }
+                }
+            }
+
+            ReportAction::Run { file, backend, output } => {
+                let report = oracle_forms_xml::ReportsXmlParser::parse_file(&file)?;
+
+                let backend_type = match backend.to_ascii_lowercase().as_str() {
+                    "oracle" => oracle_forms_db::DbBackend::Oracle,
+                    "sqlite" => oracle_forms_db::DbBackend::Sqlite,
+                    _ => oracle_forms_db::DbBackend::Mock,
+                };
+
+                let mut config = oracle_forms_db::DbConfig {
+                    backend: backend_type,
+                    ..Default::default()
+                };
+
+                let driver: Box<dyn oracle_forms_db::DatabaseDriver> = match oracle_forms_db::create_driver(&config) {
+                    Ok(d) => match d.test_connection().await {
+                        Ok(_) => d,
+                        Err(e) if backend_type == oracle_forms_db::DbBackend::Oracle => {
+                            eprintln!("[Notice] Oracle listener not reachable ({}). Falling back to mock engine.", e);
+                            config.backend = oracle_forms_db::DbBackend::Mock;
+                            oracle_forms_db::create_driver(&config)?
+                        }
+                        Err(e) => return Err(e.into()),
+                    },
+                    Err(e) => return Err(e.into()),
+                };
+
+                println!("============================================================");
+                println!("  Executing Oracle Report: {} (Backend: {:?})", report.name, driver.backend());
+                println!("============================================================");
+
+                let eval_result = oracle_forms_runtime::ReportDataEvaluator::evaluate(
+                    &report,
+                    &*driver,
+                    &std::collections::HashMap::new(),
+                ).await?;
+
+                println!("  Root Groups:     {:?}", eval_result.root_groups);
+                for (grp, recs) in &eval_result.group_records {
+                    println!("  Group records:   {} ({} rows)", grp, recs.len());
+                }
+                println!("  Summaries:       {}", eval_result.report_summaries.len());
+                for (sum_name, sum_val) in &eval_result.report_summaries {
+                    println!("    - {}: {:.2}", sum_name, sum_val);
+                }
+                println!("============================================================");
+
+                let html = oracle_forms_runtime::ReportRenderer::render_html(&report, &eval_result);
+
+                if let Some(out_path) = output {
+                    if let Some(parent) = out_path.parent() {
+                        let _ = fs::create_dir_all(parent);
+                    }
+                    fs::write(&out_path, &html)?;
+                    println!("Rendered HTML report saved to: {}", out_path.display());
+                } else {
+                    let out_path = std::env::temp_dir().join(format!("{}.html", report.name.to_ascii_lowercase()));
+                    fs::write(&out_path, &html)?;
+                    println!("Rendered HTML report written to: {}", out_path.display());
+                }
+            }
+        },
     }
 
     Ok(())

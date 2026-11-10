@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE report SYSTEM "reports.dtd">
+<report DTDVersion="9.0.4.0.0" name="ORDERS_SUMMARY" title="Customer Orders Summary Report" unitOfMeasurement="inch">
+  <data>
+    <dataSource name="Q_ORDERS">
+      <select>SELECT ORDER_ID, ORDER_DATE, 101 AS CUSTOMER_ID, TOTAL_AMOUNT AS ORDER_TOTAL, STATUS AS ORDER_STATUS FROM ORDERS ORDER BY ORDER_ID</select>
+      <group name="G_ORDERS">
+        <dataItem name="ORDER_ID" datatype="number" width="10" />
+        <dataItem name="ORDER_DATE" datatype="character" width="20" />
+        <dataItem name="CUSTOMER_ID" datatype="number" width="10" />
+        <dataItem name="ORDER_TOTAL" datatype="number" width="12" />
+        <dataItem name="ORDER_STATUS" datatype="character" width="15" />
+        <summary name="CS_TOTAL_SALES" source="ORDER_TOTAL" function="sum" reset="report" />
+        <summary name="CS_ORDER_COUNT" source="ORDER_ID" function="count" reset="report" />
+        <summary name="CS_AVG_ORDER" source="ORDER_TOTAL" function="average" reset="report" />
+      </group>
+    </dataSource>
+  </data>
+  <layout>
+    <section name="MAIN_SECTION">
+      <body>
+        <frame name="M_HEADER_FRAME">
+          <geometryInfo x="0.5" y="0.5" width="7.5" height="0.8" />
+          <text name="B_TITLE">
+            <geometryInfo x="0.5" y="0.5" width="7.5" height="0.4" />
+            <textSegment><string>Customer Orders Summary Report</string></textSegment>
+          </text>
+        </frame>
+        <frame name="M_BODY_FRAME">
+          <geometryInfo x="0.5" y="1.5" width="7.5" height="5.0" />
+          <repeatingFrame name="R_ORDERS" source="G_ORDERS" printDirection="down">
+            <geometryInfo x="0.5" y="1.5" width="7.5" height="0.3" />
+            <field name="F_ORDER_ID" source="ORDER_ID">
+              <geometryInfo x="0.5" y="1.5" width="1.0" height="0.25" />
+            </field>
+            <field name="F_ORDER_DATE" source="ORDER_DATE">
+              <geometryInfo x="1.6" y="1.5" width="1.5" height="0.25" />
+            </field>
+            <field name="F_CUSTOMER_ID" source="CUSTOMER_ID">
+              <geometryInfo x="3.2" y="1.5" width="1.0" height="0.25" />
+            </field>
+            <field name="F_ORDER_TOTAL" source="ORDER_TOTAL" formatMask="$#,##0.00">
+              <geometryInfo x="4.3" y="1.5" width="1.5" height="0.25" />
+            </field>
+            <field name="F_ORDER_STATUS" source="ORDER_STATUS">
+              <geometryInfo x="5.9" y="1.5" width="1.5" height="0.25" />
+            </field>
+          </repeatingFrame>
+        </frame>
+        <frame name="M_SUMMARY_FRAME">
+          <geometryInfo x="0.5" y="7.0" width="7.5" height="1.0" />
+          <field name="F_ORDER_COUNT" source="CS_ORDER_COUNT">
+            <geometryInfo x="2.0" y="7.0" width="1.5" height="0.25" />
+          </field>
+          <field name="F_TOTAL_SALES" source="CS_TOTAL_SALES" formatMask="$#,##0.00">
+            <geometryInfo x="4.3" y="7.0" width="1.5" height="0.25" />
+          </field>
+          <field name="F_AVG_ORDER" source="CS_AVG_ORDER" formatMask="$#,##0.00">
+            <geometryInfo x="6.0" y="7.0" width="1.5" height="0.25" />
+          </field>
+        </frame>
+      </body>
+    </section>
+  </layout>
+</report>

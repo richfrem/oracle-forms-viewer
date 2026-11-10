@@ -37,21 +37,20 @@ You are pairing with me on **Oracle Forms Workbench** (`oracle-forms-fmb-researc
 - **Phase D (Completed)**: Resumable PL/SQL tree-walking interpreter inside `FormSession` (`crates/oracle-forms-runtime`), Oracle value semantics (3-valued logic, `NULL` equality, empty string is `NULL`, numeric/string conversions), Tier-1 built-ins (`GO_ITEM`, `GO_BLOCK`, `EXECUTE_QUERY`, `FIRST/NEXT/PREV/LAST_RECORD`, `SHOW_ALERT`, `MESSAGE`, `SET_ITEM_PROPERTY`, `NAME_IN`, `COPY`, `DEFAULT_VALUE`, `ERASE`), interactive async suspension during `SHOW_ALERT` with continuation on resume, step budget and recursion guardrails, and verified conformance scenario `conf_03_query_cascade`.
 - **Phase E (Completed)**: Transactions & Full CRUD Commit Event Pipeline (`crates/oracle-forms-runtime`, `crates/oracle-forms-db`), first-edit row locking (`SELECT ... FOR UPDATE NOWAIT`) with optimistic concurrency re-check against `initial_values`, complete commit pipeline (`KEY-COMMIT` -> validation -> `PRE-COMMIT` -> per-dirty-record `PRE/ON/POST-DELETE`, `PRE/ON/POST-INSERT`, `PRE/ON/POST-UPDATE` -> `POST-FORMS-COMMIT` -> DB `COMMIT` or savepoint rollback), `:SEQUENCE.<NAME>.NEXTVAL` primary key generation in `PRE-INSERT`, `COMMIT` / `COMMIT_FORM` builtins, and verified conformance suite `conf_08_commit_pipeline` (`test_conf_08_commit_pipeline_full_crud_event_sequence`, `test_conf_08_first_edit_locking_and_concurrency_conflict`, `test_conf_08_pre_commit_failure_triggers_savepoint_rollback`).
 - **Phase F (Completed)**: Visual Layout Editor, Form Diff Tool & XML Round-Trip (`crates/oracle-forms-core`, `crates/oracle-forms-xml`, `crates/oracle-forms-cli`, `crates/oracle-forms-server`, `ui/`), Forms2XML export serializer (`FormsXmlWriter`), structural & visual diff engine (`FormDiffer`, `ModuleDiff`), CLI `diff` and `export-xml` subcommands, server REST endpoints (`/api/forms/export-xml`, `/api/forms/diff`, `/api/forms/module/:name/item`), interactive 2D canvas drag-and-drop item layout editing with coordinate badges, editable Property Inspector, and in-browser Form Diff Tool tab.
+- **Phase G (Completed)**: Reports Engine (`crates/oracle-forms-core`, `crates/oracle-forms-xml`, `crates/oracle-forms-runtime`, `crates/oracle-forms-cli`, `crates/oracle-forms-server`, `ui/`), ROS 60050 research spike completed, pure-native Reports XML streaming parser (`ReportsXmlParser`), Data Model Evaluator (`ReportDataEvaluator`) with master-detail data links, formulas (`CF_`), group and report-level summaries (`CS_` sum, count, avg, min, max, percent of total), HTML5 Paged Media layout renderer (`ReportRenderer`) with CSS `@page` printing and format masks (`$#,##0.00`), CLI `report inspect` and `report run`, server endpoints (`/api/reports`, `/api/reports/run`, `/api/reports/:name/html`), and in-browser "📊 Reports Engine" tab with live iframe preview and data model inspector.
 - **Database Testbed**: Podman container `oracle23ai-lite` is running with seeded schema tables (`ORDERS`, `CUSTOMERS`, `DEPARTMENTS`, `EMPLOYEES`, `CLAIMS`, `ITEMS`, `STOCK`, etc.).
 
-### 3. Immediate Mission: Milestone G (Reports Engine) or Live Runtime UI Engine
+### 3. Immediate Mission: Live Interactive Runtime UI Engine (`/api/forms/session`) or Pure-Rust Thin Driver (Track T)
 Please inspect `docs/plans/06-IMPLEMENTATION-ROADMAP-AND-MILESTONES.md` and help me execute the next milestone:
 
-- **Milestone G: Reports Engine (Research Spike First)**:
-  1. Feasibility spike investigating Oracle Reports binary `.rdf` ROS 60050 stream decoding versus Reports XML exports (`rwconverter`).
-  2. Data model evaluator: Queries, data groups, summary and formula columns.
-  3. Layout renderer: Repeating frames, matrix layouts, fields, headers, and pagination.
-  4. Output generation: Clean printable HTML5 / PDF output matching report layout.
+- **Option 1: Live Interactive Runtime UI Engine (`/api/forms/session`)**:
+  1. Wire `FormSession` into `oracle-forms-server` REST & WebSocket session endpoints.
+  2. Live interactive keyboard navigation (`Tab`, `Shift+Tab`, `Up/Down`, `Enter`), real-time field validation, and master-detail synchronization on the web canvas.
+  3. Interactive alert dialogs, query mode (`Enter Query` / `Execute Query`), and commit buttons on the web UI.
 
-- **Parallel Track: Live Runtime UI Engine (`/api/forms/session`)**:
-  1. Wire `FormSession` into `oracle-forms-server` REST & WebSocket endpoints.
-  2. Live interactive keyboard navigation (Tab, Shift+Tab, Up/Down, Enter), real-time field validation, and master-detail synchronization on the web canvas.
-  3. Interactive alert dialogs and commit buttons on the web UI.
+- **Option 2: Pure-Rust Oracle Thin Driver (Track T)**:
+  1. Zero-client Oracle wire protocol over TCP :1521 without external tools or client libraries.
+  2. Implement TNS packet connection handshake, data packets, and row streaming.
 
 Let's review where we are, confirm git status, and proceed with the next milestone!
 ```

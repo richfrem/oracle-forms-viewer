@@ -30,8 +30,8 @@
 │ Phase F: Visual Layout Editor, Form Diff Tool & XML Round-Trip [DONE]       │
 │ 2D canvas editor; property edits; testbed-validated XML compilation.        │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Phase G: Reports Engine (Research Spike First)                              │
-│ Feasibility investigation on .rdf ROS 60050 stream vs Reports XML exports.  │
+│ Phase G: Reports Engine (Research Spike & Renderer) [DONE]                  │
+│ Native Reports XML parser, data model evaluator, HTML5/PDF paged media.     │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Track T (Parallel): Pure-Rust Oracle Thin Driver (oracle-thin)              │
 │ Zero-client wire protocol over TCP :1521 (independent parallel track).      │
@@ -137,9 +137,15 @@
 
 ---
 
-### Milestone G: Reports Engine (Research Spike First)
+### Milestone G: Reports Engine (Research Spike & Renderer) ✅
 - **Objective**: Investigate `.rdf` binary stream decoding feasibility and build layout renderer.
-- **Tasks**:
-  1. Step 1: Research spike evaluating `.rdf` ROS 60050 decoding vs Reports XML exports.
-  2. Step 2: Data model evaluator (queries, groups, summaries).
-  3. Step 3: Repeating frame matrix layout calculator and HTML5/PDF renderer.
+- **Tasks & Deliverables**:
+  1. **Research Spike Completed**: Evaluated ROS 60050 chunk structures in `.rdf`/`.tdf` templates; confirmed heuristic text/PL-SQL extraction feasibility while adopting pure-native Reports XML (`reports.dtd`) for complete, lossless layout and query model parsing.
+  2. **Reports AST & XML Parser**: Built `oracle-forms-core::report` AST models and `oracle-forms-xml::ReportsXmlParser` streaming quick-xml parser.
+  3. **Data Model Evaluator**: Built `ReportDataEvaluator` executing queries via `DatabaseDriver` (Oracle 23ai, SQLite, Mock), resolving master-detail data links, calculating formulas (`CF_`), and accumulating summaries (`CS_` sum, count, average, min, max, median, percent of total).
+  4. **HTML5 Paged Media Renderer**: Built `ReportRenderer` producing semantic, print-ready HTML5 with CSS Paged Media (`@page { size: letter portrait; margin: 0.5in; }`), format masks (`$#,##0.00`), and master-detail card layouts.
+  5. **CLI & Server Tooling**: Added `oracle-forms-cli report inspect` & `report run` subcommands, server REST endpoints (`/api/reports`, `/api/reports/run`, `/api/reports/:name/html`), and web viewer "📊 Reports Engine" tab with live iframe preview and data model inspector.
+- **Verification Gate**:
+  - Sample report suites (`orders_summary_report.xml`, `department_salaries_report.xml`) pass all integration tests (`test_orders_summary_report_parsing_and_evaluation`, `test_department_salaries_master_detail_report`).
+  - Verified live execution against Oracle Database 23ai container (`oracle23ai-lite`).
+  - All unit and integration tests compile and pass with zero clippy warnings.

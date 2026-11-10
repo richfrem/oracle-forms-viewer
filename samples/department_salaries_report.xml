@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE report SYSTEM "reports.dtd">
+<report DTDVersion="9.0.4.0.0" name="DEPT_SALARIES" title="Department Payroll &amp; Compensation Report" unitOfMeasurement="inch">
+  <data>
+    <dataSource name="Q_DEPARTMENTS">
+      <select>SELECT DEPARTMENT_ID, DEPARTMENT_NAME, LOCATION_ID FROM DEPARTMENTS ORDER BY DEPARTMENT_ID</select>
+      <group name="G_DEPT">
+        <dataItem name="DEPARTMENT_ID" datatype="number" width="10" />
+        <dataItem name="DEPARTMENT_NAME" datatype="character" width="30" />
+        <dataItem name="LOCATION_ID" datatype="number" width="10" />
+        <summary name="CS_DEPT_TOTAL_SALARY" source="SALARY" function="sum" reset="G_DEPT" />
+        <summary name="CS_DEPT_EMP_COUNT" source="EMPLOYEE_ID" function="count" reset="G_DEPT" />
+      </group>
+    </dataSource>
+    <dataSource name="Q_EMPLOYEES">
+      <select>SELECT EMPLOYEE_ID, FIRST_NAME, LAST_NAME, SALARY, DEPARTMENT_ID FROM EMPLOYEES ORDER BY EMPLOYEE_ID</select>
+      <group name="G_EMP">
+        <dataItem name="EMPLOYEE_ID" datatype="number" width="10" />
+        <dataItem name="FIRST_NAME" datatype="character" width="20" />
+        <dataItem name="LAST_NAME" datatype="character" width="25" />
+        <dataItem name="SALARY" datatype="number" width="10" />
+        <dataItem name="DEPARTMENT_ID" datatype="number" width="10" />
+        <formula name="CF_BONUS" source=":SALARY * 0.10" datatype="number" />
+        <summary name="CS_TOTAL_PAYROLL" source="SALARY" function="sum" reset="report" />
+      </group>
+    </dataSource>
+    <link name="L_DEPT_EMP" parentGroup="G_DEPT" parentColumn="DEPARTMENT_ID" childQuery="Q_EMPLOYEES" childColumn="DEPARTMENT_ID" condition="eq" />
+  </data>
+  <layout>
+    <section name="MAIN_SECTION">
+      <body>
+        <frame name="M_HEADER_FRAME">
+          <geometryInfo x="0.5" y="0.5" width="7.5" height="0.6" />
+          <text name="B_TITLE">
+            <geometryInfo x="0.5" y="0.5" width="7.5" height="0.4" />
+            <textSegment><string>Department Payroll &amp; Compensation Report</string></textSegment>
+          </text>
+        </frame>
+        <frame name="M_MASTER_FRAME">
+          <geometryInfo x="0.5" y="1.2" width="7.5" height="6.0" />
+          <repeatingFrame name="R_DEPT" source="G_DEPT" printDirection="down">
+            <geometryInfo x="0.5" y="1.2" width="7.5" height="2.0" />
+            <field name="F_DEPT_ID" source="DEPARTMENT_ID">
+              <geometryInfo x="0.5" y="1.2" width="1.0" height="0.25" />
+            </field>
+            <field name="F_DEPT_NAME" source="DEPARTMENT_NAME">
+              <geometryInfo x="1.6" y="1.2" width="3.0" height="0.25" />
+            </field>
+            <repeatingFrame name="R_EMP" source="G_EMP" printDirection="down">
+              <geometryInfo x="1.0" y="1.5" width="7.0" height="0.3" />
+              <field name="F_EMP_ID" source="EMPLOYEE_ID">
+                <geometryInfo x="1.0" y="1.5" width="1.0" height="0.25" />
+              </field>
+              <field name="F_FIRST_NAME" source="FIRST_NAME">
+                <geometryInfo x="2.1" y="1.5" width="1.5" height="0.25" />
+              </field>
+              <field name="F_LAST_NAME" source="LAST_NAME">
+                <geometryInfo x="3.7" y="1.5" width="1.5" height="0.25" />
+              </field>
+              <field name="F_SALARY" source="SALARY" formatMask="$#,##0.00">
+                <geometryInfo x="5.3" y="1.5" width="1.2" height="0.25" />
+              </field>
+              <field name="F_BONUS" source="CF_BONUS" formatMask="$#,##0.00">
+                <geometryInfo x="6.6" y="1.5" width="1.2" height="0.25" />
+              </field>
+            </repeatingFrame>
+            <field name="F_DEPT_TOTAL_SALARY" source="CS_DEPT_TOTAL_SALARY" formatMask="$#,##0.00">
+              <geometryInfo x="5.3" y="1.9" width="1.5" height="0.25" />
+            </field>
+            <field name="F_DEPT_EMP_COUNT" source="CS_DEPT_EMP_COUNT">
+              <geometryInfo x="3.7" y="1.9" width="1.5" height="0.25" />
+            </field>
+          </repeatingFrame>
+        </frame>
+        <frame name="M_GRAND_TOTAL_FRAME">
+          <geometryInfo x="0.5" y="7.5" width="7.5" height="0.8" />
+          <field name="F_TOTAL_PAYROLL" source="CS_TOTAL_PAYROLL" formatMask="$#,##0.00">
+            <geometryInfo x="5.3" y="7.5" width="1.5" height="0.25" />
+          </field>
+        </frame>
+      </body>
+    </section>
+  </layout>
+</report>
