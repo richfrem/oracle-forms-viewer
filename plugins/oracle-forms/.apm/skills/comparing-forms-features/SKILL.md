@@ -86,6 +86,8 @@ python3 plugins/oracle-forms/.apm/skills/comparing-forms-features/scripts/compar
 
 ## References
 
+- Testing Forms (14c FSAL vs Native Rust): [testing-forms-reference.md](references/testing-forms-reference.md)
+- Testing Reports (14c Server vs Native Rust Reports Engine): [testing-reports-reference.md](references/testing-reports-reference.md)
 - Feature Catalog & Built-in Mapping: [feature-catalog.md](references/feature-catalog.md)
 - End-to-End Runtime Parity Testing: [testing-forms-parity](../testing-forms-parity/SKILL.md)
 - Forms Batch Compilation: [compiling-and-running-oracle-forms](../compiling-and-running-oracle-forms/SKILL.md)
