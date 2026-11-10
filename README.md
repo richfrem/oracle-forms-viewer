@@ -19,20 +19,29 @@ Zero JVM, zero Node.js, and zero Oracle runtime software required for the native
 
 ## Screenshots
 
-### Interactive Form Preview
+### Form Designer with Custom Menu (.mmb)
 
-Preview a claims form alongside the object navigator
-and property inspector. Interactive Preview supports local edits without database
-connections or PL/SQL execution.
+Object navigator, canvas with in-form navigation, attached `OFW_EMP_MENU.mmb`, and property palette.
 
-![Interactive claims form preview with the runtime frame and property inspector](docs/screenshots/claims-preview.png)
+![Form Designer with custom menu](docs/screenshots/workbench/form-designer-custom-menu.jpg)
 
-### XML and Property Inspection
+### Live Run against Oracle 23ai
 
-Select a form item to inspect its source XML, layout coordinates, data type, and
-database-related properties.
+Run the form with real triggers and PL/SQL over a live database session.
 
-![Raw XML slice and property inspector for the selected claim ID field](docs/screenshots/xml-property-inspector.png)
+![Live run](docs/screenshots/workbench/live-run-oracle-23ai.jpg)
+
+### PL/SQL Studio and Split Drawer
+
+![PL/SQL Studio](docs/screenshots/workbench/plsql-studio.jpg)
+
+![PL/SQL split drawer](docs/screenshots/workbench/plsql-split-drawer.jpg)
+
+### Reports Engine
+
+HTML5 report preview with data model diagram and report property sheet.
+
+![Reports Engine](docs/screenshots/workbench/reports-engine.jpg)
 
 ### Live Forms 14c Desktop Execution (FSAL + Oracle 23ai Database)
 
