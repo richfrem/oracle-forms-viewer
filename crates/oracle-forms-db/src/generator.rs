@@ -80,7 +80,7 @@ impl SqlGenerator {
                 }
 
                 match backend {
-                    DbBackend::Oracle => {
+                    DbBackend::Oracle | DbBackend::OracleThin => {
                         let placeholder = format!(":b{}", bind_counter);
                         rewritten.push_str(&placeholder);
                     }
@@ -198,7 +198,7 @@ impl SqlGenerator {
         }
 
         // Prepend hidden ROWID for Oracle backend
-        if backend == DbBackend::Oracle {
+        if backend == DbBackend::Oracle || backend == DbBackend::OracleThin {
             selected_columns.insert(0, "ROWID".to_string());
         }
 
@@ -268,7 +268,7 @@ impl SqlGenerator {
         // 6. Append dialect-specific limit clause
         if let Some(lim) = limit {
             match backend {
-                DbBackend::Oracle => {
+                DbBackend::Oracle | DbBackend::OracleThin => {
                     sql.push_str(&format!(" FETCH FIRST {} ROWS ONLY", lim));
                 }
                 DbBackend::Sqlite | DbBackend::Postgres | DbBackend::Mock => {
@@ -349,7 +349,7 @@ impl SqlGenerator {
 
         let cols_joined = columns.join(", ");
         let (sql, binds) = match backend {
-            DbBackend::Oracle => (
+            DbBackend::Oracle | DbBackend::OracleThin => (
                 format!(
                     "SELECT {} FROM {} WHERE ROWID = :b1 FOR UPDATE NOWAIT",
                     cols_joined, table_name
@@ -408,7 +408,7 @@ impl SqlGenerator {
                     };
 
                     match backend {
-                        DbBackend::Oracle => {
+                        DbBackend::Oracle | DbBackend::OracleThin => {
                             let placeholder = format!(":b{}", bind_idx);
                             binds.push((placeholder.clone(), sql_val));
                             placeholders.push(placeholder);
@@ -479,7 +479,7 @@ impl SqlGenerator {
                 };
 
                 match backend {
-                    DbBackend::Oracle => {
+                    DbBackend::Oracle | DbBackend::OracleThin => {
                         let placeholder = format!(":b{}", bind_idx);
                         assignments.push(format!("{} = {}", col, placeholder));
                         binds.push((placeholder, sql_val));
@@ -498,7 +498,7 @@ impl SqlGenerator {
         }
 
         let (where_clause, rowid_bind) = match backend {
-            DbBackend::Oracle => (
+            DbBackend::Oracle | DbBackend::OracleThin => (
                 format!("WHERE ROWID = :b{}", bind_idx),
                 (format!(":b{}", bind_idx), SqlValue::Text(row_id.to_string())),
             ),
@@ -532,7 +532,7 @@ impl SqlGenerator {
             .unwrap_or_else(|| block.name.clone());
 
         let (sql, binds) = match backend {
-            DbBackend::Oracle => (
+            DbBackend::Oracle | DbBackend::OracleThin => (
                 format!("DELETE FROM {} WHERE ROWID = :b1", table_name),
                 vec![(":b1".to_string(), SqlValue::Text(row_id.to_string()))],
             ),

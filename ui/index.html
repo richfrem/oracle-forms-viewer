@@ -40,6 +40,7 @@
         <div class="db-controls" id="dbControls">
           <label for="dbBackendSelect" style="font-weight: 600; color: #a0c4ff;">DB:</label>
           <select id="dbBackendSelect" title="Select Database Backend">
+            <option value="oracle-thin">Oracle Thin (Pure-Rust :1521)</option>
             <option value="oracle">Oracle (testbed sqlplus)</option>
             <option value="sqlite">SQLite</option>
             <option value="mock">Mock</option>
@@ -304,9 +305,10 @@
               <select id="reportSelect" class="diff-select"></select>
               <label for="reportBackendSelect" style="margin-left: 12px;">Backend:</label>
               <select id="reportBackendSelect" class="diff-select">
-                <option value="mock">Mock Engine</option>
-                <option value="sqlite">SQLite</option>
+                <option value="oracle-thin">Oracle Thin (Pure-Rust :1521)</option>
                 <option value="oracle">Oracle 23ai</option>
+                <option value="sqlite">SQLite</option>
+                <option value="mock">Mock Engine</option>
               </select>
               <button id="runReportBtn" class="btn btn-sm btn-primary">▶️ Run Report</button>
               <button id="printReportBtn" class="btn btn-sm btn-secondary" style="margin-left: auto;">🖨️ Print / Save PDF</button>

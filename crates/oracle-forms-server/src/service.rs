@@ -271,7 +271,8 @@ impl FormsService {
         let driver: Box<dyn oracle_forms_db::DatabaseDriver> = match oracle_forms_db::create_driver(&active_config) {
             Ok(d) => match d.test_connection().await {
                 Ok(_) => d,
-                Err(e) if active_config.backend == oracle_forms_db::DbBackend::Oracle => {
+                Err(e) if active_config.backend == oracle_forms_db::DbBackend::Oracle
+                    || active_config.backend == oracle_forms_db::DbBackend::OracleThin => {
                     tracing::warn!("Oracle connection failed: {}. Falling back to mock driver.", e);
                     active_config.backend = oracle_forms_db::DbBackend::Mock;
                     oracle_forms_db::create_driver(&active_config)
@@ -533,6 +534,7 @@ impl FormsService {
 
         let backend = match backend_str.to_ascii_lowercase().as_str() {
             "oracle" => oracle_forms_db::DbBackend::Oracle,
+            "oracle-thin" | "oracle_thin" | "thin" => oracle_forms_db::DbBackend::OracleThin,
             "sqlite" => oracle_forms_db::DbBackend::Sqlite,
             _ => oracle_forms_db::DbBackend::Mock,
         };
@@ -545,7 +547,7 @@ impl FormsService {
         let driver = match oracle_forms_db::create_driver(&config) {
             Ok(d) => match d.test_connection().await {
                 Ok(_) => d,
-                Err(_) if backend == oracle_forms_db::DbBackend::Oracle => {
+                Err(_) if backend == oracle_forms_db::DbBackend::Oracle || backend == oracle_forms_db::DbBackend::OracleThin => {
                     config.backend = oracle_forms_db::DbBackend::Mock;
                     oracle_forms_db::create_driver(&config)
                         .map_err(|e| FormsError::Database(e.to_string()))?

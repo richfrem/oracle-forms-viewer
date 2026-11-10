@@ -116,3 +116,59 @@ async fn test_oracle_live_container_query() {
     assert!(!result.records.len() > 0);
     println!("Fetched {} live rows from Oracle 23ai!", result.records.len());
 }
+
+#[tokio::test]
+async fn test_oracle_thin_live_container_query() {
+    let config = DbConfig::oracle_thin_default();
+    let driver = match create_driver(&config) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("Skipping live thin driver test: {}", e);
+            return;
+        }
+    };
+
+    if let Err(e) = driver.test_connection().await {
+        eprintln!("Oracle thin listener not reachable ({}). Skipping live test.", e);
+        return;
+    }
+
+    let bound = BoundSql::new("SELECT ROWID, item_id, item_name, amount FROM test_items ORDER BY item_id");
+    let result = driver
+        .query(&bound)
+        .await
+        .expect("Oracle thin query failed");
+
+    assert!(!result.records.is_empty());
+    println!("Fetched {} live rows via Oracle Thin Driver!", result.records.len());
+
+    let first = &result.records[0];
+    assert!(first.row_id.is_some());
+    assert!(first.values.contains_key("ITEM_NAME"));
+}
+
+#[tokio::test]
+async fn test_oracle_thin_parameterized_query() {
+    let config = DbConfig::oracle_thin_default();
+    let driver = match create_driver(&config) {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+
+    if driver.test_connection().await.is_err() {
+        return;
+    }
+
+    let bound = BoundSql::with_binds(
+        "SELECT item_id, item_name, amount FROM test_items WHERE item_id = :b1",
+        vec![(":b1".to_string(), SqlValue::from(1))],
+    );
+
+    let result = driver
+        .query(&bound)
+        .await
+        .expect("Oracle thin parameterized query failed");
+
+    assert_eq!(result.records.len(), 1);
+    assert_eq!(result.records[0].values.get("ITEM_NAME").unwrap(), "Widget A");
+}
