@@ -13,8 +13,13 @@
   let layoutEditMode = false;
   let menuSourceModule = null;
   let previewSource = null;
+  const runtime = new FormsRuntime();
   const preview = new FormsPreview(
-    (block, item) => {
+    (block, item, row) => {
+      if (runtime.active) {
+        runtimeSend({ kind: 'button', block: block.name, item: item.name, record: recordForRow(block.name, row) });
+        return;
+      }
       const trigger = currentPayload.moduleIndex.triggers.find(t =>
         t.level === 'ITEM' && t.blockName === block.name && t.itemName === item.name &&
         t.name.toUpperCase() === 'WHEN-BUTTON-PRESSED');
@@ -23,10 +28,23 @@
         trigger?.textRef ? { name: trigger.name, file: trigger.textRef.file, module: currentPayload.summary.moduleName } : null);
     },
     (block, item, row) => {
+      if (runtime.active && lastSessionState) {
+        const record = recordForRow(block.name, row);
+        const sameBlock = (lastSessionState.cursorBlock || '').toUpperCase() === block.name.toUpperCase();
+        const current = activeRecordIndexByBlock.get(block.name) || 0;
+        const hasRecord = record < (queryRecordsByBlock.get(block.name) || []).length;
+        if (hasRecord && (!sameBlock || record !== current) && !(item.itemType || '').toLowerCase().includes('button')) {
+          runtimeSend({ kind: 'navigate', block: block.name, item: item.name, record });
+        }
+      }
       selectedObject = { type: 'ITEM', block, item };
       renderPropertyInspector(selectedObject);
       selectedItemStats.textContent = `Preview: ${block.name}.${item.name}, record ${row + 1}`;
-      oracleStatusMsg.textContent = 'Local preview only - no database or PL/SQL execution';
+      if (!runtime.active) oracleStatusMsg.textContent = 'Local preview only - no database or PL/SQL execution';
+    },
+    (block, item, row, value) => {
+      if (!runtime.active) return;
+      runtimeSend({ kind: 'setItem', block: block.name, item: item.name, value, record: recordForRow(block.name, row) });
     }
   );
 
@@ -63,9 +81,23 @@
   const runtimeNextRecordBtn = document.getElementById('runtimeNextRecordBtn');
   const runtimeExecuteQueryBtn = document.getElementById('runtimeExecuteQueryBtn');
 
+  // Live form session controls
+  const runFormBtn = document.getElementById('runFormBtn');
+  const stopFormBtn = document.getElementById('stopFormBtn');
+  const runtimeCommitBtn = document.getElementById('runtimeCommitBtn');
+  const allowWritesToggle = document.getElementById('allowWritesToggle');
+  const dbUserInput = document.getElementById('dbUserInput');
+  const dbPassInput = document.getElementById('dbPassInput');
+  const sessionBadge = document.getElementById('sessionBadge');
+  const sessionTracePanel = document.getElementById('sessionTracePanel');
+  const sessionTrace = document.getElementById('sessionTrace');
+  const runtimeAlertDialog = document.getElementById('runtimeAlertDialog');
+
   // Query engine state
   const queryRecordsByBlock = new Map();
   const activeRecordIndexByBlock = new Map();
+  // Selected tab page of tab canvases drawn on top of the content canvas.
+  const overlayTabPage = new Map();
 
   const treeFilterInput = document.getElementById('treeFilterInput');
   const navigatorTree = document.getElementById('navigatorTree');
@@ -189,7 +221,34 @@
       if (button.id === 'runtimeExecuteQueryBtn' || button.id === 'runtimePrevRecordBtn' || button.id === 'runtimeNextRecordBtn') {
         return;
       }
+      if (runtime.active) {
+        const title = (button.title || '').toLowerCase();
+        if (title.startsWith('save')) return runtimeSend({ kind: 'commit' });
+        if (title.startsWith('exit')) return runtimeSend({ kind: 'key', name: 'EXIT_FORM' });
+        if (title.startsWith('clear block')) return runtimeSend({ kind: 'key', name: 'CLEAR_BLOCK' });
+        if (title.startsWith('enter query')) return runtimeSend({ kind: 'key', name: 'ENTER_QUERY' });
+      }
       if (previewEnabled && button) showPreviewDialog(button.title, 'Toolbar action not executed in this local preview.');
+    });
+
+    // Live form session
+    runFormBtn?.addEventListener('click', startRuntimeSession);
+    stopFormBtn?.addEventListener('click', stopRuntimeSession);
+    runtimeCommitBtn?.addEventListener('click', () => runtimeSend({ kind: 'commit' }));
+    runtimeAlertDialog?.querySelectorAll('button[data-button]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        runtimeAlertDialog.close();
+        try {
+          applySessionState(await runtime.answerAlert(Number(btn.dataset.button)));
+        } catch (err) {
+          showBanner(`Alert answer failed: ${err.message}`);
+        }
+      });
+    });
+    // Escape must not leave the server trigger waiting forever: treat it as the default button.
+    runtimeAlertDialog?.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      runtimeAlertDialog.querySelector(`button[data-button="${runtimeAlertDialog.dataset.defaultButton || 1}"]`)?.click();
     });
 
     // Database query and navigation controls
@@ -270,10 +329,10 @@
           const res = await fetch('/api/forms/export-xml', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ module: currentPayload.moduleIndex })
+            body: JSON.stringify({ moduleName: currentPayload.moduleIndex.key.name })
           });
-          if (!res.ok) throw new Error('Export XML failed');
           const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Export XML failed');
           const blob = new Blob([data.xml], { type: 'application/xml' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -283,8 +342,12 @@
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-          showBanner(`Exported ${currentPayload.moduleIndex.key.name}_fmb.xml successfully.`);
-          setTimeout(hideBanner, 3000);
+          if (data.mode === 'summary') {
+            showBanner(`Exported a SUMMARY of ${currentPayload.moduleIndex.key.name} (regenerated from the parsed model; unmodelled properties are omitted). Open the form from its Forms2XML file for a lossless export.`);
+          } else {
+            showBanner(`Exported ${currentPayload.moduleIndex.key.name}_fmb.xml: the original XML with only your edits applied.`);
+            setTimeout(hideBanner, 4000);
+          }
         } catch (err) {
           showBanner("Failed to export XML: " + err.message);
         }
@@ -531,6 +594,12 @@
 
   // Set active module
   function setModulePayload(payload) {
+    if (runtime.active) {
+      runtime.stop();
+      queryRecordsByBlock.clear();
+      activeRecordIndexByBlock.clear();
+      setRuntimeUi(null);
+    }
     currentPayload = payload;
     selectedObject = null;
     previewSource = null;
@@ -593,7 +662,12 @@
     document.getElementById('previewDialog').showModal();
   }
 
-  function switchTabPage(tabName) {
+  function switchTabPage(tabName, canvasName = null) {
+    if (canvasName && activeCanvas && canvasName !== activeCanvas.name) {
+      overlayTabPage.set(canvasName, tabName);
+      renderCanvasSvg();
+      return;
+    }
     if (!activeCanvas || !activeCanvas.tabPages) return;
     activeTabPage = tabName;
     document.querySelectorAll('.tab-pill').forEach(p => {
@@ -969,7 +1043,7 @@
 
   function applyRecordsToBlock(blockName) {
     const records = queryRecordsByBlock.get(blockName) || [];
-    const activeIdx = activeRecordIndexByBlock.get(blockName) || 0;
+    const activeIdx = topRecordIndex(blockName);
     const mod = currentPayload?.moduleIndex;
     const block = mod?.blocks.find(b => b.name === blockName);
     const recsToDisplay = Math.max(1, block?.recordsDisplayed || 1);
@@ -1005,6 +1079,9 @@
   }
 
   async function executeBlockQuery(targetBlockName = null) {
+    if (runtime.active) {
+      return runtimeSend({ kind: 'executeQuery', block: targetBlockName || getActiveBlockName() });
+    }
     if (!currentPayload) {
       showBanner('Open a form before querying the database.');
       return;
@@ -1073,6 +1150,9 @@
   }
 
   function navigateRecord(direction) {
+    if (runtime.active) {
+      return runtimeSend({ kind: direction === 'next' ? 'nextRecord' : 'previousRecord' });
+    }
     const blockName = getActiveBlockName();
     if (!blockName) return;
     const records = queryRecordsByBlock.get(blockName) || [];
@@ -1093,16 +1173,134 @@
     renderCanvasSvg();
   }
 
-  // Visual Canvas 2D SVG Rendering
-  function renderCanvasSvg() {
-    if (!currentPayload || !activeCanvas) {
-      formsSvg.innerHTML = '<text x="20" y="30" fill="#666">No canvas selected</text>';
-      canvasStats.textContent = 'Dimensions: -';
+  // ---------------------------------------------------------------------------
+  // Live form session (server-side runtime)
+  // ---------------------------------------------------------------------------
+
+  function recordForRow(blockName, row) {
+    return topRecordIndex(blockName) + (row || 0);
+  }
+
+  function setRuntimeUi(state) {
+    const running = runtime.active;
+    runFormBtn?.classList.toggle('hidden', running);
+    stopFormBtn?.classList.toggle('hidden', !running);
+    runtimeCommitBtn?.classList.toggle('hidden', !running);
+    sessionBadge?.classList.toggle('hidden', !running);
+    sessionTracePanel?.classList.toggle('hidden', !running);
+    if (dbBackendSelect) dbBackendSelect.disabled = running;
+    if (allowWritesToggle) allowWritesToggle.disabled = running;
+    if (running && state && sessionBadge) {
+      const ro = state.readOnly;
+      sessionBadge.textContent = `RUNNING ${state.moduleName} · ${state.backend}${ro ? ' · read-only' : ' · writes ON'}`;
+      sessionBadge.classList.toggle('read-only', !!ro);
+    }
+    if (runtimeCommitBtn) runtimeCommitBtn.disabled = !!state?.readOnly;
+  }
+
+  async function startRuntimeSession() {
+    if (!currentPayload) return showBanner('Open a form before running it.');
+    const backend = dbBackendSelect ? dbBackendSelect.value : '';
+    runFormBtn.disabled = true;
+    runFormBtn.textContent = '⏳ Starting...';
+    try {
+      const state = await runtime.start({
+        moduleName: currentPayload.summary.moduleName || currentPayload.moduleIndex.key.name,
+        backend: backend === 'mock' ? 'mock' : backend,
+        username: dbUserInput?.value.trim(),
+        password: dbPassInput?.value,
+        allowWrites: allowWritesToggle?.checked,
+      });
+      if (dbPassInput) dbPassInput.value = '';
+      sessionTrace.textContent = '';
+      const previewToggle = document.getElementById('previewToggle');
+      if (!previewToggle.checked) {
+        previewToggle.checked = true;
+        previewToggle.dispatchEvent(new Event('change'));
+      }
+      hideBanner();
+      applySessionState(state);
+      if (state.missingLibraries?.length) {
+        showBanner(`Attached libraries not found (calls into them will fail): ${state.missingLibraries.join(', ')}`);
+      }
+    } catch (err) {
+      showBanner(`Could not start the form: ${err.message}`);
+    } finally {
+      runFormBtn.disabled = false;
+      runFormBtn.textContent = '▶ Run Form';
+      setRuntimeUi(null);
+    }
+  }
+
+  async function stopRuntimeSession() {
+    await runtime.stop();
+    queryRecordsByBlock.clear();
+    activeRecordIndexByBlock.clear();
+    preview.reset();
+    setRuntimeUi(null);
+    renderCanvasSvg();
+  }
+
+  async function runtimeSend(event) {
+    try {
+      applySessionState(await runtime.send(event));
+    } catch (err) {
+      showBanner(err.message);
+      if (/not found|expired|ended/i.test(err.message)) stopRuntimeSession();
+    }
+  }
+
+  let lastSessionState = null;
+  function applySessionState(state) {
+    if (!state) return;
+    if (!state.alert) lastSessionState = state;
+    if (state.alert) {
+      const a = state.alert;
+      document.getElementById('runtimeAlertTitle').textContent = a.alertName;
+      document.getElementById('runtimeAlertMessage').textContent = a.message;
+      [a.button1, a.button2, a.button3].forEach((label, i) => {
+        const btn = document.getElementById(`runtimeAlertBtn${i + 1}`);
+        btn.textContent = label || '';
+        btn.hidden = !label;
+      });
+      runtimeAlertDialog.dataset.defaultButton = a.defaultButton || 1;
+      runtimeAlertDialog.showModal();
       return;
     }
 
+    for (const b of state.blocks || []) {
+      queryRecordsByBlock.set(b.name, (b.records || []).map(r => r.values || {}));
+      activeRecordIndexByBlock.set(b.name, b.currentRecord || 0);
+    }
+    preview.reset();
+    for (const b of state.blocks || []) applyRecordsToBlock(b.name);
+    if (state.cursorBlock) updateRecordNavigator(state.cursorBlock);
+
+    if (state.trace?.length) {
+      sessionTrace.textContent += state.trace.join('\n') + '\n';
+      sessionTrace.scrollTop = sessionTrace.scrollHeight;
+    }
+    const lastMessage = state.messages?.length ? state.messages[state.messages.length - 1] : null;
+    if (oracleStatusMsg) {
+      oracleStatusMsg.textContent = lastMessage
+        || `Record: ${state.cursorRecord} · Block: ${state.cursorBlock || '-'} · ${state.formStatus}`;
+    }
+    if (state.error) showBanner(state.error);
+    setRuntimeUi(state);
+    renderCanvasSvg();
+    if (state.exitRequested) {
+      showBanner('The form called EXIT_FORM. Session ended.');
+      stopRuntimeSession();
+    }
+  }
+
+  // Visual Canvas 2D SVG Rendering
+  /**
+   * Renders one canvas as SVG markup. `opts.overlay` is set for stacked / tab canvases
+   * drawn on top of the window's content canvas (their own origin is 0,0).
+   */
+  function buildCanvasLayer(canvas, activeTabPage, opts = {}) {
     const mod = currentPayload.moduleIndex;
-    const canvas = activeCanvas;
     const coord = mod.coordinate || {};
 
     // Coordinate scaling: translate from Oracle Forms units to standard CSS pixels
@@ -1121,6 +1319,7 @@
       }
     }
 
+    if (opts.coordScale) coordScale = opts.coordScale;
     const scale = (val) => Math.round((val || 0) * coordScale);
 
     // Collect visual items on this canvas
@@ -1208,29 +1407,19 @@
     const width = Math.max(baseWidth, maxContentX + 30);
     const height = Math.max(baseHeight, maxContentY + 30, needsAutoFlow ? currentItemY + 60 : 0);
 
-    formsSvg.setAttribute('width', width);
-    formsSvg.setAttribute('height', height);
-    formsSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    canvasStats.textContent = `Canvas: ${canvas.name} | Dimensions: ${width} x ${height} px${coordScale !== 1.0 ? ` (Scaled from ${canvas.width}x${canvas.height})` : ''} | Window: ${canvas.windowName || 'Default'}`;
-
-    if (oracleWindowTitle) {
-      const winName = canvas.windowName || mod.title || mod.key.name;
-      oracleWindowTitle.textContent = `${winName} - [${canvas.name}]`;
-    }
-    if (oracleStatusMsg && !selectedObject) {
-      oracleStatusMsg.textContent = `Record: 1/1  Canvas: ${canvas.name}`;
-    }
 
     let svgHtml = '';
 
-    // Canvas background
+    // Canvas background (overlays only paint their own viewport)
     const bgCol = canvas.backColor || '#d4d0c8';
-    svgHtml += `<rect x="0" y="0" width="${width}" height="${height}" fill="${bgCol}"/>`;
+    if (!opts.overlay) {
+      svgHtml += `<rect x="0" y="0" width="${width}" height="${height}" fill="${bgCol}"/>`;
+    }
 
     // Layer 0.5: Tab Canvas Notebook Body & Interactive Tab Headers
     if (canvas.tabPages && canvas.tabPages.length > 0) {
-      const tabStartX = (canvas.xPosition && canvas.xPosition > 0) ? scale(canvas.xPosition) : 15;
-      const tabStartY = (canvas.yPosition && canvas.yPosition > 0) ? scale(canvas.yPosition) : 15;
+      const tabStartX = opts.overlay ? 0 : ((canvas.xPosition && canvas.xPosition > 0) ? scale(canvas.xPosition) : 15);
+      const tabStartY = opts.overlay ? 0 : ((canvas.yPosition && canvas.yPosition > 0) ? scale(canvas.yPosition) : 15);
       const tabWidth = scale(canvas.width) || (width - tabStartX * 2);
       const tabHeight = scale(canvas.height) || (height - tabStartY - 30);
       const tabBodyY = tabStartY + 26;
@@ -1251,7 +1440,7 @@
 
         if (isActive) {
           svgHtml += `
-            <g class="svg-tab-header active" style="cursor: pointer;" onclick="window.switchSvgTabPage('${escapeHtml(tp.name)}')">
+            <g class="svg-tab-header active" style="cursor: pointer;" onclick="window.switchSvgTabPage('${escapeHtml(tp.name)}', '${escapeHtml(canvas.name)}')">
               <path d="M ${curTabX} ${tabBodyY + 1} L ${curTabX} ${tabStartY + 3} Q ${curTabX} ${tabStartY - 2} ${curTabX + 4} ${tabStartY - 2} L ${curTabX + tabW - 4} ${tabStartY - 2} Q ${curTabX + tabW} ${tabStartY - 2} ${curTabX + tabW} ${tabStartY + 3} L ${curTabX + tabW} ${tabBodyY + 1} Z" fill="#f5f4ef" stroke="#808080" stroke-width="1.5"/>
               <path d="M ${curTabX + 1.5} ${tabBodyY} L ${curTabX + 1.5} ${tabStartY + 4} Q ${curTabX + 1.5} ${tabStartY - 0.5} ${curTabX + 4} ${tabStartY - 0.5} L ${curTabX + tabW - 3} ${tabStartY - 0.5}" fill="none" stroke="#ffffff" stroke-width="1"/>
               <!-- Open bottom line to seamlessly merge into active notebook body -->
@@ -1261,7 +1450,7 @@
           `;
         } else {
           svgHtml += `
-            <g class="svg-tab-header inactive" style="cursor: pointer;" onclick="window.switchSvgTabPage('${escapeHtml(tp.name)}')">
+            <g class="svg-tab-header inactive" style="cursor: pointer;" onclick="window.switchSvgTabPage('${escapeHtml(tp.name)}', '${escapeHtml(canvas.name)}')">
               <path d="M ${curTabX} ${tabBodyY} L ${curTabX} ${tabStartY + 6} Q ${curTabX} ${tabStartY + 3} ${curTabX + 3} ${tabStartY + 3} L ${curTabX + tabW - 3} ${tabStartY + 3} Q ${curTabX + tabW} ${tabStartY + 3} ${curTabX + tabW} ${tabStartY + 6} L ${curTabX + tabW} ${tabBodyY} Z" fill="#d0ccc3" stroke="#808080" stroke-width="1"/>
               <text x="${curTabX + tabW / 2}" y="${tabStartY + 18}" text-anchor="middle" font-family="Segoe UI, Tahoma, sans-serif" font-size="11" fill="#444">${escapeHtml(tabLabel)}</text>
             </g>
@@ -1359,8 +1548,11 @@
       let h = autoPos ? autoPos.h : (rawH || (isButton ? 33 : 20));
       if (isButton && h < 26) h = 33;
 
-      // Draw Multi-Record Grid rows
+      // Draw Multi-Record Grid rows. A single-record item of a multi-record block
+      // (Number of Items Displayed = 1) shows the current record.
       const rowCount = isMultiRow ? recordsToDisplay : 1;
+      const rowOffset = (!isMultiRow && recordsToDisplay > 1)
+        ? Math.max(0, (activeRecordIndexByBlock.get(block.name) || 0) - topRecordIndex(block.name)) : 0;
 
       for (let r = 0; r < rowCount; r++) {
         const rowY = y + r * (h + dist);
@@ -1395,7 +1587,7 @@
 
         if (previewEnabled && !isHeaderLabel) {
           svgHtml += `<foreignObject x="${x}" y="${rowY}" width="${w}" height="${Math.max(h, 20)}"
-            data-preview-block="${escapeHtml(block.name)}" data-preview-item="${escapeHtml(item.name)}" data-preview-row="${r}"></foreignObject>`;
+            data-preview-block="${escapeHtml(block.name)}" data-preview-item="${escapeHtml(item.name)}" data-preview-row="${r + rowOffset}"></foreignObject>`;
         } else if (isHeaderLabel) {
           // Clean borderless display header (e.g. MIN_NAME)
           svgHtml += `
@@ -1432,7 +1624,7 @@
           const activeIdx = activeRecordIndexByBlock.get(block.name) || 0;
           let displayVal = null;
           if (bRecords && bRecords.length > 0) {
-            const recIdx = isMultiRow ? (activeIdx + r) : activeIdx;
+            const recIdx = isMultiRow ? (topRecordIndex(block.name) + r) : activeIdx;
             if (recIdx < bRecords.length) {
               const rec = bRecords[recIdx];
               displayVal = rec[item.name] ?? (item.columnName ? rec[item.columnName] : null);
@@ -1468,7 +1660,7 @@
           const activeIdx = activeRecordIndexByBlock.get(block.name) || 0;
           let displayVal = null;
           if (bRecords && bRecords.length > 0) {
-            const recIdx = isMultiRow ? (activeIdx + r) : activeIdx;
+            const recIdx = isMultiRow ? (topRecordIndex(block.name) + r) : activeIdx;
             if (recIdx < bRecords.length) {
               const rec = bRecords[recIdx];
               displayVal = rec[item.name] ?? (item.columnName ? rec[item.columnName] : null);
@@ -1554,15 +1746,87 @@
       }
     }
 
+    return { svgHtml, width, height, coordScale };
+  }
+
+  /** Index of the first record shown in a multi-record block (keeps the current record visible). */
+  function topRecordIndex(blockName) {
+    const block = currentPayload?.moduleIndex.blocks.find(b => b.name === blockName);
+    const shown = Math.max(1, block?.recordsDisplayed || 1);
+    const current = activeRecordIndexByBlock.get(blockName) || 0;
+    return Math.max(0, current - shown + 1);
+  }
+
+  /** Stacked and tab canvases shown in the same window as a content canvas. */
+  function overlayCanvasesFor(canvas) {
+    const mod = currentPayload.moduleIndex;
+    if ((canvas.canvasType || 'Content') !== 'Content' || !canvas.windowName) return [];
+    return mod.canvases.filter(c => c !== canvas && c.windowName === canvas.windowName
+      && ['Tab', 'Stacked'].includes(c.canvasType || ''));
+  }
+
+  function renderCanvasSvg() {
+    if (!currentPayload || !activeCanvas) {
+      formsSvg.innerHTML = '<text x="20" y="30" fill="#666">No canvas selected</text>';
+      canvasStats.textContent = 'Dimensions: -';
+      return;
+    }
+    const mod = currentPayload.moduleIndex;
+    const canvas = activeCanvas;
+
+    const base = buildCanvasLayer(canvas, activeTabPage);
+    let svgHtml = base.svgHtml;
+    let width = base.width;
+    let height = base.height;
+
+    // A window shows its content canvas with stacked / tab canvases on top of it.
+    for (const ov of overlayCanvasesFor(canvas)) {
+      if (!overlayTabPage.has(ov.name) && ov.tabPages?.length) overlayTabPage.set(ov.name, ov.tabPages[0].name);
+      const layer = buildCanvasLayer(ov, overlayTabPage.get(ov.name) || null, { overlay: true, coordScale: base.coordScale });
+      const ox = Math.round((ov.viewportXPosition || 0) * base.coordScale);
+      const oy = Math.round((ov.viewportYPosition || 0) * base.coordScale);
+      const vw = Math.round((ov.viewportWidth || ov.width || 0) * base.coordScale) || layer.width;
+      const vh = Math.round((ov.viewportHeight || ov.height || 0) * base.coordScale) || layer.height;
+      svgHtml += `<g class="svg-overlay-canvas" data-canvas="${escapeHtml(ov.name)}" transform="translate(${ox},${oy})">
+        <rect x="0" y="0" width="${vw}" height="${vh}" fill="${ov.backColor || '#d4d0c8'}"/>${layer.svgHtml}</g>`;
+      width = Math.max(width, ox + vw + 10);
+      height = Math.max(height, oy + vh + 10);
+    }
+
+    formsSvg.setAttribute('width', width);
+    formsSvg.setAttribute('height', height);
+    formsSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    const overlays = overlayCanvasesFor(canvas).map(c => c.name);
+    canvasStats.textContent = `Canvas: ${canvas.name}${overlays.length ? ' + ' + overlays.join(', ') : ''} | Dimensions: ${width} x ${height} px | Window: ${canvas.windowName || 'Default'}`;
+    if (oracleWindowTitle) {
+      const winName = canvas.windowName || mod.title || mod.key.name;
+      oracleWindowTitle.textContent = `${winName} - [${canvas.name}]`;
+    }
+    if (oracleStatusMsg && !selectedObject && !runtime.active) {
+      oracleStatusMsg.textContent = `Record: 1/1  Canvas: ${canvas.name}`;
+    }
+
     formsSvg.innerHTML = svgHtml;
     if (previewEnabled) {
       formsSvg.querySelectorAll('foreignObject[data-preview-block]').forEach(object => {
         const block = mod.blocks.find(b => b.name === object.dataset.previewBlock);
         const item = block.items.find(i => i.name === object.dataset.previewItem);
-        object.append(preview.control(block, item, Number(object.dataset.previewRow)));
+        const row = Number(object.dataset.previewRow);
+        const control = preview.control(block, item, row);
+        // Highlight the current record of multi-record blocks (Forms' current-record VA).
+        if ((block.recordsDisplayed || 1) > 1
+          && topRecordIndex(block.name) + row === (activeRecordIndexByBlock.get(block.name) || 0)
+          && (queryRecordsByBlock.get(block.name) || []).length > 0) {
+          control.classList.add('current-record');
+        }
+        object.append(control);
       });
-      canvasStats.textContent += ' | LOCAL PREVIEW: no database or PL/SQL execution';
-      oracleStatusMsg.textContent = 'Local preview only - no database or PL/SQL execution';
+      if (runtime.active) {
+        canvasStats.textContent += ' | LIVE: triggers and PL/SQL run on the server';
+      } else {
+        canvasStats.textContent += ' | LOCAL PREVIEW: no database or PL/SQL execution';
+        oracleStatusMsg.textContent = 'Local preview only - no database or PL/SQL execution';
+      }
     }
     applyZoom();
   }

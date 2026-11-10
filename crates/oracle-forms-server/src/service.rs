@@ -13,6 +13,18 @@ struct ServiceState {
     modules: HashMap<String, ModuleIndex>,
     converted_files: HashMap<String, PathBuf>,
     cache_dirs: HashMap<String, PathBuf>,
+    /// Edits made in the layout editor, applied to the original XML on export.
+    item_edits: HashMap<String, Vec<oracle_forms_xml::ItemPatch>>,
+}
+
+/// How an export was produced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ExportMode {
+    /// The original Forms2XML file with only the edited attributes changed (lossless).
+    PatchedOriginal,
+    /// Regenerated from the parsed model: properties that are not modelled are omitted.
+    Summary,
 }
 
 #[derive(Clone)]
@@ -23,6 +35,8 @@ pub struct FormsService {
     /// Off by default: a request must never be able to borrow the operator's credentials
     /// unless the operator opted in when starting the server.
     allow_env_credentials: bool,
+    /// Live form sessions (triggers and PL/SQL running on the server).
+    pub sessions: crate::runtime_sessions::SessionManager,
 }
 
 impl FormsService {
@@ -33,6 +47,7 @@ impl FormsService {
             base_cache_dir: dir,
             state: Arc::new(RwLock::new(ServiceState::default())),
             allow_env_credentials: false,
+            sessions: Default::default(),
         }
     }
 
@@ -470,14 +485,72 @@ impl FormsService {
         if let Some(h_val) = height {
             item.height = Some(h_val);
         }
-        if let Some(prompt_val) = prompt {
+        if let Some(prompt_val) = prompt.clone() {
             item.prompt = Some(prompt_val);
         }
-        if let Some(label_val) = label {
+        if let Some(label_val) = label.clone() {
             item.label = Some(label_val);
         }
+        let updated = module.clone();
 
-        Ok(module.clone())
+        // Record the edit as attribute changes for a lossless export.
+        let mut attrs: Vec<(String, String)> = Vec::new();
+        if let Some(v) = x { attrs.push(("XPosition".into(), v.to_string())); }
+        if let Some(v) = y { attrs.push(("YPosition".into(), v.to_string())); }
+        if let Some(v) = width { attrs.push(("Width".into(), v.to_string())); }
+        if let Some(v) = height { attrs.push(("Height".into(), v.to_string())); }
+        if let Some(v) = prompt { attrs.push(("Prompt".into(), v)); }
+        if let Some(v) = label { attrs.push(("Label".into(), v)); }
+        let edits = st.item_edits.entry(mod_upper).or_default();
+        match edits.iter_mut().find(|p| p.block.eq_ignore_ascii_case(block_name) && p.item.eq_ignore_ascii_case(item_name)) {
+            Some(existing) => {
+                for (k, v) in attrs {
+                    match existing.attributes.iter_mut().find(|(ek, _)| *ek == k) {
+                        Some(slot) => slot.1 = v,
+                        None => existing.attributes.push((k, v)),
+                    }
+                }
+            }
+            None => edits.push(oracle_forms_xml::ItemPatch { block: block_name.to_string(), item: item_name.to_string(), attributes: attrs }),
+        }
+
+        Ok(updated)
+    }
+
+    /// Finds and parses an attached library (`.pld`) for a module: looks next to the
+    /// module file, then in the samples directory. Only plain file names are tried.
+    pub fn resolve_library(&self, module_name: &str, library_name: &str) -> Option<ModuleIndex> {
+        let base = std::path::Path::new(library_name.trim())
+            .file_stem()
+            .and_then(|s| s.to_str())?
+            .to_string();
+        if !is_plain_file_name(&base) {
+            return None;
+        }
+        let mut dirs = Vec::new();
+        {
+            let st = self.state.read().unwrap();
+            if let Some(parent) = st.converted_files.get(&module_name.to_ascii_uppercase()).and_then(|f| f.parent()) {
+                dirs.push(if parent.as_os_str().is_empty() { PathBuf::from(".") } else { parent.to_path_buf() });
+            }
+        }
+        dirs.push(Self::samples_dir());
+        let candidates = [format!("{}.pld", base.to_ascii_lowercase()), format!("{}.pld", base.to_ascii_uppercase()), format!("{}.pld", base)];
+        for dir in dirs {
+            for cand in &candidates {
+                if let Some(path) = safe_join(&dir, cand) {
+                    if path.is_file() {
+                        let key = ModuleKey::new(base.to_ascii_uppercase(), ModuleType::Library);
+                        let cache = self.base_cache_dir.join(format!("lib_{}", base.to_ascii_lowercase()));
+                        let _ = fs::create_dir_all(&cache);
+                        if let Ok(idx) = PldParser::parse(&key, &path, &cache) {
+                            return Some(idx);
+                        }
+                    }
+                }
+            }
+        }
+        None
     }
 
     pub fn get_or_load_module(&self, name: &str) -> Result<ModuleIndex> {
@@ -489,9 +562,40 @@ impl FormsService {
             .or_else(|_| self.load_sample(&format!("{}_fmb.xml", name)))
     }
 
-    pub fn export_xml(&self, module_name: &str) -> Result<String> {
+    /// Exports a module as Forms2XML. If the module was opened from an XML file, the
+    /// original file is returned with only the edited attributes changed (lossless).
+    /// Otherwise (binary .fmb) a summary is regenerated from the parsed model.
+    pub fn export_xml(&self, module_name: &str) -> Result<(String, ExportMode)> {
         let module = self.get_or_load_module(module_name)?;
-        Ok(oracle_forms_xml::FormsXmlWriter::write_string(&module))
+        let key = module.key.name.to_ascii_uppercase();
+        let (source, edits) = {
+            let st = self.state.read().unwrap();
+            (
+                st.converted_files.get(&key).cloned(),
+                st.item_edits.get(&key).cloned().unwrap_or_default(),
+            )
+        };
+        if let Some(path) = source.filter(|p| p.extension().map(|e| e.eq_ignore_ascii_case("xml")).unwrap_or(false)) {
+            if let Ok(original) = fs::read_to_string(&path) {
+                let patched = oracle_forms_xml::patch_items(&original, &edits)
+                    .map_err(|e| FormsError::InvalidFormat(e.to_string()))?;
+                return Ok((patched, ExportMode::PatchedOriginal));
+            }
+        }
+        Ok((Self::summary_xml(&module), ExportMode::Summary))
+    }
+
+    /// Regenerated (lossy) XML, clearly labelled as such.
+    pub fn summary_xml(module: &ModuleIndex) -> String {
+        let xml = oracle_forms_xml::FormsXmlWriter::write_string(module);
+        let note = "<!-- SUMMARY EXPORT: regenerated from the Workbench's parsed model. Properties the \
+Workbench does not model (fonts, colours, LOV and record-group details, most item \
+properties) are omitted. Do not compile this over the original form; convert the .fmb with \
+frmf2xml for a complete export. -->\n";
+        match xml.find("?>") {
+            Some(i) => format!("{}\n{}{}", &xml[..i + 2], note, xml[i + 2..].trim_start()),
+            None => format!("{}{}", note, xml),
+        }
     }
 
     pub fn diff_modules(&self, base_name: &str, modified_name: &str) -> Result<oracle_forms_core::diff::ModuleDiff> {

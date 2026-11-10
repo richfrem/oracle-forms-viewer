@@ -262,4 +262,7 @@ pub enum DbError {
 
     #[error("Database configuration error: {0}")]
     ConfigError(String),
+
+    #[error("Unsupported database operation: {0}")]
+    Unsupported(String),
 }

@@ -34,6 +34,10 @@ pub fn app_router_with_security(service: FormsService, security_cfg: SecurityCon
         .route("/api/reports", get(get_reports))
         .route("/api/reports/run", post(run_report_endpoint))
         .route("/api/reports/{name}/html", get(get_report_html))
+        .route("/api/sessions", post(start_session))
+        .route("/api/sessions/{id}", get(session_state).delete(end_session))
+        .route("/api/sessions/{id}/events", post(session_event))
+        .route("/api/sessions/{id}/alert", post(session_alert))
         .fallback(static_handler)
         .with_state(service)
         .layer(axum::middleware::from_fn_with_state(
@@ -272,6 +276,119 @@ async fn query_form_block(
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StartSessionRequest {
+    module_name: String,
+    /// Omit (or "none") to run without a database.
+    backend: Option<String>,
+    host: Option<String>,
+    port: Option<u16>,
+    service_name: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+    /// Off by default: the session refuses DML, locks and commits.
+    #[serde(default)]
+    allow_writes: bool,
+}
+
+fn session_error(code: u16, message: String) -> Response {
+    let status = StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    (status, Json(serde_json::json!({ "error": message }))).into_response()
+}
+
+/// Starts a live form session: loads the module and its attached libraries, connects
+/// to the database (if requested) and runs the startup triggers.
+async fn start_session(State(service): State<FormsService>, Json(req): Json<StartSessionRequest>) -> Response {
+    let module = match service.get_or_load_module(&req.module_name) {
+        Ok(m) => m,
+        Err(e) => return session_error(404, e.to_string()),
+    };
+
+    let mut libraries = Vec::new();
+    let mut missing = Vec::new();
+    for lib in &module.attached_libraries {
+        match service.resolve_library(&req.module_name, &lib.name) {
+            Some(idx) => libraries.push(idx),
+            None => missing.push(lib.name.clone()),
+        }
+    }
+
+    let db = match req.backend.as_deref().map(str::trim).filter(|b| !b.is_empty() && !b.eq_ignore_ascii_case("none")) {
+        None => None,
+        Some(name) => {
+            let backend = match oracle_forms_db::DbBackend::parse(name) {
+                Ok(b) => b,
+                Err(e) => return session_error(400, e.to_string()),
+            };
+            let mut cfg = oracle_forms_db::DbConfig { backend, ..Default::default() };
+            if let Some(h) = req.host { cfg.host = Some(h); }
+            if let Some(p) = req.port { cfg.port = Some(p); }
+            if let Some(s) = req.service_name { cfg.service_name = Some(s); }
+            if let Some(u) = req.username.filter(|u| !u.is_empty()) { cfg.username = Some(u); }
+            if let Some(pw) = req.password.filter(|p| !p.is_empty()) { cfg.password = Some(pw); }
+            Some(service.apply_credential_policy(cfg))
+        }
+    };
+
+    let opts = crate::runtime_sessions::StartOptions {
+        module,
+        libraries,
+        missing_libraries: missing,
+        db,
+        allow_writes: req.allow_writes,
+    };
+    match service.sessions.start(opts).await {
+        Ok(state) => Json(state).into_response(),
+        Err(e) => session_error(400, e),
+    }
+}
+
+async fn session_event(
+    State(service): State<FormsService>,
+    AxumPath(id): AxumPath<String>,
+    Json(event): Json<crate::runtime_sessions::SessionEvent>,
+) -> Response {
+    match service.sessions.send_event(&id, event).await {
+        Ok(state) => Json(state).into_response(),
+        Err((code, msg)) => session_error(code, msg),
+    }
+}
+
+#[derive(Deserialize)]
+struct AlertAnswer {
+    /// 1, 2 or 3.
+    button: u8,
+}
+
+async fn session_alert(State(service): State<FormsService>, AxumPath(id): AxumPath<String>, Json(answer): Json<AlertAnswer>) -> Response {
+    let code = match answer.button {
+        1 => oracle_forms_runtime::ALERT_BUTTON1,
+        2 => oracle_forms_runtime::ALERT_BUTTON2,
+        3 => oracle_forms_runtime::ALERT_BUTTON3,
+        _ => return session_error(400, "button must be 1, 2 or 3".to_string()),
+    };
+    match service.sessions.answer_alert(&id, code).await {
+        Ok(state) => Json(state).into_response(),
+        Err((c, msg)) => session_error(c, msg),
+    }
+}
+
+async fn session_state(State(service): State<FormsService>, AxumPath(id): AxumPath<String>) -> Response {
+    match service.sessions.state(&id).await {
+        Ok(state) => Json(state).into_response(),
+        Err((code, msg)) => session_error(code, msg),
+    }
+}
+
+async fn end_session(State(service): State<FormsService>, AxumPath(id): AxumPath<String>) -> Response {
+    if service.sessions.remove(&id) {
+        StatusCode::NO_CONTENT.into_response()
+    } else {
+        session_error(404, "Session not found".to_string())
+    }
+}
+
+#[derive(Deserialize)]
 struct ExportXmlRequest {
     #[serde(rename = "moduleName")]
     module_name: Option<String>,
@@ -283,26 +400,20 @@ struct ExportXmlResponse {
     #[serde(rename = "moduleName")]
     module_name: String,
     xml: String,
+    /// `patchedOriginal` (lossless) or `summary` (regenerated, lossy).
+    mode: crate::service::ExportMode,
 }
 
 async fn export_form_xml(
     State(service): State<FormsService>,
     Json(payload): Json<ExportXmlRequest>,
 ) -> Response {
-    if let Some(module) = payload.module {
-        let xml = oracle_forms_xml::FormsXmlWriter::write_string(&module);
-        return Json(ExportXmlResponse {
-            module_name: module.key.name,
-            xml,
-        })
-        .into_response();
-    }
-
     if let Some(name) = payload.module_name {
         match service.export_xml(&name) {
-            Ok(xml) => Json(ExportXmlResponse {
+            Ok((xml, mode)) => Json(ExportXmlResponse {
                 module_name: name,
                 xml,
+                mode,
             })
             .into_response(),
             Err(e) => (
@@ -311,6 +422,14 @@ async fn export_form_xml(
             )
                 .into_response(),
         }
+    } else if let Some(module) = payload.module {
+        // A client-supplied model can only be exported as a (lossy) summary.
+        Json(ExportXmlResponse {
+            module_name: module.key.name.clone(),
+            xml: FormsService::summary_xml(&module),
+            mode: crate::service::ExportMode::Summary,
+        })
+        .into_response()
     } else {
         (
             StatusCode::BAD_REQUEST,
@@ -705,8 +824,49 @@ mod tests {
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
         let xml_str = resp.get("xml").and_then(|v| v.as_str()).unwrap();
-        assert!(xml_str.contains("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
-        assert!(xml_str.contains("<FormModule Name=\"ORDERS\""));
+        // Opened from Forms2XML: the export is the original file, byte for byte.
+        assert_eq!(resp["mode"], "patchedOriginal");
+        let original = std::fs::read_to_string("../../samples/orders_fmb.xml").unwrap();
+        assert_eq!(xml_str, original);
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn export_after_layout_edit_changes_only_that_item() {
+        let (service, cache) = security_test_service("export-edit");
+        let original = std::fs::read_to_string("../../samples/test_db_fmb.xml").unwrap();
+        service.load_sample("test_db_fmb.xml").unwrap();
+        let (status, body, _) = send(
+            service.clone(),
+            Request::builder()
+                .method("POST")
+                .uri("/api/forms/module/TEST_DB/item")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"blockName": "BLOCK5", "itemName": "TEXT_ITEM4", "x": 33, "y": 77}"#))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let (status, body, _) = send(
+            service,
+            Request::builder()
+                .method("POST")
+                .uri("/api/forms/export-xml")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"moduleName": "TEST_DB"}"#))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let resp: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert_eq!(resp["mode"], "patchedOriginal");
+        let exported = resp["xml"].as_str().unwrap();
+        // Exactly the two coordinates changed; every other byte is the original.
+        let expected = original
+            .replacen(r#"Name="TEXT_ITEM4" Justification="Start" DistanceBetweenRecords="4" Width="240" ItemType="Text Item" BackColor="white" XPosition="20" FontName="Segoe UI" YPosition="50""#,
+                      r#"Name="TEXT_ITEM4" Justification="Start" DistanceBetweenRecords="4" Width="240" ItemType="Text Item" BackColor="white" XPosition="33" FontName="Segoe UI" YPosition="77""#, 1);
+        assert_ne!(expected, original, "test fixture changed");
+        assert_eq!(exported, expected);
         let _ = std::fs::remove_dir_all(cache);
     }
 
@@ -1007,6 +1167,64 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::NOT_FOUND);
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn live_session_runs_test_db_form_triggers_against_sqlite() {
+        let (service, cache) = security_test_service("live-session");
+        let start = |body: &'static str| {
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions")
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap()
+        };
+        let (status, body, _) = send(service.clone(), start(r#"{"moduleName": "test_db_fmb.xml", "backend": "sqlite"}"#)).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let state: serde_json::Value = serde_json::from_str(&body).unwrap();
+        // WHEN-NEW-FORM-INSTANCE ran its SELECT ... INTO against test_items (item 1).
+        let block5 = state["blocks"].as_array().unwrap().iter().find(|b| b["name"] == "BLOCK5").unwrap();
+        assert_eq!(block5["records"][0]["values"]["TEXT_ITEM4"], "Widget A", "{state}");
+        assert_eq!(state["readOnly"], true);
+
+        // The "next item" button trigger moves to the next row via its IF/ELSIF + SELECT.
+        let id = state["sessionId"].as_str().unwrap();
+        let (status, body, _) = send(
+            service.clone(),
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/sessions/{}/events", id))
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"kind": "button", "block": "BLOCK5", "item": "PUSH_BUTTON285"}"#))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let state: serde_json::Value = serde_json::from_str(&body).unwrap();
+        let block5 = state["blocks"].as_array().unwrap().iter().find(|b| b["name"] == "BLOCK5").unwrap();
+        assert_eq!(block5["records"][0]["values"]["TEXT_ITEM4"], "Gadget B", "{state}");
+
+        let (status, _, _) = send(service, Request::builder().method("DELETE").uri(format!("/api/sessions/{}", id)).body(Body::empty()).unwrap()).await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn session_start_with_unknown_backend_is_rejected() {
+        let (service, cache) = security_test_service("bad-backend");
+        let (status, body, _) = send(
+            service,
+            Request::builder()
+                .method("POST")
+                .uri("/api/sessions")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"moduleName": "test_db_fmb.xml", "backend": "orcale"}"#))
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
         let _ = std::fs::remove_dir_all(cache);
     }
 }

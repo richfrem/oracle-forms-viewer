@@ -1,8 +1,9 @@
 /* Interactive form controls with live database query and simulation capabilities. */
 window.FormsPreview = class FormsPreview {
-  constructor(onAction = () => {}, onFocus = () => {}) {
+  constructor(onAction = () => {}, onFocus = () => {}, onEdit = () => {}) {
     this.onAction = onAction;
     this.onFocus = onFocus;
+    this.onEdit = onEdit;
     this.values = new Map();
   }
 
@@ -98,7 +99,10 @@ window.FormsPreview = class FormsPreview {
       control.type = checkbox ? 'checkbox' : radio ? 'radio' : 'text';
       if (checkbox || radio) {
         control.checked = !!this.values.get(key);
-        control.addEventListener('change', () => this.values.set(key, control.checked));
+        control.addEventListener('change', () => {
+          this.values.set(key, control.checked);
+          this.onEdit(block, item, row, control.checked);
+        });
       } else {
         const curVal = this.values.get(key) != null ? this.values.get(key) : (colKey ? this.values.get(colKey) : '');
         control.value = curVal != null ? curVal : '';
@@ -106,6 +110,8 @@ window.FormsPreview = class FormsPreview {
           (item.propertyClass || '').toUpperCase().includes('NONENTERABLE');
         if (dml.maximumLength > 0) control.maxLength = dml.maximumLength;
         control.addEventListener('input', () => this.values.set(key, control.value));
+        // Leaving the field commits the value (and fires WHEN-VALIDATE-ITEM in a live session).
+        control.addEventListener('change', () => this.onEdit(block, item, row, control.value));
       }
       if (radio) {
         control.disabled = true;

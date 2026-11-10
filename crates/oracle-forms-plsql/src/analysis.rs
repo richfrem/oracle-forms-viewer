@@ -326,6 +326,50 @@ impl CodeIntelligence {
                     Self::walk_statements(&b.body, unit_name, symbols, nodes, edges, item_refs, details);
                     details.push(("BEGIN ... END;".to_string(), StatementCategory::Supported));
                 }
+                Statement::Exit { condition } => {
+                    if let Some(c) = condition {
+                        Self::walk_expr(c, unit_name, symbols, nodes, edges, item_refs);
+                    }
+                    details.push(("EXIT".to_string(), StatementCategory::Supported));
+                }
+                Statement::Case { selector, whens, else_branch } => {
+                    if let Some(sel) = selector {
+                        Self::walk_expr(sel, unit_name, symbols, nodes, edges, item_refs);
+                    }
+                    for (c, branch) in whens {
+                        Self::walk_expr(c, unit_name, symbols, nodes, edges, item_refs);
+                        Self::walk_statements(branch, unit_name, symbols, nodes, edges, item_refs, details);
+                    }
+                    if let Some(eb) = else_branch {
+                        Self::walk_statements(eb, unit_name, symbols, nodes, edges, item_refs, details);
+                    }
+                    details.push(("CASE ... END CASE".to_string(), StatementCategory::Supported));
+                }
+                Statement::OpenCursor { cursor, args } => {
+                    for a in args {
+                        Self::walk_expr(a, unit_name, symbols, nodes, edges, item_refs);
+                    }
+                    details.push((format!("OPEN {}", cursor), StatementCategory::Delegated));
+                }
+                Statement::FetchCursor { cursor, into } => {
+                    for t in into {
+                        if let Expr::Bind(bind_name) = t {
+                            let clean = bind_name.trim_start_matches(':').to_ascii_uppercase();
+                            item_refs.entry(clean).or_default().push(ItemReference {
+                                unit_name: unit_name.to_string(),
+                                access_type: "Write".to_string(),
+                            });
+                        }
+                    }
+                    details.push((format!("FETCH {}", cursor), StatementCategory::Delegated));
+                }
+                Statement::CloseCursor { cursor } => {
+                    details.push((format!("CLOSE {}", cursor), StatementCategory::Supported));
+                }
+                Statement::CursorForLoop { var_name, body, .. } => {
+                    Self::walk_statements(body, unit_name, symbols, nodes, edges, item_refs, details);
+                    details.push((format!("FOR {} IN cursor LOOP", var_name), StatementCategory::Delegated));
+                }
                 Statement::Opaque { raw, error } => {
                     details.push((
                         raw.clone(),
@@ -381,6 +425,32 @@ impl CodeIntelligence {
             }
             Expr::Parenthesized(e) => {
                 Self::walk_expr(e, unit_name, symbols, nodes, edges, item_refs);
+            }
+            Expr::InList { expr, list, .. } => {
+                Self::walk_expr(expr, unit_name, symbols, nodes, edges, item_refs);
+                for e in list {
+                    Self::walk_expr(e, unit_name, symbols, nodes, edges, item_refs);
+                }
+            }
+            Expr::Between { expr, low, high, .. } => {
+                Self::walk_expr(expr, unit_name, symbols, nodes, edges, item_refs);
+                Self::walk_expr(low, unit_name, symbols, nodes, edges, item_refs);
+                Self::walk_expr(high, unit_name, symbols, nodes, edges, item_refs);
+            }
+            Expr::NamedArg { value, .. } => {
+                Self::walk_expr(value, unit_name, symbols, nodes, edges, item_refs);
+            }
+            Expr::Case { selector, whens, else_expr } => {
+                if let Some(sel) = selector {
+                    Self::walk_expr(sel, unit_name, symbols, nodes, edges, item_refs);
+                }
+                for (c, v) in whens {
+                    Self::walk_expr(c, unit_name, symbols, nodes, edges, item_refs);
+                    Self::walk_expr(v, unit_name, symbols, nodes, edges, item_refs);
+                }
+                if let Some(e) = else_expr {
+                    Self::walk_expr(e, unit_name, symbols, nodes, edges, item_refs);
+                }
             }
             _ => {}
         }

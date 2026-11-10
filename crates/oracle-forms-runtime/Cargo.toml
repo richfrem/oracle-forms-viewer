@@ -20,6 +20,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 regex = { workspace = true }
+bigdecimal = { version = "=0.4.8", features = ["serde"] }
 
 [dev-dependencies]
 oracle-forms-xml = { workspace = true }

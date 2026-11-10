@@ -505,6 +505,9 @@ pub struct TriggerInfo {
     pub text_encoding: TextEncoding,
     pub text_ref: Option<SourceRef>,
     pub xml_ref: Option<SourceRef>,
+    /// Forms "Execution Hierarchy" property: `Override` (default), `Before` or `After`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_hierarchy: Option<String>,
     #[serde(default)]
     pub source_text: Option<String>,
 }
@@ -594,6 +597,18 @@ pub struct WindowInfo {
 pub struct AlertInfo {
     pub name: String,
     pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Button labels; Forms shows only the buttons that have a label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub button1_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub button2_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub button3_label: Option<String>,
+    /// 1, 2 or 3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_button: Option<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

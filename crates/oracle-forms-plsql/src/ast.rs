@@ -148,6 +148,38 @@ pub enum Statement {
     Null,
     Block(BlockStmt),
     Sql(SqlStatement),
+    /// `EXIT;` or `EXIT WHEN cond;` (leaves the innermost loop).
+    Exit {
+        condition: Option<Expr>,
+    },
+    /// `CASE [selector] WHEN .. THEN .. [ELSE ..] END CASE;`
+    Case {
+        selector: Option<Expr>,
+        whens: Vec<(Expr, Vec<Statement>)>,
+        else_branch: Option<Vec<Statement>>,
+    },
+    /// `OPEN cursor [(args)];`
+    OpenCursor {
+        cursor: String,
+        args: Vec<Expr>,
+    },
+    /// `FETCH cursor INTO targets;`
+    FetchCursor {
+        cursor: String,
+        into: Vec<Expr>,
+    },
+    /// `CLOSE cursor;`
+    CloseCursor {
+        cursor: String,
+    },
+    /// `FOR rec IN cursor[(args)] LOOP` or `FOR rec IN (SELECT ...) LOOP`
+    CursorForLoop {
+        var_name: String,
+        cursor: Option<String>,
+        args: Vec<Expr>,
+        query: Option<String>,
+        body: Vec<Statement>,
+    },
     Opaque {
         raw: String,
         error: Option<String>,
@@ -202,6 +234,35 @@ pub enum Expr {
         args: Vec<Expr>,
     },
     Parenthesized(Box<Expr>),
+    /// `expr [NOT] IN (a, b, ...)`
+    InList {
+        expr: Box<Expr>,
+        list: Vec<Expr>,
+        negated: bool,
+    },
+    /// `expr [NOT] BETWEEN low AND high`
+    Between {
+        expr: Box<Expr>,
+        low: Box<Expr>,
+        high: Box<Expr>,
+        negated: bool,
+    },
+    /// Cursor / implicit-cursor attribute: `SQL%ROWCOUNT`, `c1%NOTFOUND`, ...
+    Attribute {
+        object: String,
+        attr: String,
+    },
+    /// Named argument in a call: `p_name => value`.
+    NamedArg {
+        name: String,
+        value: Box<Expr>,
+    },
+    /// `CASE [selector] WHEN a THEN x ... [ELSE y] END`
+    Case {
+        selector: Option<Box<Expr>>,
+        whens: Vec<(Expr, Expr)>,
+        else_expr: Option<Box<Expr>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -234,4 +295,8 @@ pub enum BinaryOp {
 pub enum UnaryOp {
     Not,
     Negate,
+    /// `expr IS NULL` (always TRUE or FALSE, never NULL)
+    IsNull,
+    /// `expr IS NOT NULL`
+    IsNotNull,
 }

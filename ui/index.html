@@ -45,7 +45,17 @@
             <option value="sqlite">SQLite</option>
             <option value="mock">Mock</option>
           </select>
+          <input id="dbUserInput" class="db-cred-input" type="text" placeholder="DB user" autocomplete="username" aria-label="Database user" title="Database user (sent to this local server only; never stored)">
+          <input id="dbPassInput" class="db-cred-input" type="password" placeholder="password" autocomplete="current-password" aria-label="Database password" title="Database password (sent to this local server only; never stored)">
           <button id="dbQueryBtn" class="btn btn-sm btn-primary" title="Execute Query on Active Block (Ctrl+F11 / F8)">⚡ Query DB</button>
+          <button id="runFormBtn" class="btn btn-sm btn-primary" title="Run the form: triggers and PL/SQL execute on the server against the selected database">▶ Run Form</button>
+          <label class="toggle-label" title="Allow INSERT/UPDATE/DELETE and COMMIT against the database. Off: the session is read-only.">
+            <input type="checkbox" id="allowWritesToggle">
+            <span>Allow writes</span>
+          </label>
+          <button id="runtimeCommitBtn" class="btn btn-sm btn-secondary hidden" title="COMMIT_FORM (runs the commit triggers)">💾 Commit</button>
+          <button id="stopFormBtn" class="btn btn-sm btn-secondary hidden" title="End the running form session">■ Stop</button>
+          <span id="sessionBadge" class="session-badge hidden" aria-live="polite"></span>
           <div id="recordNavControls" class="record-nav-controls hidden">
             <button id="prevRecordBtn" class="btn btn-sm btn-icon" title="Previous Record (Up Arrow)">◀</button>
             <span id="recordNavBadge" class="record-nav-badge">1 / 1</span>
@@ -247,6 +257,10 @@
                 <div id="svgContainer" class="svg-container">
                   <svg id="formsSvg" xmlns="http://www.w3.org/2000/svg"></svg>
                 </div>
+                <details id="sessionTracePanel" class="session-trace hidden">
+                  <summary>Session trace (triggers, SQL, built-ins)</summary>
+                  <pre id="sessionTrace"></pre>
+                </details>
 
                 <!-- Status Bar -->
                 <div class="oracle-status-bar">
@@ -350,7 +364,17 @@
     <button id="previewSourceBtn" class="btn btn-secondary" hidden>View Associated Source</button>
     <button id="previewCloseBtn" class="btn btn-primary">Close</button>
   </dialog>
+  <dialog id="runtimeAlertDialog" class="preview-dialog">
+    <h3 id="runtimeAlertTitle"></h3>
+    <p id="runtimeAlertMessage"></p>
+    <div class="runtime-alert-buttons">
+      <button id="runtimeAlertBtn1" class="btn btn-primary" data-button="1"></button>
+      <button id="runtimeAlertBtn2" class="btn btn-secondary" data-button="2"></button>
+      <button id="runtimeAlertBtn3" class="btn btn-secondary" data-button="3"></button>
+    </div>
+  </dialog>
   <script src="preview.js"></script>
+  <script src="runtime.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

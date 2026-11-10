@@ -6,8 +6,8 @@ pub mod sqlite;
 pub mod testbed_sqlplus;
 pub mod thin;
 
-pub use driver::DatabaseDriver;
-pub use generator::{GeneratedQuery, SqlGenerator};
+pub use driver::{validate_savepoint_name, DatabaseDriver};
+pub use generator::{rewrite_binds, BindRef, GeneratedQuery, RewrittenSql, SqlGenerator};
 pub use mock::MockDriver;
 pub use model::{BoundSql, DbBackend, DbConfig, DbError, QueryRecord, QueryResult, SqlValue};
 pub use sqlite::SqliteDriver;

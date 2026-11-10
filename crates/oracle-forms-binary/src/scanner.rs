@@ -120,6 +120,7 @@ impl BinaryFmbParser {
                 )?;
 
                 triggers.push(TriggerInfo {
+                    execution_hierarchy: None,
                     name: t_name,
                     level,
                     block_name: b_name,
@@ -158,6 +159,7 @@ impl BinaryFmbParser {
                                 &code,
                             )?;
                             triggers.push(TriggerInfo {
+                    execution_hierarchy: None,
                                 name: trig_name.to_string(),
                                 level: TriggerLevel::Form,
                                 block_name: None,

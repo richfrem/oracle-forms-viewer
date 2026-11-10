@@ -126,6 +126,16 @@ impl FormRecord {
         self.item_validation.insert(key_upper, ValidationStatus::Valid);
     }
 
+    /// After POST-QUERY: values computed by the trigger are part of the queried record,
+    /// not user changes, so the record stays QUERY and is not locked.
+    pub fn reset_to_queried(&mut self) {
+        if self.status == FormsRecordStatus::Changed {
+            self.status = FormsRecordStatus::Query;
+        }
+        self.initial_values = self.values.clone();
+        self.mark_record_valid();
+    }
+
     pub fn mark_record_valid(&mut self) {
         self.validation_status = ValidationStatus::Valid;
         for v in self.item_validation.values_mut() {
@@ -139,6 +149,13 @@ impl FormRecord {
 pub struct BlockBuffer {
     pub block_name: String,
     pub records: Vec<FormRecord>,
+    /// Queried records removed with DELETE_RECORD, deleted from the database at commit.
+    #[serde(default)]
+    pub deleted_records: Vec<FormRecord>,
+    /// Incremented whenever the records are replaced (query, clear), so "same index" after
+    /// a re-query is recognised as a different record.
+    #[serde(default)]
+    pub generation: u64,
     pub current_record_index: usize, // 0-based internal index
     pub cursor_fetched_all: bool,
 }
@@ -148,6 +165,8 @@ impl BlockBuffer {
         let mut buffer = Self {
             block_name: block_name.into(),
             records: Vec::new(),
+            deleted_records: Vec::new(),
+            generation: 0,
             current_record_index: 0,
             cursor_fetched_all: true,
         };
@@ -186,13 +205,25 @@ impl BlockBuffer {
         }
     }
 
+    /// DELETE_RECORD: removes the current record from the block. A queried record is
+    /// kept in `deleted_records` so the commit can delete it from the database; a record
+    /// that was never inserted is simply discarded.
     pub fn delete_record(&mut self) -> bool {
-        if let Some(rec) = self.current_record_mut() {
-            rec.is_marked_for_delete = true;
-            true
-        } else {
-            false
+        if self.records.is_empty() || self.current_record_index >= self.records.len() {
+            return false;
         }
+        let mut rec = self.records.remove(self.current_record_index);
+        if matches!(rec.status, FormsRecordStatus::Query | FormsRecordStatus::Changed) {
+            rec.is_marked_for_delete = true;
+            self.deleted_records.push(rec);
+        }
+        if self.records.is_empty() {
+            self.records.push(FormRecord::new());
+        }
+        if self.current_record_index >= self.records.len() {
+            self.current_record_index = self.records.len() - 1;
+        }
+        true
     }
 
     pub fn clear_record(&mut self) {
@@ -219,7 +250,9 @@ impl BlockBuffer {
     }
 
     pub fn clear_block(&mut self) {
+        self.generation += 1;
         self.records.clear();
+        self.deleted_records.clear();
         self.records.push(FormRecord::new());
         self.current_record_index = 0;
         self.cursor_fetched_all = true;
@@ -238,7 +271,9 @@ impl BlockBuffer {
     }
 
     pub fn populate_from_query_result(&mut self, query_res: QueryResult) {
+        self.generation += 1;
         self.records.clear();
+        self.deleted_records.clear();
         for q_rec in query_res.records {
             let record = FormRecord::with_query_values(q_rec.values, q_rec.row_id);
             self.records.push(record);

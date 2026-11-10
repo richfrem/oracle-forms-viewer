@@ -868,10 +868,14 @@ input[type="range"] {
   box-sizing: border-box;
   font: inherit;
 }
-.preview-widget input[type="text"] {
+.preview-widget input[type="text"],
+.preview-widget select {
   padding: 1px 4px;
   border: 1px solid #7f9db9;
   background: white;
+  /* The app uses a dark color-scheme; form fields must set their own text colour. */
+  color: #111;
+  color-scheme: light;
 }
 .preview-widget button {
   border: 1px solid #716f64;
@@ -1146,3 +1150,43 @@ input[type="range"] {
   font-size: 12px;
 }
 
+
+/* ==================== LIVE FORM SESSION ==================== */
+.db-cred-input {
+  width: 92px;
+  font-size: 12px;
+  padding: 2px 6px;
+}
+.session-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #1f6f3f;
+  color: #fff;
+}
+.session-badge.read-only { background: #6b5a1f; }
+.session-trace {
+  margin: 4px 8px;
+  font-size: 12px;
+}
+.session-trace pre {
+  max-height: 180px;
+  overflow: auto;
+  margin: 4px 0 0;
+  padding: 6px;
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-size: 11px;
+  white-space: pre-wrap;
+}
+.runtime-alert-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* Generic utility: elements toggled with classList "hidden". */
+.hidden { display: none !important; }
+
+/* Current record of a multi-record block (live session). */
+.preview-widget.current-record input[type="text"] {
+  background: #fff8c5;
+  border-color: #b8860b;
+}
