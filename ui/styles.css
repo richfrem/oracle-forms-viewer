@@ -903,3 +903,142 @@ input[type="range"] {
 .preview-dialog::backdrop { background: rgb(0 0 0 / 35%); }
 .preview-dialog p { white-space: pre-wrap; }
 .preview-disclaimer { font-size: 12px; color: #555; }
+
+/* ==================== LAYOUT EDITOR & FORM DIFF ==================== */
+.edit-layout-active #formsSvg {
+  cursor: crosshair;
+}
+
+.edit-layout-active .svg-interactive-item {
+  cursor: grab;
+}
+
+.edit-layout-active .svg-interactive-item:active {
+  cursor: grabbing;
+}
+
+.edit-layout-active .svg-interactive-item:hover rect {
+  stroke: #007acc !important;
+  stroke-width: 1.5 !important;
+}
+
+.svg-item-selected rect {
+  stroke: #007acc !important;
+  stroke-width: 2 !important;
+  filter: drop-shadow(0 0 3px rgba(0, 122, 204, 0.6));
+}
+
+.drag-coords-badge {
+  position: absolute;
+  background: rgba(0, 122, 204, 0.95);
+  color: #ffffff;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-family: monospace;
+  font-weight: bold;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.prop-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-dark);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.prop-input:focus {
+  border-color: var(--accent-hover);
+  outline: none;
+}
+
+/* Diff Tab */
+.diff-toolbar {
+  padding: 8px 14px;
+  background-color: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.diff-select {
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.diff-container {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+  background-color: var(--bg-editor);
+  font-family: "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
+}
+
+.diff-header-card {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.diff-stat-pills {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.diff-pill {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.diff-pill.added { background: rgba(46, 160, 67, 0.2); color: #3fb950; border: 1px solid rgba(46, 160, 67, 0.4); }
+.diff-pill.removed { background: rgba(248, 81, 73, 0.2); color: #f85149; border: 1px solid rgba(248, 81, 73, 0.4); }
+.diff-pill.modified { background: rgba(210, 153, 34, 0.2); color: #d29922; border: 1px solid rgba(210, 153, 34, 0.4); }
+
+.diff-block-section {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.diff-block-title {
+  background: var(--bg-panel);
+  padding: 6px 12px;
+  font-weight: bold;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-main);
+}
+
+.diff-change-item {
+  padding: 6px 14px;
+  font-size: 11px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.diff-change-item.item-mod {
+  color: #e0e0e0;
+}
+.diff-change-item.item-add {
+  color: #3fb950;
+}
+.diff-change-item.item-rem {
+  color: #f85149;
+}

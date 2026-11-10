@@ -10,6 +10,7 @@
   let zoomLevel = 1.0;
   let showNullCanvas = false;
   let previewEnabled = false;
+  let layoutEditMode = false;
   let menuSourceModule = null;
   let previewSource = null;
   const preview = new FormsPreview(
@@ -84,6 +85,12 @@
   const xmlSliceDisplay = document.getElementById('xmlSliceDisplay');
   const xmlTitle = document.getElementById('xmlTitle');
   const xmlLinesBadge = document.getElementById('xmlLinesBadge');
+
+  const editLayoutToggleBtn = document.getElementById('editLayoutToggleBtn');
+  const exportXmlBtn = document.getElementById('exportXmlBtn');
+  const diffCompareSelect = document.getElementById('diffCompareSelect');
+  const runDiffBtn = document.getElementById('runDiffBtn');
+  const diffContainer = document.getElementById('diffContainer');
 
   // Initialize
   document.addEventListener('DOMContentLoaded', () => {
@@ -234,6 +241,71 @@
       if (selected) loadSample(selected);
     });
 
+    if (editLayoutToggleBtn) {
+      editLayoutToggleBtn.addEventListener('click', () => {
+        layoutEditMode = !layoutEditMode;
+        document.body.classList.toggle('edit-layout-active', layoutEditMode);
+        editLayoutToggleBtn.textContent = layoutEditMode ? '✔️ Done Editing' : '✏️ Edit Layout';
+        editLayoutToggleBtn.classList.toggle('btn-primary', layoutEditMode);
+        editLayoutToggleBtn.classList.toggle('btn-secondary', !layoutEditMode);
+        if (selectedObject) {
+          renderPropertyInspector(selectedObject);
+        }
+        renderCanvasSvg();
+      });
+    }
+
+    if (exportXmlBtn) {
+      exportXmlBtn.addEventListener('click', async () => {
+        if (!currentPayload) return showBanner('No module open to export.');
+        try {
+          const res = await fetch('/api/forms/export-xml', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ module: currentPayload.moduleIndex })
+          });
+          if (!res.ok) throw new Error('Export XML failed');
+          const data = await res.json();
+          const blob = new Blob([data.xml], { type: 'application/xml' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${currentPayload.moduleIndex.key.name}_fmb.xml`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          showBanner(`Exported ${currentPayload.moduleIndex.key.name}_fmb.xml successfully.`);
+          setTimeout(hideBanner, 3000);
+        } catch (err) {
+          showBanner("Failed to export XML: " + err.message);
+        }
+      });
+    }
+
+    if (runDiffBtn) {
+      runDiffBtn.addEventListener('click', async () => {
+        if (!currentPayload) return showBanner('Open a base form first.');
+        const compareTarget = diffCompareSelect?.value;
+        if (!compareTarget) return showBanner('Select a module to compare against.');
+        try {
+          const res = await fetch('/api/forms/diff', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              base: currentPayload.moduleIndex,
+              modifiedModule: compareTarget
+            })
+          });
+          if (!res.ok) throw new Error('Diff calculation failed');
+          const diff = await res.json();
+          renderDiffReport(diff);
+        } catch (err) {
+          showBanner("Diff calculation failed: " + err.message);
+        }
+      });
+    }
+
     sampleSelect.addEventListener('change', () => {
       const selected = sampleSelect.value;
       if (selected) loadSample(selected);
@@ -348,6 +420,9 @@
       if (res.ok) {
         const samples = await res.json();
         sampleSelect.innerHTML = samples.map(s => `<option value="${s}">${s}</option>`).join('');
+        if (diffCompareSelect) {
+          diffCompareSelect.innerHTML = samples.map(s => `<option value="${s}">${s}</option>`).join('');
+        }
         // Automatically load rccm0000.fmb on startup if no module is open yet
         const defaultSample = samples.find(s => s === 'rccm0000.fmb') || samples[0];
         if (defaultSample && !currentPayload) {
@@ -1289,6 +1364,7 @@
              ${isHidden ? 'style="opacity: 0.72;"' : ''}
              data-block="${escapeHtml(block.name)}" 
              data-item="${escapeHtml(item.name)}" 
+             ${layoutEditMode ? `onmousedown="window.startItemDrag(event, '${escapeHtml(block.name)}', '${escapeHtml(item.name)}')"` : ''}
              ${previewEnabled ? '' : `onclick="window.selectSvgItem('${escapeHtml(block.name)}', '${escapeHtml(item.name)}')"`}>
             <title>${escapeHtml(fullItemName)} | Type: ${escapeHtml(isButton ? 'Push Button' : (item.itemType || 'Text Item'))}${isHidden ? ' [Conditionally Hidden]' : ''} | Column: ${escapeHtml(item.columnName || 'N/A')}</title>
         `;
@@ -1466,6 +1542,78 @@
     }
     applyZoom();
   }
+
+  // Window helper for drag-and-drop visual layout editing
+  window.startItemDrag = function (e, blockName, itemName) {
+    if (!layoutEditMode || !currentPayload) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.selectSvgItem(blockName, itemName);
+
+    const block = currentPayload.moduleIndex.blocks.find(b => b.name === blockName);
+    const item = block?.items?.find(i => i.name === itemName);
+    if (!item) return;
+
+    const startClientX = e.clientX;
+    const startClientY = e.clientY;
+    const origX = item.xPosition || 0;
+    const origY = item.yPosition || 0;
+
+    let badge = document.getElementById('dragCoordsBadge');
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.id = 'dragCoordsBadge';
+      badge.className = 'drag-coords-badge';
+      document.body.appendChild(badge);
+    }
+    badge.style.display = 'block';
+
+    const onMouseMove = (moveEvent) => {
+      const zoom = zoomLevel || 1.0;
+      const dx = (moveEvent.clientX - startClientX) / zoom;
+      const dy = (moveEvent.clientY - startClientY) / zoom;
+      const newX = Math.max(0, Math.round((origX + dx) / 5) * 5);
+      const newY = Math.max(0, Math.round((origY + dy) / 5) * 5);
+
+      item.xPosition = newX;
+      item.yPosition = newY;
+
+      badge.style.left = `${moveEvent.clientX + 16}px`;
+      badge.style.top = `${moveEvent.clientY + 16}px`;
+      badge.textContent = `${blockName}.${itemName}: X=${newX}, Y=${newY}`;
+
+      const propEditX = document.getElementById('propEditX');
+      const propEditY = document.getElementById('propEditY');
+      if (propEditX) propEditX.value = newX;
+      if (propEditY) propEditY.value = newY;
+
+      renderCanvasSvg();
+    };
+
+    const onMouseUp = async () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      if (badge) badge.style.display = 'none';
+
+      try {
+        await fetch(`/api/forms/module/${encodeURIComponent(currentPayload.moduleIndex.key.name)}/item`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            blockName: block.name,
+            itemName: item.name,
+            x: item.xPosition,
+            y: item.yPosition
+          })
+        });
+      } catch (err) {
+        console.warn("Failed to persist dragged position:", err);
+      }
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
 
   // Window helper for inline SVG clicks
   window.selectSvgItem = function (blockName, itemName) {
@@ -1685,17 +1833,36 @@
       ]);
 
       // Layout
-      html += renderPropGroup('Layout', [
-        ['Canvas', item.canvasName || '(None)'],
-        ['Tab Page', item.tabPageName || '(None)'],
-        ['X Position', item.xPosition],
-        ['Y Position', item.yPosition],
-        ['Width', item.width || '(Default)'],
-        ['Height', item.height || '(Default)'],
-        ['Visible', item.visible !== false ? 'True' : 'False'],
-        ['Prompt', item.prompt || '(None)'],
-        ['Prompt Attachment', `${item.promptAttachmentEdge} (${item.promptAttachmentOffset}px)`]
-      ]);
+      if (layoutEditMode) {
+        html += `
+          <div class="prop-group">
+            <div class="prop-group-header">Layout Editor</div>
+            <table class="prop-table">
+              <tr><td class="prop-name">X Position</td><td class="prop-val"><input type="number" class="prop-input" id="propEditX" value="${item.xPosition || 0}"></td></tr>
+              <tr><td class="prop-name">Y Position</td><td class="prop-val"><input type="number" class="prop-input" id="propEditY" value="${item.yPosition || 0}"></td></tr>
+              <tr><td class="prop-name">Width</td><td class="prop-val"><input type="number" class="prop-input" id="propEditW" value="${item.width || ''}" placeholder="Default"></td></tr>
+              <tr><td class="prop-name">Height</td><td class="prop-val"><input type="number" class="prop-input" id="propEditH" value="${item.height || ''}" placeholder="Default"></td></tr>
+              <tr><td class="prop-name">Prompt</td><td class="prop-val"><input type="text" class="prop-input" id="propEditPrompt" value="${escapeHtml(item.prompt || '')}"></td></tr>
+              <tr><td class="prop-name">Label</td><td class="prop-val"><input type="text" class="prop-input" id="propEditLabel" value="${escapeHtml(item.label || '')}"></td></tr>
+            </table>
+            <div style="padding: 6px 8px;">
+              <button class="btn btn-sm btn-primary" id="propApplyBtn" style="width: 100%;">Apply & Save</button>
+            </div>
+          </div>
+        `;
+      } else {
+        html += renderPropGroup('Layout', [
+          ['Canvas', item.canvasName || '(None)'],
+          ['Tab Page', item.tabPageName || '(None)'],
+          ['X Position', item.xPosition],
+          ['Y Position', item.yPosition],
+          ['Width', item.width || '(Default)'],
+          ['Height', item.height || '(Default)'],
+          ['Visible', item.visible !== false ? 'True' : 'False'],
+          ['Prompt', item.prompt || '(None)'],
+          ['Prompt Attachment', `${item.promptAttachmentEdge} (${item.promptAttachmentOffset}px)`]
+        ]);
+      }
 
       // Data / DML
       html += renderPropGroup('Data & DML', [
@@ -1805,6 +1972,144 @@
 
     inspectorTargetName.textContent = title;
     propertyInspector.innerHTML = html;
+
+    if (layoutEditMode && target.type === 'ITEM') {
+      const applyBtn = document.getElementById('propApplyBtn');
+      if (applyBtn) {
+        applyBtn.addEventListener('click', async () => {
+          const item = target.item;
+          const block = target.block;
+          const x = parseInt(document.getElementById('propEditX')?.value, 10) || 0;
+          const y = parseInt(document.getElementById('propEditY')?.value, 10) || 0;
+          const wVal = document.getElementById('propEditW')?.value;
+          const w = wVal ? parseInt(wVal, 10) : null;
+          const hVal = document.getElementById('propEditH')?.value;
+          const h = hVal ? parseInt(hVal, 10) : null;
+          const prompt = document.getElementById('propEditPrompt')?.value || null;
+          const label = document.getElementById('propEditLabel')?.value || null;
+
+          item.xPosition = x;
+          item.yPosition = y;
+          item.width = w;
+          item.height = h;
+          item.prompt = prompt;
+          item.label = label;
+
+          renderCanvasSvg();
+
+          try {
+            await fetch(`/api/forms/module/${encodeURIComponent(currentPayload.moduleIndex.key.name)}/item`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                blockName: block.name,
+                itemName: item.name,
+                x, y, width: w, height: h,
+                prompt, label
+              })
+            });
+            showBanner(`Saved properties for ${block.name}.${item.name}`);
+            setTimeout(hideBanner, 2000);
+          } catch (err) {
+            showBanner('Failed to save properties: ' + err.message);
+          }
+        });
+      }
+    }
+  }
+
+  function renderDiffReport(diff) {
+    if (!diffContainer) return;
+    if (!diff || !diff.baseName) {
+      diffContainer.innerHTML = '<div class="empty-state">No diff results available.</div>';
+      return;
+    }
+
+    const hasDiff = (diff.blocksAdded?.length || 0) > 0 ||
+      (diff.blocksRemoved?.length || 0) > 0 ||
+      (diff.blocksModified?.length || 0) > 0 ||
+      (diff.canvasesModified?.length || 0) > 0 ||
+      (diff.windowsModified?.length || 0) > 0 ||
+      (diff.formTriggersAdded?.length || 0) > 0 ||
+      (diff.formTriggersRemoved?.length || 0) > 0 ||
+      (diff.formTriggersModified?.length || 0) > 0;
+
+    let html = `
+      <div class="diff-header-card">
+        <div style="font-weight: bold; font-size: 14px;">Form Diff: ${escapeHtml(diff.baseName)} vs ${escapeHtml(diff.modifiedName)}</div>
+        <div class="diff-stat-pills">
+          <span class="diff-pill added">+ ${diff.blocksAdded?.length || 0} Blocks Added</span>
+          <span class="diff-pill removed">- ${diff.blocksRemoved?.length || 0} Blocks Removed</span>
+          <span class="diff-pill modified">~ ${diff.blocksModified?.length || 0} Blocks Modified</span>
+          <span class="diff-pill modified">~ ${diff.canvasesModified?.length || 0} Canvases</span>
+          <span class="diff-pill modified">~ ${diff.windowsModified?.length || 0} Windows</span>
+        </div>
+      </div>
+    `;
+
+    if (!hasDiff) {
+      html += '<div style="padding: 16px; color: #3fb950; font-weight: bold;">✔️ No differences detected. Modules have matching structure and layout.</div>';
+      diffContainer.innerHTML = html;
+      return;
+    }
+
+    if (diff.blocksAdded?.length) {
+      html += `<div class="diff-block-section"><div class="diff-block-title" style="color: #3fb950;">+ Blocks Added</div>`;
+      diff.blocksAdded.forEach(b => {
+        html += `<div class="diff-change-item item-add">+ Block: <strong>${escapeHtml(b)}</strong></div>`;
+      });
+      html += `</div>`;
+    }
+
+    if (diff.blocksRemoved?.length) {
+      html += `<div class="diff-block-section"><div class="diff-block-title" style="color: #f85149;">- Blocks Removed</div>`;
+      diff.blocksRemoved.forEach(b => {
+        html += `<div class="diff-change-item item-rem">- Block: <strong>${escapeHtml(b)}</strong></div>`;
+      });
+      html += `</div>`;
+    }
+
+    for (const b of (diff.blocksModified || [])) {
+      html += `
+        <div class="diff-block-section">
+          <div class="diff-block-title">Block: ${escapeHtml(b.name)}</div>
+      `;
+      for (const pc of (b.propertyChanges || [])) {
+        html += `<div class="diff-change-item item-mod">* Property '${escapeHtml(pc.property)}': ${escapeHtml(pc.oldValue || 'null')} &rarr; <strong>${escapeHtml(pc.newValue || 'null')}</strong></div>`;
+      }
+      for (const item of (b.itemsAdded || [])) {
+        html += `<div class="diff-change-item item-add">+ Item Added: <strong>${escapeHtml(item.name)}</strong> (${escapeHtml(item.itemType || 'Text Item')}) at (${item.xPosition}, ${item.yPosition})</div>`;
+      }
+      for (const item of (b.itemsRemoved || [])) {
+        html += `<div class="diff-change-item item-rem">- Item Removed: <strong>${escapeHtml(item.name)}</strong></div>`;
+      }
+      for (const item of (b.itemsModified || [])) {
+        html += `<div class="diff-change-item item-mod">~ Item <strong>${escapeHtml(item.name)}</strong>:</div>`;
+        if (item.geometryDiff) {
+          const g = item.geometryDiff;
+          html += `<div class="diff-change-item" style="padding-left: 28px; color: #79c0ff;">Position: (${g.oldX}, ${g.oldY}) &rarr; <strong>(${g.newX}, ${g.newY})</strong>`;
+          if (g.oldWidth !== g.newWidth || g.oldHeight !== g.newHeight) {
+            html += ` | Size: (${g.oldWidth}x${g.oldHeight}) &rarr; <strong>(${g.newWidth}x${g.newHeight})</strong>`;
+          }
+          html += `</div>`;
+        }
+        for (const pc of (item.propertyChanges || [])) {
+          html += `<div class="diff-change-item" style="padding-left: 28px;">Property '${escapeHtml(pc.property)}': ${escapeHtml(pc.oldValue || 'null')} &rarr; <strong>${escapeHtml(pc.newValue || 'null')}</strong></div>`;
+        }
+      }
+      for (const t of (b.triggersAdded || [])) {
+        html += `<div class="diff-change-item item-add">+ Trigger Added: <strong>${escapeHtml(t)}</strong></div>`;
+      }
+      for (const t of (b.triggersRemoved || [])) {
+        html += `<div class="diff-change-item item-rem">- Trigger Removed: <strong>${escapeHtml(t)}</strong></div>`;
+      }
+      for (const t of (b.triggersModified || [])) {
+        html += `<div class="diff-change-item item-mod">~ Trigger Modified: <strong>${escapeHtml(t.name)}</strong></div>`;
+      }
+      html += `</div>`;
+    }
+
+    diffContainer.innerHTML = html;
   }
 
   function renderPropGroup(groupTitle, rows) {

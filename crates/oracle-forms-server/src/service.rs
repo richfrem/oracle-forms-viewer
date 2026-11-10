@@ -394,6 +394,91 @@ impl FormsService {
             resolved_through: through,
         }
     }
+
+    #[allow(dead_code)]
+    pub fn save_module(&self, module: ModuleIndex) {
+        let mut st = self.state.write().unwrap();
+        st.modules.insert(module.key.name.clone(), module);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn update_item(
+        &self,
+        module_name: &str,
+        block_name: &str,
+        item_name: &str,
+        x: Option<i32>,
+        y: Option<i32>,
+        width: Option<i32>,
+        height: Option<i32>,
+        prompt: Option<String>,
+        label: Option<String>,
+    ) -> Result<ModuleIndex> {
+        let mod_upper = module_name.to_ascii_uppercase();
+        if !self.state.read().unwrap().modules.contains_key(&mod_upper) {
+            let loaded = self.get_or_load_module(module_name)?;
+            self.save_module(loaded);
+        }
+
+        let mut st = self.state.write().unwrap();
+        let module = st
+            .modules
+            .get_mut(&mod_upper)
+            .ok_or_else(|| FormsError::NotFound(format!("Module '{}' not found in service state", module_name)))?;
+
+        let block = module
+            .blocks
+            .iter_mut()
+            .find(|b| b.name.eq_ignore_ascii_case(block_name))
+            .ok_or_else(|| FormsError::NotFound(format!("Block '{}' not found in module '{}'", block_name, module_name)))?;
+
+        let item = block
+            .items
+            .iter_mut()
+            .find(|i| i.name.eq_ignore_ascii_case(item_name))
+            .ok_or_else(|| FormsError::NotFound(format!("Item '{}' not found in block '{}'", item_name, block_name)))?;
+
+        if let Some(x_val) = x {
+            item.x_position = x_val;
+        }
+        if let Some(y_val) = y {
+            item.y_position = y_val;
+        }
+        if let Some(w_val) = width {
+            item.width = Some(w_val);
+        }
+        if let Some(h_val) = height {
+            item.height = Some(h_val);
+        }
+        if let Some(prompt_val) = prompt {
+            item.prompt = Some(prompt_val);
+        }
+        if let Some(label_val) = label {
+            item.label = Some(label_val);
+        }
+
+        Ok(module.clone())
+    }
+
+    pub fn get_or_load_module(&self, name: &str) -> Result<ModuleIndex> {
+        if let Some(m) = self.get_module(name) {
+            return Ok(m);
+        }
+        self.load_sample(name)
+            .or_else(|_| self.load_sample(&format!("{}.xml", name)))
+            .or_else(|_| self.load_sample(&format!("{}_fmb.xml", name)))
+    }
+
+    pub fn export_xml(&self, module_name: &str) -> Result<String> {
+        let module = self.get_or_load_module(module_name)?;
+        Ok(oracle_forms_xml::FormsXmlWriter::write_string(&module))
+    }
+
+    pub fn diff_modules(&self, base_name: &str, modified_name: &str) -> Result<oracle_forms_core::diff::ModuleDiff> {
+        let base = self.get_or_load_module(base_name)?;
+        let modified = self.get_or_load_module(modified_name)?;
+        Ok(oracle_forms_core::diff::FormDiffer::diff(&base, &modified))
+    }
 }
 
 struct ClassChain {

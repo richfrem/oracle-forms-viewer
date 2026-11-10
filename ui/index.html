@@ -84,6 +84,8 @@
           <select id="previewAlertSelect" aria-label="Preview declared alert" disabled>
             <option value="">Preview Alert...</option>
           </select>
+          <button id="editLayoutToggleBtn" class="btn btn-sm btn-secondary" title="Enable interactive visual layout editing on canvas">✏️ Edit Layout</button>
+          <button id="exportXmlBtn" class="btn btn-sm btn-primary" title="Export module to Forms2XML XML">💾 Export XML</button>
           <button id="loadMenuBtn" class="btn btn-sm btn-secondary">Load Menu XML</button>
           <input type="file" id="menuFileInput" accept=".xml" hidden>
         </div>
@@ -123,6 +125,7 @@
           <button class="tab-btn active" data-tab="canvasTab">🎨 Visual Canvas Preview</button>
           <button class="tab-btn" data-tab="codeTab">📜 PL/SQL Viewer <span id="codeTabBadge" class="pill-badge">0</span></button>
           <button class="tab-btn" data-tab="xmlTab">📄 Raw XML Slice</button>
+          <button class="tab-btn" data-tab="diffTab">⚖️ Form Diff Tool</button>
         </nav>
 
         <div class="tab-views">
@@ -278,6 +281,18 @@
             </div>
             <div class="xml-editor-container">
               <pre id="xmlSliceDisplay" class="code-pre"><code>&lt;!-- Select an object in the tree to inspect its XML source --&gt;</code></pre>
+            </div>
+          </div>
+
+          <!-- Form Diff Tool Tab -->
+          <div id="diffTab" class="tab-view">
+            <div class="diff-toolbar">
+              <label for="diffCompareSelect">Compare with module:</label>
+              <select id="diffCompareSelect" class="diff-select"></select>
+              <button id="runDiffBtn" class="btn btn-sm btn-primary">Run Diff</button>
+            </div>
+            <div class="diff-container" id="diffContainer">
+              <div class="empty-state">Select another form to compare against current module.</div>
             </div>
           </div>
         </div>
