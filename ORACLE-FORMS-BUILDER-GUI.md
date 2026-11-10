@@ -181,3 +181,7 @@ To run a form interactively with real database transactions against the local Or
    java -jar /path/to/frmsal.jar -url "http://localhost:9001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx&userid=scott/tiger@oracle-db-23ai:1521/FREEPDB1"
    ```
 This launches the native desktop Java client window directly connected to the server and database.
+
+## Workbench parity notes
+
+Workbench supports Forms Builder-like capabilities in a modern UI: property palette, layout edit mode, wizard, menu module attach, PL/SQL split view, and Reports preview/property sheet. Not full Builder parity.

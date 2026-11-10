@@ -149,3 +149,11 @@ python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scri
 ## License
 
 This project is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE).
+
+## Recent Workbench Updates
+
+- **Menu modules (.mmb)**: `samples/ofw_emp_menu.mmb` (+ `_mmb.xml`) demonstrates a custom menu for `OFW_DEMO_EMPLOYEES`. Attach one to an open form via the canvas toolbar menu selector (`POST /api/forms/module/{name}/attach-menu`).
+- **Browse / Open**: `GET /api/files/browse` lists `.fmb`, `.xml`, `.olb`, `.mmb`, report files from `samples/`; uploads are also supported.
+- **Reports mode**: PL/SQL split view, data model diagram, property sheet, template themes and XML export (sample: `ofw_employee_directory_report.xml`).
+- **XML entity decoding**: attributes (labels, PL/SQL) are fully unescaped by the XML reader, so menus no longer show `&amp;` / `amp;` / `lt;New_Item>`.
+- **Known gap**: opening a standalone `.mmb` shows the previous form's canvas; a dedicated menu inspector view is planned.

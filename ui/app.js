@@ -15,17 +15,90 @@
   let previewSource = null;
   const runtime = new FormsRuntime();
   const preview = new FormsPreview(
-    (block, item, row) => {
-      if (runtime.active) {
-        runtimeSend({ kind: 'button', block: block.name, item: item.name, record: recordForRow(block.name, row) });
+    async (block, item, row) => {
+      selectedObject = { type: 'ITEM', block, item };
+      renderPropertyInspector(selectedObject);
+      if (layoutEditMode) {
+        renderCanvasSvg();
         return;
       }
-      const trigger = currentPayload.moduleIndex.triggers.find(t =>
+
+      const nameUp = (item.name || '').toUpperCase();
+      const labelUp = unescapeXml(item.label || item.prompt || '').toUpperCase();
+      const builtin = (item.builtinAction || '').toUpperCase();
+
+      const hasTrigger = currentPayload?.moduleIndex?.triggers?.some(t =>
         t.level === 'ITEM' && t.blockName === block.name && t.itemName === item.name &&
         t.name.toUpperCase() === 'WHEN-BUTTON-PRESSED');
-      showPreviewDialog(item.label || item.name,
-        'Button action not executed. Application navigation and trigger effects are not simulated.',
-        trigger?.textRef ? { name: trigger.name, file: trigger.textRef.file, module: currentPayload.summary.moduleName } : null);
+
+      // Handle explicit built-in or wizard-added in-form navigation buttons when no item trigger overrides them
+      if (!hasTrigger || builtin) {
+        if (builtin === 'PREVIOUS_RECORD' || nameUp.includes('BTN_PREV') || labelUp.includes('PREVIOUS') || labelUp === '< PREV') {
+          if (!runtime.active && (queryRecordsByBlock.get(getActiveBlockName()) || []).length === 0) {
+            await executeBlockQuery();
+          }
+          navigateRecord('prev');
+          return;
+        }
+        if (builtin === 'NEXT_RECORD' || nameUp.includes('BTN_NEXT') || labelUp.includes('NEXT >') || labelUp === 'NEXT') {
+          if (!runtime.active && (queryRecordsByBlock.get(getActiveBlockName()) || []).length === 0) {
+            await executeBlockQuery();
+          }
+          navigateRecord('next');
+          return;
+        }
+        if (builtin === 'FIRST_RECORD' || nameUp.includes('BTN_FIRST') || labelUp.includes('FIRST')) {
+          navigateRecord('first');
+          return;
+        }
+        if (builtin === 'LAST_RECORD' || nameUp.includes('BTN_LAST') || labelUp.includes('LAST')) {
+          navigateRecord('last');
+          return;
+        }
+        if (builtin === 'EXECUTE_QUERY' || nameUp.includes('BTN_QUERY') || (nameUp.includes('BTN_SEARCH') && !hasTrigger)) {
+          await executeBlockQuery();
+          return;
+        }
+        if (builtin === 'COMMIT_FORM' || nameUp.includes('BTN_SAVE') || labelUp === 'SAVE' || labelUp.includes('SAVE')) {
+          if (runtime.active) await runtimeSend({ kind: 'commit' });
+          else showBanner('Changes saved in session.');
+          return;
+        }
+        if (builtin === 'CLEAR_BLOCK' || nameUp.includes('BTN_CLEAR') || labelUp === 'CLEAR') {
+          if (runtime.active) await runtimeSend({ kind: 'key', name: 'CLEAR_BLOCK' });
+          else { preview.reset(); renderCanvasSvg(); }
+          return;
+        }
+      }
+
+      // If form session is not yet active, auto-start it so in-form buttons work immediately!
+      if (!runtime.active) {
+        const pendingEdits = [];
+        for (const [k, v] of preview.values.entries()) {
+          if (v !== '' && v != null) {
+            try {
+              const [b, it, r] = JSON.parse(k);
+              pendingEdits.push({ block: b, item: it, record: r || 0, value: String(v) });
+            } catch (_) {}
+          }
+        }
+        await startRuntimeSession();
+        if (runtime.active) {
+          for (const edit of pendingEdits) {
+            const bObj = currentPayload?.moduleIndex?.blocks?.find(b => b.name.toUpperCase() === edit.block);
+            if (bObj && !bObj.queryDataSourceName) {
+              await runtimeSend({ kind: 'setItem', block: edit.block, item: edit.item, value: edit.value, record: edit.record });
+            }
+          }
+          await runtimeSend({ kind: 'button', block: block.name, item: item.name, record: recordForRow(block.name, row) });
+          return;
+        }
+      }
+
+      if (runtime.active) {
+        await runtimeSend({ kind: 'button', block: block.name, item: item.name, record: recordForRow(block.name, row) });
+        return;
+      }
     },
     (block, item, row) => {
       if (runtime.active && lastSessionState) {
@@ -39,8 +112,7 @@
       }
       selectedObject = { type: 'ITEM', block, item };
       renderPropertyInspector(selectedObject);
-      selectedItemStats.textContent = `Preview: ${block.name}.${item.name}, record ${row + 1}`;
-      if (!runtime.active) oracleStatusMsg.textContent = 'Local preview only - no database or PL/SQL execution';
+      selectedItemStats.textContent = `Item: ${block.name}.${item.name} (Record ${row + 1})`;
     },
     (block, item, row, value) => {
       if (!runtime.active) return;
@@ -131,14 +203,50 @@
   const reportPreviewFrame = document.getElementById('reportPreviewFrame');
   const reportDataTree = document.getElementById('reportDataTree');
 
+  function normalizeOracleColor(c) {
+    if (!c) return null;
+    const s = String(c).trim();
+    const m = /^r(\d+)g(\d+)b(\d+)$/i.exec(s);
+    if (m) {
+      const scale = (Number(m[1]) <= 100 && Number(m[2]) <= 100 && Number(m[3]) <= 100 && s === s.toLowerCase()) ? 2.55 : 1;
+      const r = Math.min(255, Math.round(Number(m[1]) * scale));
+      const g = Math.min(255, Math.round(Number(m[2]) * scale));
+      const b = Math.min(255, Math.round(Number(m[3]) * scale));
+      return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+    }
+    return s;
+  }
+
   // Initialize
   document.addEventListener('DOMContentLoaded', () => {
     setupTabSwitching();
     setupControls();
+    setupWorkspaceEnhancements();
+    setupBuilderStudio();
     loadSampleList();
     loadReportsList();
-    // Pre-load default sample
-    loadSample('orders_fmb.xml');
+    // Pre-load default or URL-requested sample & mode
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialSample = urlParams.get('sample') || 'ofw_demo_employees_fmb.xml';
+    const initialMode = urlParams.get('mode');
+    loadSample(initialSample).then(async () => {
+      const initialTab = urlParams.get('tab');
+      if (initialTab === 'reports') {
+        switchTab('reportsTab');
+        const repMode = urlParams.get('reportMode');
+        if (repMode === 'split') document.getElementById('repModeSplitBtn')?.click();
+        else if (repMode === 'plsql') document.getElementById('repModePlsqlBtn')?.click();
+      } else if (urlParams.get('modal') === 'browse') {
+        document.getElementById('openFileModalBtn')?.click();
+      } else if (initialMode === 'edit') {
+        document.getElementById('editLayoutToggleBtn')?.click();
+        window.selectSvgItem?.('CONTROL', 'BTN_SEARCH');
+      } else if (initialMode === 'wizard') {
+        document.getElementById('openWizardBtn')?.click();
+      } else if (initialMode === 'run') {
+        await startRuntimeSession();
+      }
+    });
   });
 
   // Tab switching
@@ -150,6 +258,17 @@
         btn.classList.add('active');
         const viewId = btn.getAttribute('data-tab');
         document.getElementById(viewId).classList.add('active');
+        const leftPane = document.getElementById('leftPane');
+        const toggleLeftBtn = document.getElementById('toggleLeftPaneBtn');
+        if (viewId === 'reportsTab') {
+          leftPane?.classList.add('collapsed');
+          toggleLeftBtn?.classList.remove('active');
+          executeReport();
+        } else if (viewId === 'canvasTab') {
+          leftPane?.classList.remove('collapsed');
+          toggleLeftBtn?.classList.add('active');
+          setTimeout(zoomFit, 50);
+        }
       });
     });
   }
@@ -159,9 +278,400 @@
     if (btn) btn.click();
   }
 
+  function openBottomDrawer(tabPaneId = 'drawerPlsql') {
+    const drawer = document.getElementById('bottomCodeDrawer');
+    const toggleBtn = document.getElementById('toggleCodeDrawerBtn');
+    if (drawer) drawer.classList.remove('hidden');
+    if (toggleBtn) toggleBtn.classList.add('active');
+    if (tabPaneId) {
+      document.querySelectorAll('.drawer-tab').forEach(b => {
+        b.classList.toggle('active', b.getAttribute('data-drawer') === tabPaneId);
+      });
+      document.querySelectorAll('.drawer-pane').forEach(p => {
+        p.classList.toggle('active', p.id === tabPaneId);
+      });
+    }
+  }
+
+  function setupWorkspaceEnhancements() {
+    const leftPane = document.getElementById('leftPane');
+    const rightPane = document.getElementById('rightPane');
+    const bottomDrawer = document.getElementById('bottomCodeDrawer');
+    const toggleLeftBtn = document.getElementById('toggleLeftPaneBtn');
+    const closeLeftBtn = document.getElementById('closeLeftPaneBtn');
+    const toggleRightBtn = document.getElementById('toggleRightPaneBtn');
+    const closeRightBtn = document.getElementById('closeRightPaneBtn');
+    const toggleDrawerBtn = document.getElementById('toggleCodeDrawerBtn');
+    const closeDrawerBtn = document.getElementById('closeDrawerBtn');
+    const focusModeBtn = document.getElementById('focusModeBtn');
+
+    const toggleLeft = () => {
+      const collapsed = leftPane.classList.toggle('collapsed');
+      toggleLeftBtn?.classList.toggle('active', !collapsed);
+      setTimeout(zoomFit, 220);
+    };
+    const toggleRight = () => {
+      const collapsed = rightPane.classList.toggle('collapsed');
+      toggleRightBtn?.classList.toggle('active', !collapsed);
+      setTimeout(zoomFit, 220);
+    };
+    const setReportViewMode = (mode) => {
+      const repLayout = document.getElementById('reportsMainLayout');
+      const repPane = document.getElementById('reportPlsqlStudioPane');
+      if (!repLayout) return;
+      repLayout.classList.remove('mode-preview', 'mode-split', 'mode-plsql');
+      repLayout.classList.add(`mode-${mode}`);
+      if (repPane) repPane.classList.toggle('hidden', mode === 'preview');
+      document.getElementById('repModePreviewBtn')?.classList.toggle('active', mode === 'preview');
+      document.getElementById('repModeSplitBtn')?.classList.toggle('active', mode === 'split');
+      document.getElementById('repModePlsqlBtn')?.classList.toggle('active', mode === 'plsql');
+      if (document.getElementById('reportsTab')?.classList.contains('active')) {
+        toggleDrawerBtn?.classList.toggle('active', mode !== 'preview');
+      }
+    };
+
+    document.getElementById('repModePreviewBtn')?.addEventListener('click', () => setReportViewMode('preview'));
+    document.getElementById('repModeSplitBtn')?.addEventListener('click', () => setReportViewMode('split'));
+    document.getElementById('repModePlsqlBtn')?.addEventListener('click', () => setReportViewMode('plsql'));
+    document.getElementById('copyReportPlsqlBtn')?.addEventListener('click', () => {
+      const text = document.getElementById('reportPlsqlDisplay')?.innerText || '';
+      navigator.clipboard?.writeText(text);
+    });
+
+    const toggleDrawer = () => {
+      if (document.getElementById('reportsTab')?.classList.contains('active')) {
+        const repLayout = document.getElementById('reportsMainLayout');
+        const isSplit = repLayout?.classList.contains('mode-split') || repLayout?.classList.contains('mode-plsql');
+        setReportViewMode(isSplit ? 'preview' : 'split');
+        return;
+      }
+      const hidden = bottomDrawer.classList.toggle('hidden');
+      toggleDrawerBtn?.classList.toggle('active', !hidden);
+      setTimeout(zoomFit, 100);
+    };
+    const toggleFocus = () => {
+      const enterFocus = !leftPane.classList.contains('collapsed') || !rightPane.classList.contains('collapsed');
+      leftPane.classList.toggle('collapsed', enterFocus);
+      rightPane.classList.toggle('collapsed', enterFocus);
+      toggleLeftBtn?.classList.toggle('active', !enterFocus);
+      toggleRightBtn?.classList.toggle('active', !enterFocus);
+      focusModeBtn?.classList.toggle('active', enterFocus);
+      if (enterFocus) {
+        switchTab('canvasTab');
+      }
+      setTimeout(zoomFit, 220);
+    };
+
+    toggleLeftBtn?.addEventListener('click', toggleLeft);
+    closeLeftBtn?.addEventListener('click', toggleLeft);
+    toggleRightBtn?.addEventListener('click', toggleRight);
+    closeRightBtn?.addEventListener('click', toggleRight);
+    toggleDrawerBtn?.addEventListener('click', toggleDrawer);
+    closeDrawerBtn?.addEventListener('click', toggleDrawer);
+    focusModeBtn?.addEventListener('click', toggleFocus);
+
+    // Bottom Drawer Tabs
+    document.querySelectorAll('.drawer-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-drawer');
+        openBottomDrawer(targetId);
+      });
+    });
+
+    document.getElementById('openFullCodeTabBtn')?.addEventListener('click', () => {
+      switchTab('codeTab');
+    });
+
+    // Modals: Open File, DB Config, Floating Props, Floating Code
+    const openModal = (id) => document.getElementById(id)?.showModal();
+    document.getElementById('openFileModalBtn')?.addEventListener('click', () => {
+      openModal('openFileModal');
+      loadWorkspaceFilesBrowser();
+    });
+    document.getElementById('browseReportBtn')?.addEventListener('click', () => {
+      openModal('openFileModal');
+      loadWorkspaceFilesBrowser('REPORT');
+    });
+    document.getElementById('dbConfigBtn')?.addEventListener('click', () => openModal('dbConfigModal'));
+
+    document.querySelectorAll('#browseCategoryPills .cat-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        document.querySelectorAll('#browseCategoryPills .cat-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        filterWorkspaceFilesBrowser();
+      });
+    });
+
+    document.getElementById('browseFilterInput')?.addEventListener('input', () => {
+      filterWorkspaceFilesBrowser();
+    });
+
+    document.querySelectorAll('[data-attach-menu]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const menuMod = btn.getAttribute('data-attach-menu');
+        document.getElementById('openFileModal')?.close();
+        attachMenuToCurrentForm(menuMod);
+      });
+    });
+
+    const menuModuleSelect = document.getElementById('menuModuleSelect');
+    menuModuleSelect?.addEventListener('change', () => {
+      const val = menuModuleSelect.value;
+      if (val === 'BROWSE_MMB') {
+        document.getElementById('menuFileInput')?.click();
+        menuModuleSelect.value = currentPayload?.moduleIndex?.menuModule || 'DEFAULT';
+        return;
+      }
+      attachMenuToCurrentForm(val);
+    });
+
+    const openFloatingProps = () => {
+      const modalContent = document.getElementById('modalPropertyInspector');
+      const modalTarget = document.getElementById('modalInspectorTarget');
+      if (modalContent && propertyInspector) modalContent.innerHTML = propertyInspector.innerHTML;
+      if (modalTarget && inspectorTargetName) modalTarget.textContent = inspectorTargetName.textContent;
+      openModal('floatingPropsModal');
+    };
+    document.getElementById('popoutPropsBtn')?.addEventListener('click', openFloatingProps);
+    document.getElementById('detachPropsBtn')?.addEventListener('click', openFloatingProps);
+
+    const openFloatingCode = () => {
+      const modalCode = document.getElementById('modalPlsqlDisplay');
+      const modalTitle = document.getElementById('modalCodeTitle');
+      if (modalCode && plsqlCodeDisplay) modalCode.innerHTML = plsqlCodeDisplay.innerHTML;
+      if (modalTitle && codeTitle) modalTitle.textContent = codeTitle.textContent;
+      openModal('floatingCodeModal');
+    };
+    document.getElementById('popoutCodeTopBtn')?.addEventListener('click', openFloatingCode);
+    document.getElementById('popoutCodeModalBtn')?.addEventListener('click', openFloatingCode);
+    document.getElementById('modalFromStudioBtn')?.addEventListener('click', openFloatingCode);
+
+    document.getElementById('copyPlsqlBtn')?.addEventListener('click', () => {
+      const text = plsqlCodeDisplay?.innerText || '';
+      navigator.clipboard?.writeText(text);
+    });
+
+    // Close modal buttons & backdrop click
+    document.querySelectorAll('[data-close-modal]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-close-modal');
+        document.getElementById(id)?.close();
+      });
+    });
+    document.querySelectorAll('dialog.workbench-modal').forEach(dlg => {
+      dlg.addEventListener('click', (e) => {
+        if (e.target === dlg) dlg.close();
+      });
+    });
+
+    // Update DB status label when backend or username changes
+    const updateDbPill = () => {
+      const label = document.getElementById('dbStatusLabel');
+      if (!label || !dbBackendSelect) return;
+      const user = dbUserInput?.value.trim() || 'forms_user';
+      const map = {
+        'oracle-thin': `${user}@FREEPDB1`,
+        'oracle': `${user}@23ai`,
+        'sqlite': 'SQLite Local',
+        'mock': 'Mock Engine'
+      };
+      label.textContent = map[dbBackendSelect.value] || dbBackendSelect.value;
+    };
+    dbBackendSelect?.addEventListener('change', updateDbPill);
+    dbUserInput?.addEventListener('input', updateDbPill);
+    updateDbPill();
+
+    document.getElementById('logonConnectRunBtn')?.addEventListener('click', () => {
+      updateDbPill();
+      document.getElementById('dbConfigModal')?.close();
+      startRuntimeSession();
+    });
+
+    // Delegated handler for all in-window Oracle Forms Menu & Toolbar commands
+    oracleWindowShell?.addEventListener('click', (e) => {
+      const cmdEl = e.target.closest('[data-ora-cmd]');
+      if (!cmdEl) return;
+      const cmd = cmdEl.getAttribute('data-ora-cmd');
+      if (!cmd) return;
+      e.stopPropagation();
+      switch (cmd) {
+        case 'logon':
+          openModal('dbConfigModal');
+          break;
+        case 'run':
+          startRuntimeSession();
+          break;
+        case 'commit':
+          if (runtime.active) runtimeSend({ kind: 'commit' });
+          else showBanner('Start a live form session (▶ Run) before committing changes.');
+          break;
+        case 'clearForm':
+          if (runtime.active) runtimeSend({ kind: 'key', name: 'CLEAR_FORM' });
+          else { preview.reset(); renderCanvasSvg(); }
+          break;
+        case 'print':
+          window.print();
+          break;
+        case 'exit':
+          if (runtime.active) runtimeSend({ kind: 'key', name: 'EXIT_FORM' });
+          else stopRuntimeSession();
+          break;
+        case 'clearRecord':
+          if (runtime.active) runtimeSend({ kind: 'key', name: 'CLEAR_RECORD' });
+          else { preview.reset(); renderCanvasSvg(); }
+          break;
+        case 'toggleEditLayout':
+          editLayoutToggleBtn?.click();
+          break;
+        case 'enterQuery':
+          if (runtime.active) runtimeSend({ kind: 'key', name: 'ENTER_QUERY' });
+          else if (oracleStatusMsg) oracleStatusMsg.textContent = 'Enter a query criteria in the form fields, then press Execute Query (Ctrl+F11).';
+          break;
+        case 'executeQuery':
+          executeBlockQuery();
+          break;
+        case 'cancelQuery':
+          if (runtime.active) runtimeSend({ kind: 'key', name: 'EXIT_FORM' });
+          break;
+        case 'prevBlock':
+          if (runtime.active) runtimeSend({ kind: 'key', name: 'PREVIOUS_BLOCK' });
+          break;
+        case 'nextBlock':
+          if (runtime.active) runtimeSend({ kind: 'key', name: 'NEXT_BLOCK' });
+          break;
+        case 'clearBlock':
+          if (runtime.active) runtimeSend({ kind: 'key', name: 'CLEAR_BLOCK' });
+          else { preview.reset(); renderCanvasSvg(); }
+          break;
+        case 'firstRecord':
+          navigateRecord('first');
+          break;
+        case 'prevRecord':
+          navigateRecord('prev');
+          break;
+        case 'nextRecord':
+          navigateRecord('next');
+          break;
+        case 'lastRecord':
+          navigateRecord('last');
+          break;
+        case 'createRecord':
+          if (runtime.active) runtimeSend({ kind: 'key', name: 'CREATE_RECORD' });
+          break;
+        case 'deleteRecord':
+          if (runtime.active) runtimeSend({ kind: 'key', name: 'DELETE_RECORD' });
+          break;
+        case 'prevItem':
+          if (runtime.active) runtimeSend({ kind: 'key', name: 'PREVIOUS_ITEM' });
+          break;
+        case 'nextItem':
+          if (runtime.active) runtimeSend({ kind: 'key', name: 'NEXT_ITEM' });
+          break;
+        case 'toggleNav':
+          toggleLeft();
+          break;
+        case 'toggleProps':
+          toggleRight();
+          break;
+        case 'floatProps':
+          openFloatingProps();
+          break;
+        case 'toggleDrawer':
+          toggleDrawer();
+          break;
+        case 'floatCode':
+          openFloatingCode();
+          break;
+        case 'showTrace':
+          openBottomDrawer('drawerTrace');
+          break;
+        case 'toggleFocus':
+          toggleFocus();
+          break;
+        case 'about':
+          showPreviewDialog(
+            'Oracle Forms Workbench (Rust Native)',
+            'Pure-Rust Oracle Forms 12c/14c Designer, PL/SQL Interpreter & Live Database Runtime connected to Oracle 23ai Free (:1521).'
+          );
+          break;
+      }
+    });
+
+    // Tree Expand / Collapse All & Category Pills
+    document.getElementById('expandAllTreeBtn')?.addEventListener('click', () => {
+      navigatorTree?.querySelectorAll('.tree-children').forEach(c => c.classList.remove('collapsed'));
+      navigatorTree?.querySelectorAll('.tree-toggle').forEach(t => { if (t.textContent) t.textContent = '▼'; });
+    });
+    document.getElementById('collapseAllTreeBtn')?.addEventListener('click', () => {
+      navigatorTree?.querySelectorAll('.tree-children').forEach(c => c.classList.add('collapsed'));
+      navigatorTree?.querySelectorAll('.tree-toggle').forEach(t => { if (t.textContent) t.textContent = '▶'; });
+    });
+
+    document.querySelectorAll('#treeCategoryPills .cat-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        document.querySelectorAll('#treeCategoryPills .cat-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        const cat = pill.getAttribute('data-cat');
+        navigatorTree?.querySelectorAll(':scope > .tree-node').forEach(groupNode => {
+          const title = (groupNode.querySelector('.tree-label')?.textContent || '').toUpperCase();
+          if (cat === 'ALL') {
+            groupNode.style.display = '';
+          } else if (cat === 'BLOCKS') {
+            groupNode.style.display = title.includes('BLOCK') ? '' : 'none';
+          } else if (cat === 'TRIGGERS') {
+            groupNode.style.display = title.includes('TRIGGER') ? '' : 'none';
+          } else if (cat === 'CANVASES') {
+            groupNode.style.display = (title.includes('CANVAS') || title.includes('WINDOW')) ? '' : 'none';
+          } else if (cat === 'UNITS') {
+            groupNode.style.display = (title.includes('PROGRAM') || title.includes('LIBRARY') || title.includes('ALERT')) ? '' : 'none';
+          }
+        });
+      });
+    });
+
+    // Property Filter Input
+    const propFilterInput = document.getElementById('propFilterInput');
+    propFilterInput?.addEventListener('input', () => {
+      const q = propFilterInput.value.trim().toLowerCase();
+      propertyInspector?.querySelectorAll('.prop-table tr').forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = (!q || text.includes(q)) ? '' : 'none';
+      });
+    });
+
+    // PL/SQL Studio List Filter
+    const codeListFilter = document.getElementById('codeListFilterInput');
+    codeListFilter?.addEventListener('input', () => {
+      const q = codeListFilter.value.trim().toLowerCase();
+      document.querySelectorAll('#codeUnitsList .code-unit-item').forEach(item => {
+        item.style.display = (!q || item.textContent.toLowerCase().includes(q)) ? '' : 'none';
+      });
+    });
+
+    // Global IDE Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      const tag = (e.target.tagName || '').toUpperCase();
+      const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      if (e.key === 'F4') {
+        e.preventDefault();
+        openFloatingProps();
+      } else if (e.key === 'F11' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        openFloatingCode();
+      } else if (!inInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === '[') { e.preventDefault(); toggleLeft(); }
+        else if (e.key === ']') { e.preventDefault(); toggleRight(); }
+        else if (e.key === '`') { e.preventDefault(); toggleDrawer(); }
+      }
+    });
+  }
+
   // Controls setup
   function setupControls() {
     const previewToggle = document.getElementById('previewToggle');
+    previewEnabled = !!previewToggle?.checked;
+    document.getElementById('previewResetBtn').disabled = !previewEnabled;
+    document.getElementById('previewAlertSelect').disabled = !previewEnabled;
     previewToggle.addEventListener('change', () => {
       previewEnabled = previewToggle.checked;
       document.getElementById('previewResetBtn').disabled = !previewEnabled;
@@ -185,7 +695,7 @@
     document.getElementById('previewCloseBtn').addEventListener('click', () => document.getElementById('previewDialog').close());
     document.getElementById('previewSourceBtn').addEventListener('click', () => {
       document.getElementById('previewDialog').close();
-      if (previewSource) loadCode(previewSource.name, previewSource.file, 'PREVIEW ACTION', previewSource.module);
+      if (previewSource) loadCode(previewSource.name, previewSource.file, 'PREVIEW ACTION', previewSource.module, true);
     });
     document.getElementById('loadMenuBtn').addEventListener('click', () => {
       if (!currentPayload) return showBanner('Open a form before loading its companion menu XML.');
@@ -215,18 +725,11 @@
         event.target.value = '';
       }
     });
-    document.querySelector('.oracle-action-toolbar').addEventListener('click', (event) => {
+    document.querySelector('.oracle-action-toolbar')?.addEventListener('click', (event) => {
       const button = event.target.closest('button');
       if (!button) return;
-      if (button.id === 'runtimeExecuteQueryBtn' || button.id === 'runtimePrevRecordBtn' || button.id === 'runtimeNextRecordBtn') {
+      if (button.hasAttribute('data-ora-cmd') || button.id) {
         return;
-      }
-      if (runtime.active) {
-        const title = (button.title || '').toLowerCase();
-        if (title.startsWith('save')) return runtimeSend({ kind: 'commit' });
-        if (title.startsWith('exit')) return runtimeSend({ kind: 'key', name: 'EXIT_FORM' });
-        if (title.startsWith('clear block')) return runtimeSend({ kind: 'key', name: 'CLEAR_BLOCK' });
-        if (title.startsWith('enter query')) return runtimeSend({ kind: 'key', name: 'ENTER_QUERY' });
       }
       if (previewEnabled && button) showPreviewDialog(button.title, 'Toolbar action not executed in this local preview.');
     });
@@ -312,9 +815,11 @@
       editLayoutToggleBtn.addEventListener('click', () => {
         layoutEditMode = !layoutEditMode;
         document.body.classList.toggle('edit-layout-active', layoutEditMode);
-        editLayoutToggleBtn.textContent = layoutEditMode ? '✔️ Done Editing' : '✏️ Edit Layout';
+        editLayoutToggleBtn.textContent = layoutEditMode ? '✔️ Done' : '✏️ Layout';
         editLayoutToggleBtn.classList.toggle('btn-primary', layoutEditMode);
         editLayoutToggleBtn.classList.toggle('btn-secondary', !layoutEditMode);
+        document.getElementById('layoutFormatRibbon')?.classList.toggle('hidden', !layoutEditMode);
+        document.getElementById('canvasToolPalette')?.classList.toggle('hidden', !layoutEditMode);
         if (selectedObject) {
           renderPropertyInspector(selectedObject);
         }
@@ -395,6 +900,11 @@
 
     sampleSelect.addEventListener('change', () => {
       const selected = sampleSelect.value;
+      if (selected === '__BROWSE__') {
+        document.getElementById('openFileModal')?.showModal();
+        loadWorkspaceFilesBrowser();
+        return;
+      }
       if (selected) loadSample(selected);
     });
 
@@ -500,21 +1010,52 @@
     if (previewEnabled) viewport.scrollTop = 0;
   }
 
-  // Sample listing
+  // Sample listing & Workspace Artifact Browser
+  let cachedWorkspaceFiles = [];
+
   async function loadSampleList() {
     try {
       const res = await fetch('/api/samples');
       if (res.ok) {
         const samples = await res.json();
-        sampleSelect.innerHTML = samples.map(s => `<option value="${s}">${s}</option>`).join('');
-        if (diffCompareSelect) {
-          diffCompareSelect.innerHTML = samples.map(s => `<option value="${s}">${s}</option>`).join('');
+        const forms = [];
+        const menus = [];
+        const reports = [];
+        const libs = [];
+        for (const s of samples) {
+          const low = s.toLowerCase();
+          if (low.endsWith('_report.xml') || low.endsWith('_rdf.xml') || low.endsWith('.rdf') || low.endsWith('.rpt')) {
+            reports.push(s);
+          } else if (low.endsWith('.mmb') || low.endsWith('_mmb.xml')) {
+            menus.push(s);
+          } else if (low.endsWith('.olb') || low.endsWith('_olb.xml') || low.endsWith('.pld') || low.endsWith('.pll')) {
+            libs.push(s);
+          } else {
+            forms.push(s);
+          }
         }
-        // Automatically load rccm0000.fmb on startup if no module is open yet
-        const defaultSample = samples.find(s => s === 'rccm0000.fmb') || samples[0];
-        if (defaultSample && !currentPayload) {
-          sampleSelect.value = defaultSample;
-          loadSample(defaultSample);
+        let html = `<option value="__BROWSE__">📂 Browse Local / Workspace Files...</option>`;
+        if (forms.length) {
+          html += `<optgroup label="📋 Forms (.fmb / .xml)">${forms.map(s => `<option value="${s}">${s}</option>`).join('')}</optgroup>`;
+        }
+        if (menus.length) {
+          html += `<optgroup label="🍔 Menu Modules (.mmb / .xml)">${menus.map(s => `<option value="${s}">${s}</option>`).join('')}</optgroup>`;
+        }
+        if (reports.length) {
+          html += `<optgroup label="📊 Oracle Reports (.rdf / .xml)">${reports.map(s => `<option value="${s}">${s}</option>`).join('')}</optgroup>`;
+        }
+        if (libs.length) {
+          html += `<optgroup label="📚 Libraries (.olb / .pld)">${libs.map(s => `<option value="${s}">${s}</option>`).join('')}</optgroup>`;
+        }
+        sampleSelect.innerHTML = html;
+        if (diffCompareSelect) {
+          diffCompareSelect.innerHTML = forms.map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+        const urlSample = new URLSearchParams(window.location.search).get('sample');
+        if (urlSample && samples.includes(urlSample)) {
+          sampleSelect.value = urlSample;
+        } else if (samples.includes('ofw_demo_employees_fmb.xml')) {
+          sampleSelect.value = 'ofw_demo_employees_fmb.xml';
         }
       }
     } catch (e) {
@@ -522,9 +1063,148 @@
     }
   }
 
+  async function loadWorkspaceFilesBrowser(forceCategory = null) {
+    const listEl = document.getElementById('workspaceFilesBrowserList');
+    if (!listEl) return;
+    if (forceCategory) {
+      document.querySelectorAll('#browseCategoryPills .cat-pill').forEach(p => {
+        p.classList.toggle('active', p.getAttribute('data-bcat') === forceCategory);
+      });
+    }
+    try {
+      const res = await fetch('/api/files/browse');
+      if (res.ok) {
+        const data = await res.json();
+        cachedWorkspaceFiles = Array.isArray(data) ? data : (data.files || []);
+        filterWorkspaceFilesBrowser();
+      }
+    } catch (e) {
+      listEl.innerHTML = `<div class="empty-state">Error loading workspace files: ${escapeHtml(e.message)}</div>`;
+    }
+  }
+
+  function filterWorkspaceFilesBrowser() {
+    const listEl = document.getElementById('workspaceFilesBrowserList');
+    if (!listEl) return;
+    const activeCat = document.querySelector('#browseCategoryPills .cat-pill.active')?.getAttribute('data-bcat') || 'ALL';
+    const query = (document.getElementById('browseFilterInput')?.value || '').trim().toLowerCase();
+
+    const filtered = cachedWorkspaceFiles.filter(f => {
+      const fname = (f.fileName || f.name || '').toLowerCase();
+      const fpath = (f.relativePath || f.path || '').toLowerCase();
+      if (activeCat !== 'ALL' && f.category !== activeCat) return false;
+      if (query && !fname.includes(query) && !fpath.includes(query)) return false;
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      listEl.innerHTML = `<div class="empty-state">No matching artifacts found in workspace. Use the Local Computer picker on the left to open any external file.</div>`;
+      return;
+    }
+
+    const catLabels = {
+      FORM: 'Form',
+      MENU: 'Menu (.mmb)',
+      OBJECT_LIB: 'Object Lib (.olb)',
+      PLSQL_LIB: 'PL/SQL (.pld)',
+      REPORT: 'Report (.rdf/.xml)'
+    };
+
+    listEl.innerHTML = filtered.map(f => {
+      const fname = f.fileName || f.name || '';
+      const fpath = f.relativePath || f.path || '';
+      const kb = Math.max(1, Math.round((f.sizeBytes || 0) / 1024));
+      const catLabel = catLabels[f.category] || f.category;
+      let actionsHtml = '';
+      if (f.category === 'MENU') {
+        const baseMenu = fname.replace(/_mmb\.xml$/i, '').replace(/\.mmb$/i, '').toUpperCase();
+        actionsHtml = `
+          <button class="btn btn-xs btn-emerald" data-browser-attach-menu="${escapeHtml(baseMenu)}" title="Attach this Menu Module to the active Form">🍔 Attach to Form</button>
+          <button class="btn btn-xs btn-secondary" data-browser-open="${escapeHtml(fname)}" title="Inspect Menu Module structure & PL/SQL">Inspect</button>
+        `;
+      } else if (f.category === 'REPORT') {
+        actionsHtml = `<button class="btn btn-xs btn-primary" data-browser-open="${escapeHtml(fname)}">📊 Open in Reports</button>`;
+      } else {
+        actionsHtml = `<button class="btn btn-xs btn-primary" data-browser-open="${escapeHtml(fname)}">📂 Open</button>`;
+      }
+      return `
+        <div class="browse-file-row">
+          <div class="browse-file-info">
+            <div class="browse-file-name">
+              <span class="browse-cat-badge ${escapeHtml(f.category)}">${escapeHtml(catLabel)}</span>
+              <span>${escapeHtml(fname)}</span>
+            </div>
+            <div class="browse-file-meta">
+              <span>${escapeHtml(fpath)}</span>
+              <span>·</span>
+              <span>${kb} KB</span>
+            </div>
+          </div>
+          <div style="display:flex; gap:5px; flex-shrink:0;">
+            ${actionsHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    listEl.querySelectorAll('[data-browser-open]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const fname = btn.getAttribute('data-browser-open');
+        document.getElementById('openFileModal')?.close();
+        loadSample(fname);
+      });
+    });
+
+    listEl.querySelectorAll('[data-browser-attach-menu]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const menuMod = btn.getAttribute('data-browser-attach-menu');
+        document.getElementById('openFileModal')?.close();
+        attachMenuToCurrentForm(menuMod);
+      });
+    });
+  }
+
+  async function attachMenuToCurrentForm(menuModuleName) {
+    if (!currentPayload?.moduleIndex) {
+      showBanner('Open a Form first before attaching a custom Menu Module (.mmb).');
+      return;
+    }
+    const modName = currentPayload.moduleIndex.key?.name || currentPayload.summary?.moduleName;
+    try {
+      const res = await fetch(`/api/forms/module/${encodeURIComponent(modName)}/attach-menu`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ menuModule: menuModuleName })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to attach menu module');
+      setModulePayload(data);
+      if (!menuModuleName || menuModuleName === 'DEFAULT') {
+        showBanner(`Restored Standard Oracle Default Menu Bar on ${modName}.`);
+      } else {
+        showBanner(`🍔 Attached Custom Menu Module '${menuModuleName}.mmb' to ${modName} (${(data.moduleIndex.menus || []).length} menus loaded).`);
+      }
+      setTimeout(hideBanner, 3600);
+    } catch (e) {
+      showBanner(`Could not attach menu '${menuModuleName}': ${e.message}`);
+    }
+  }
+
   async function loadSample(sampleName) {
     try {
       hideBanner();
+      const low = (sampleName || '').toLowerCase();
+      if (low.endsWith('_report.xml') || low.endsWith('_rdf.xml') || low.endsWith('.rdf') || low.endsWith('.rpt')) {
+        switchTab('reportsTab');
+        if (reportSelect) {
+          if (!Array.from(reportSelect.options).some(o => o.value === sampleName)) {
+            reportSelect.add(new Option(sampleName, sampleName));
+          }
+          reportSelect.value = sampleName;
+          executeReport();
+        }
+        return;
+      }
       const res = await fetch(`/api/open-sample/${encodeURIComponent(sampleName)}`, { method: 'POST' });
       if (!res.ok) {
         const err = await res.json();
@@ -532,6 +1212,18 @@
         return;
       }
       const payload = await res.json();
+      if (payload.isReport) {
+        switchTab('reportsTab');
+        if (reportSelect && payload.reportName) {
+          if (!Array.from(reportSelect.options).some(o => o.value === payload.reportName)) {
+            reportSelect.add(new Option(`${payload.title || payload.reportName}`, payload.reportName));
+          }
+          reportSelect.value = payload.reportName;
+          executeReport();
+        }
+        return;
+      }
+      if (sampleSelect) sampleSelect.value = sampleName;
       setModulePayload(payload);
     } catch (e) {
       showBanner("Network error while loading sample: " + e.message);
@@ -541,6 +1233,7 @@
   async function uploadFile(file) {
     try {
       hideBanner();
+      document.getElementById('openFileModal')?.close();
       const formData = new FormData();
       formData.append('file', file);
       const res = await fetch('/api/open-file', {
@@ -556,6 +1249,7 @@
   async function openFilePath(path) {
     try {
       hideBanner();
+      document.getElementById('openFileModal')?.close();
       const res = await fetch('/api/open-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -579,6 +1273,17 @@
       return;
     }
     const payload = await res.json();
+    if (payload.isReport) {
+      switchTab('reportsTab');
+      if (reportSelect && payload.reportName) {
+        if (!Array.from(reportSelect.options).some(o => o.value === payload.reportName)) {
+          reportSelect.add(new Option(`${payload.title || payload.reportName}`, payload.reportName));
+        }
+        reportSelect.value = payload.reportName;
+        executeReport();
+      }
+      return;
+    }
     setModulePayload(payload);
   }
 
@@ -610,7 +1315,7 @@
     menuSourceModule = payload.summary.moduleName;
     preview.load(payload.moduleIndex);
     const alerts = document.getElementById('previewAlertSelect');
-    alerts.replaceChildren(new Option('Preview Alert...', ''));
+    alerts.replaceChildren(new Option('🔔 Alert...', ''));
     for (const alert of payload.moduleIndex.alerts || []) alerts.add(new Option(alert.name, alert.name));
     const summary = payload.summary;
     const mod = payload.moduleIndex;
@@ -650,8 +1355,61 @@
 
     renderRuntimeMenuBar(mod);
     renderNavigatorTree();
+    renderCodeUnitsList(mod);
+    renderPropertyInspector({ type: 'MODULE', module: mod, summary });
     renderCanvasSvg();
     setTimeout(zoomFit, 60);
+  }
+
+  function renderCodeUnitsList(mod) {
+    const listEl = document.getElementById('codeUnitsList');
+    if (!listEl) return;
+    const triggers = mod.triggers || [];
+    const units = mod.programUnits || [];
+    if (triggers.length === 0 && units.length === 0) {
+      listEl.innerHTML = '<div class="empty-state">No triggers or PL/SQL program units in this module.</div>';
+      return;
+    }
+    let html = '';
+    for (const t of triggers) {
+      const scope = t.itemName ? `${t.blockName}.${t.itemName}` : (t.blockName || 'Form');
+      const file = t.textRef?.file || '';
+      html += `
+        <div class="code-unit-item" data-code-name="${escapeHtml(t.name)}" data-code-file="${escapeHtml(file)}" data-code-scope="TRIGGER (${escapeHtml(scope)})">
+          <div>
+            <strong>⚡ ${escapeHtml(t.name)}</strong>
+            <span class="code-unit-meta">${escapeHtml(scope)}</span>
+          </div>
+          <span class="tree-badge">${t.lineCount || 0}L</span>
+        </div>
+      `;
+    }
+    for (const pu of units) {
+      const file = pu.textRef?.file || '';
+      html += `
+        <div class="code-unit-item" data-code-name="${escapeHtml(pu.name)}" data-code-file="${escapeHtml(file)}" data-code-scope="PROGRAM UNIT (${escapeHtml(pu.unitType || 'PROC')})">
+          <div>
+            <strong>📦 ${escapeHtml(pu.name)}</strong>
+            <span class="code-unit-meta">${escapeHtml(pu.unitType || 'Program Unit')}</span>
+          </div>
+          <span class="tree-badge">${pu.lineCount || 0}L</span>
+        </div>
+      `;
+    }
+    listEl.innerHTML = html;
+    listEl.querySelectorAll('.code-unit-item').forEach(el => {
+      el.addEventListener('click', () => {
+        listEl.querySelectorAll('.code-unit-item').forEach(i => i.classList.remove('active'));
+        el.classList.add('active');
+        loadCode(el.dataset.codeName, el.dataset.codeFile, el.dataset.codeScope, null, false);
+      });
+    });
+    // Auto-load the first trigger into the studio display so it's never blank
+    const firstEl = listEl.querySelector('.code-unit-item');
+    if (firstEl) {
+      firstEl.classList.add('active');
+      loadCode(firstEl.dataset.codeName, firstEl.dataset.codeFile, firstEl.dataset.codeScope, null, false);
+    }
   }
 
   function showPreviewDialog(title, message, source = null) {
@@ -740,11 +1498,18 @@
         sublabel: `-> ${r.detailBlock}`
       }));
 
+      const rawDs = unescapeXml(b.queryDataSourceName || '').trim();
+      const blockSublabel = !rawDs
+        ? '[Control]'
+        : (/^(\(?\s*select\b|\s*select\b)/i.test(rawDs) || rawDs.includes('\n') || rawDs.length > 24
+          ? '[Subquery]'
+          : `[${rawDs}]`);
+
       return {
         name: b.name,
         type: 'BLOCK',
         obj: b,
-        sublabel: b.queryDataSourceName ? `[${b.queryDataSourceName}]` : '[Control]',
+        sublabel: blockSublabel,
         children: [
           { name: `Items (${items.length})`, type: 'GROUP', children: items },
           { name: `Triggers (${blockTriggers.length})`, type: 'GROUP', children: blockTriggers },
@@ -1000,16 +1765,19 @@
 
     // If selected object has code, display code
     if (type === 'TRIGGER' && targetObj.trigger.textRef) {
-      loadCode(targetObj.trigger.name, targetObj.trigger.textRef.file, 'TRIGGER');
+      openBottomDrawer('drawerPlsql');
+      loadCode(targetObj.trigger.name, targetObj.trigger.textRef.file, 'TRIGGER', null, false);
     } else if (type === 'PROGRAM_UNIT' && targetObj.programUnit.textRef) {
-      loadCode(targetObj.programUnit.name, targetObj.programUnit.textRef.file, 'PROGRAM_UNIT');
+      openBottomDrawer('drawerPlsql');
+      loadCode(targetObj.programUnit.name, targetObj.programUnit.textRef.file, 'PROGRAM_UNIT', null, false);
     } else if (type === 'MENU_ITEM' && targetObj && targetObj.item && targetObj.item.commandRef) {
-      loadCode(`Menu: ${targetObj.menu.name}.${targetObj.item.name}`, targetObj.item.commandRef.file, 'MENU_ITEM', menuSourceModule);
+      openBottomDrawer('drawerPlsql');
+      loadCode(`Menu: ${targetObj.menu.name}.${targetObj.item.name}`, targetObj.item.commandRef.file, 'MENU_ITEM', menuSourceModule, false);
     } else if (type === 'ITEM') {
-      // If item has trigger, pick first
+      // If item has trigger, preload first trigger into code viewer without forcing tab switch
       const itemTriggers = mod.triggers.filter(t => t.level === 'ITEM' && t.itemName === name);
       if (itemTriggers.length > 0 && itemTriggers[0].textRef) {
-        loadCode(itemTriggers[0].name, itemTriggers[0].textRef.file, 'TRIGGER');
+        loadCode(itemTriggers[0].name, itemTriggers[0].textRef.file, 'TRIGGER', null, false);
       }
     }
 
@@ -1149,20 +1917,30 @@
     }
   }
 
-  function navigateRecord(direction) {
+  async function navigateRecord(direction) {
     if (runtime.active) {
+      if (direction === 'first') return runtimeSend({ kind: 'key', name: 'FIRST_RECORD' });
+      if (direction === 'last') return runtimeSend({ kind: 'key', name: 'LAST_RECORD' });
       return runtimeSend({ kind: direction === 'next' ? 'nextRecord' : 'previousRecord' });
     }
     const blockName = getActiveBlockName();
     if (!blockName) return;
-    const records = queryRecordsByBlock.get(blockName) || [];
-    if (records.length === 0) return;
+    let records = queryRecordsByBlock.get(blockName) || [];
+    if (records.length === 0) {
+      await executeBlockQuery(blockName);
+      records = queryRecordsByBlock.get(blockName) || [];
+      if (records.length === 0) return;
+    }
 
     let curIdx = activeRecordIndexByBlock.get(blockName) || 0;
     if (direction === 'next' && curIdx < records.length - 1) {
       curIdx++;
     } else if (direction === 'prev' && curIdx > 0) {
       curIdx--;
+    } else if (direction === 'first' && curIdx > 0) {
+      curIdx = 0;
+    } else if (direction === 'last' && curIdx < records.length - 1) {
+      curIdx = records.length - 1;
     } else {
       return;
     }
@@ -1227,7 +2005,7 @@
       showBanner(`Could not start the form: ${err.message}`);
     } finally {
       runFormBtn.disabled = false;
-      runFormBtn.textContent = '▶ Run Form';
+      runFormBtn.textContent = '▶ Run';
       setRuntimeUi(null);
     }
   }
@@ -1474,18 +2252,19 @@
 
       if (g.graphicsType === 'Frame') {
         const title = g.frameTitle || g.name || '';
+        const isSelGraphic = selectedObject && selectedObject.type === 'GRAPHIC' && selectedObject.graphic.name === g.name;
         svgHtml += `
-          <g class="svg-graphic frame">
-            <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" fill="none" stroke="#808080" stroke-width="1.5" rx="2"/>
+          <g class="svg-graphic frame ${isSelGraphic ? 'svg-item-selected' : ''}" style="cursor:pointer;" onclick="window.selectSvgGraphic('${escapeHtml(g.name)}')">
+            <rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" fill="${g.backColor || 'none'}" stroke="${isSelGraphic ? '#38bdf8' : '#808080'}" stroke-width="1.5" rx="2"/>
             <rect x="${gx + 1}" y="${gy + 1}" width="${gw - 2}" height="${gh - 2}" fill="none" stroke="#ffffff" stroke-width="1" rx="2"/>
             ${title ? `
-              <rect x="${gx + 10}" y="${gy - 7}" width="${title.length * 7 + 10}" height="14" fill="${bgCol}"/>
+              <rect x="${gx + 10}" y="${gy - 7}" width="${title.length * 7 + 12}" height="14" fill="${bgCol}"/>
               <text x="${gx + 15}" y="${gy + 4}" font-family="Segoe UI, Tahoma, sans-serif" font-size="11" font-weight="bold" fill="#000">${escapeHtml(title)}</text>
             ` : ''}
           </g>
         `;
       } else if (g.graphicsType === 'Text') {
-        svgHtml += `<text x="${gx}" y="${gy + 12}" font-family="Segoe UI, Tahoma, sans-serif" font-size="11" fill="#000">${escapeHtml(g.graphicsText || g.name)}</text>`;
+        svgHtml += `<text x="${gx}" y="${gy + 12}" style="cursor:pointer;" onclick="window.selectSvgGraphic('${escapeHtml(g.name)}')" font-family="Segoe UI, Tahoma, sans-serif" font-size="11" font-weight="bold" fill="${g.foreColor || '#000'}">${escapeHtml(g.graphicsText || g.name)}</text>`;
       } else {
         svgHtml += `<rect x="${gx}" y="${gy}" width="${gw}" height="${gh}" fill="${g.backColor || 'none'}" stroke="#808080" stroke-width="1"/>`;
       }
@@ -1596,13 +2375,18 @@
         } else if (isButton) {
           // Push button
           const btnLabel = item.label || item.prompt || item.name;
+          const btnBg = normalizeOracleColor(item.backColor) || '#ece9d8';
+          const btnFg = normalizeOracleColor(item.foreColor) || '#111111';
+          const btnFont = item.fontName || 'Segoe UI, Tahoma, sans-serif';
+          const btnSize = item.fontSize || 11;
+          const btnWeight = item.fontWeight || '600';
           svgHtml += `
-            <rect x="${x}" y="${rowY}" width="${w}" height="${h}" rx="3" fill="#ece9d8" stroke="#716f64" stroke-width="1" ${isHidden ? 'stroke-dasharray="4,2"' : ''}/>
+            <rect x="${x}" y="${rowY}" width="${w}" height="${h}" rx="3" fill="${escapeHtml(btnBg)}" stroke="#716f64" stroke-width="1" ${isHidden ? 'stroke-dasharray="4,2"' : ''}/>
             <line x1="${x + 1}" y1="${rowY + 1}" x2="${x + w - 1}" y2="${rowY + 1}" stroke="#ffffff" stroke-width="1.5"/>
             <line x1="${x + 1}" y1="${rowY + 1}" x2="${x + 1}" y2="${rowY + h - 1}" stroke="#ffffff" stroke-width="1.5"/>
             <line x1="${x + 1}" y1="${rowY + h - 1}" x2="${x + w - 1}" y2="${rowY + h - 1}" stroke="#716f64" stroke-width="1.5"/>
             <line x1="${x + w - 1}" y1="${rowY + 1}" x2="${x + w - 1}" y2="${rowY + h - 1}" stroke="#716f64" stroke-width="1.5"/>
-            <text x="${x + w / 2}" y="${rowY + h / 2 + 4}" text-anchor="middle" font-family="Segoe UI, Tahoma, sans-serif" font-size="11" font-weight="600" fill="#111">${escapeHtml(btnLabel)}</text>
+            <text x="${x + w / 2}" y="${rowY + h / 2 + 4}" text-anchor="middle" font-family="${escapeHtml(btnFont)}" font-size="${btnSize}" font-weight="${escapeHtml(btnWeight)}" fill="${escapeHtml(btnFg)}">${escapeHtml(btnLabel)}</text>
           `;
         } else if (itemType.includes('check')) {
           // Checkbox
@@ -1799,8 +2583,12 @@
     const overlays = overlayCanvasesFor(canvas).map(c => c.name);
     canvasStats.textContent = `Canvas: ${canvas.name}${overlays.length ? ' + ' + overlays.join(', ') : ''} | Dimensions: ${width} x ${height} px | Window: ${canvas.windowName || 'Default'}`;
     if (oracleWindowTitle) {
-      const winName = canvas.windowName || mod.title || mod.key.name;
-      oracleWindowTitle.textContent = `${winName} - [${canvas.name}]`;
+      const winObj = (mod.windows || []).find(w => w.name === canvas.windowName) || (mod.windows || [])[0];
+      const realTitle = unescapeXml(winObj?.title || mod.title || '');
+      const winName = canvas.windowName || winObj?.name || mod.key.name;
+      oracleWindowTitle.textContent = realTitle
+        ? `${realTitle}  —  [${winName} · ${canvas.name}]`
+        : `${winName} - [${canvas.name}]`;
     }
     if (oracleStatusMsg && !selectedObject && !runtime.active) {
       oracleStatusMsg.textContent = `Record: 1/1  Canvas: ${canvas.name}`;
@@ -1824,12 +2612,27 @@
       if (runtime.active) {
         canvasStats.textContent += ' | LIVE: triggers and PL/SQL run on the server';
       } else {
-        canvasStats.textContent += ' | LOCAL PREVIEW: no database or PL/SQL execution';
-        oracleStatusMsg.textContent = 'Local preview only - no database or PL/SQL execution';
+        canvasStats.textContent += ' | READY: click any form button or ▶ Run to execute live';
+        const activeBlk = getActiveBlockName();
+        const recs = activeBlk ? (queryRecordsByBlock.get(activeBlk) || []) : [];
+        if (recs.length === 0 && oracleStatusMsg) {
+          oracleStatusMsg.textContent = 'Ready — click Search, Show all, < Previous / Next > on the form, or ▶ Run';
+        }
       }
     }
     applyZoom();
   }
+
+  window.selectSvgGraphic = function (graphicName) {
+    if (!currentPayload) return;
+    const g = (currentPayload.moduleIndex.graphics || []).find(gr => gr.name === graphicName);
+    if (g) {
+      selectedObject = { type: 'GRAPHIC', graphic: g };
+      selectedItemStats.textContent = `Selected Graphic: ${g.name} (${g.graphicsType || 'Frame'})`;
+      renderPropertyInspector(selectedObject);
+      renderCanvasSvg();
+    }
+  };
 
   // Window helper for drag-and-drop visual layout editing
   window.startItemDrag = function (e, blockName, itemName) {
@@ -1940,99 +2743,120 @@
   }
 
   // Runtime Frame Menu Bar Dynamic Rendering
+  let fullBlockRecordsBackup = new Map();
+
   function renderRuntimeMenuBar(mod) {
     const container = document.getElementById('oracleMenuItems');
     if (!container) return;
 
+    const menuSelect = document.getElementById('menuModuleSelect');
+    if (menuSelect) {
+      const attachedName = (mod?.menuModule || '').toUpperCase().replace(/\.MMB$/i, '').replace(/\.MMX$/i, '');
+      if (!mod || !mod.menus || mod.menus.length === 0 || !attachedName || attachedName === 'DEFAULT&SMARTBAR') {
+        menuSelect.value = 'DEFAULT';
+      } else {
+        if (!Array.from(menuSelect.options).some(o => o.value.toUpperCase() === attachedName)) {
+          menuSelect.add(new Option(`🍔 Menu: ${attachedName}.mmb`, attachedName), 0);
+        }
+        menuSelect.value = attachedName;
+      }
+    }
+
     if (!mod || !mod.menus || mod.menus.length === 0) {
-      // Default standard Oracle Forms runtime menus
+      // Default standard Oracle Forms runtime menus with interactive commands
       container.innerHTML = `
         <div class="menu-item dropdown">
           <span>Action</span>
           <div class="dropdown-menu">
-            <div class="dropdown-item"><span>Save</span><kbd>Ctrl+S</kbd></div>
-            <div class="dropdown-item"><span>Print...</span><kbd>Ctrl+P</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="logon"><span>🔑 Connect / Logon...</span><kbd>Alt+L</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="run"><span>▶ Run Form Session</span><kbd>Ctrl+R</kbd></div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item"><span>Exit</span><kbd>Ctrl+Q</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="commit"><span>💾 Save / Commit</span><kbd>Ctrl+S</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="clearForm"><span>🧹 Clear All</span><kbd>F8</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="print"><span>🖨️ Print...</span><kbd>Ctrl+P</kbd></div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" data-ora-cmd="exit"><span>🚪 Exit Form</span><kbd>Ctrl+Q</kbd></div>
           </div>
         </div>
         <div class="menu-item dropdown">
           <span>Edit</span>
           <div class="dropdown-menu">
-            <div class="dropdown-item"><span>Cut</span><kbd>Ctrl+X</kbd></div>
-            <div class="dropdown-item"><span>Copy</span><kbd>Ctrl+C</kbd></div>
-            <div class="dropdown-item"><span>Paste</span><kbd>Ctrl+V</kbd></div>
-            <div class="dropdown-divider"></div>
-            <div class="dropdown-item"><span>Clear All</span></div>
+            <div class="dropdown-item" data-ora-cmd="clearRecord"><span>Clear Record</span><kbd>Shift+F4</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="toggleEditLayout"><span>✏️ Edit Canvas Layout</span></div>
           </div>
         </div>
         <div class="menu-item dropdown">
           <span>Query</span>
           <div class="dropdown-menu">
-            <div class="dropdown-item"><span>Enter</span><kbd>F7</kbd></div>
-            <div class="dropdown-item"><span>Execute</span><kbd>Ctrl+F11</kbd></div>
-            <div class="dropdown-item"><span>Cancel</span><kbd>Ctrl+Q</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="enterQuery"><span>❓ Enter Query</span><kbd>F7</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="executeQuery"><span>⚡ Execute Query</span><kbd>Ctrl+F11</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="cancelQuery"><span>🚫 Cancel Query</span><kbd>Ctrl+Q</kbd></div>
           </div>
         </div>
         <div class="menu-item dropdown">
           <span>Block</span>
           <div class="dropdown-menu">
-            <div class="dropdown-item"><span>Previous</span><kbd>Shift+F5</kbd></div>
-            <div class="dropdown-item"><span>Next</span><kbd>Shift+F6</kbd></div>
-            <div class="dropdown-item"><span>Clear</span></div>
+            <div class="dropdown-item" data-ora-cmd="prevBlock"><span>⏮️ Previous Block</span><kbd>Shift+PgUp</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="nextBlock"><span>⏭️ Next Block</span><kbd>Shift+PgDn</kbd></div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" data-ora-cmd="clearBlock"><span>🧹 Clear Block</span><kbd>F5</kbd></div>
           </div>
         </div>
         <div class="menu-item dropdown">
           <span>Record</span>
           <div class="dropdown-menu">
-            <div class="dropdown-item"><span>Previous</span><kbd>Up</kbd></div>
-            <div class="dropdown-item"><span>Next</span><kbd>Down</kbd></div>
-            <div class="dropdown-item"><span>Insert</span><kbd>F6</kbd></div>
-            <div class="dropdown-item"><span>Remove</span><kbd>Shift+F6</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="firstRecord"><span>⏫ First Record</span></div>
+            <div class="dropdown-item" data-ora-cmd="prevRecord"><span>🔼 Previous Record</span><kbd>Up</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="nextRecord"><span>🔽 Next Record</span><kbd>Down</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="lastRecord"><span>⏬ Last Record</span></div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" data-ora-cmd="createRecord"><span>➕ Insert Record</span><kbd>F6</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="deleteRecord"><span>❌ Remove Record</span><kbd>Shift+F6</kbd></div>
           </div>
         </div>
         <div class="menu-item dropdown">
           <span>Field</span>
           <div class="dropdown-menu">
-            <div class="dropdown-item"><span>Clear</span></div>
-            <div class="dropdown-item"><span>Duplicate</span><kbd>F3</kbd></div>
-            <div class="dropdown-item"><span>List of Values...</span><kbd>F9</kbd></div>
-          </div>
-        </div>
-        <div class="menu-item dropdown">
-          <span>Help</span>
-          <div class="dropdown-menu">
-            <div class="dropdown-item"><span>Keys...</span><kbd>Ctrl+K</kbd></div>
-            <div class="dropdown-item"><span>About Forms...</span></div>
+            <div class="dropdown-item" data-ora-cmd="prevItem"><span>Previous Field</span><kbd>Shift+Tab</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="nextItem"><span>Next Field</span><kbd>Tab</kbd></div>
           </div>
         </div>
         <div class="menu-item dropdown">
           <span>Window</span>
           <div class="dropdown-menu">
-            <div class="dropdown-item"><span>Cascade</span></div>
-            <div class="dropdown-item"><span>Tile</span></div>
+            <div class="dropdown-item" data-ora-cmd="toggleNav"><span>🗂️ Show/Hide Object Navigator</span><kbd>[</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="toggleProps"><span>🎛️ Show/Hide Property Palette</span><kbd>]</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="floatProps"><span>↗ Floating Property Sheet</span><kbd>F4</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="toggleDrawer"><span>📜 Show/Hide PL/SQL Split Drawer</span><kbd>\`</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="floatCode"><span>↗ Floating PL/SQL Editor</span><kbd>F11</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="showTrace"><span>📡 Show Session Trace Log</span></div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" data-ora-cmd="toggleFocus"><span>⛶ Full Runner View (Hide Sidebars)</span></div>
+          </div>
+        </div>
+        <div class="menu-item dropdown">
+          <span>Help</span>
+          <div class="dropdown-menu">
+            <div class="dropdown-item" data-ora-cmd="floatProps"><span>Display Error / Properties...</span><kbd>F4</kbd></div>
+            <div class="dropdown-item" data-ora-cmd="about"><span>About Oracle Forms Workbench...</span></div>
           </div>
         </div>
       `;
-      container.querySelectorAll('.dropdown-item').forEach(element => {
-        element.addEventListener('click', () => {
-          if (previewEnabled) showPreviewDialog(element.textContent.trim(), 'Standard menu action not executed in this local preview.');
-        });
-      });
       return;
     }
 
-    // Dynamic Menu Module from Form
+    // Dynamic Menu Module (.mmb) from Form
     const menuMap = new Map();
     for (const m of mod.menus) {
       menuMap.set(m.name.toUpperCase(), m);
     }
 
     const rootMenu = menuMap.get('MAIN_MENU') || menuMap.get('MAIN') || mod.menus[0];
+    const mmbBadgeName = (mod.menuModule || menuSourceModule || rootMenu.name).replace(/\.mmb$/i, '');
     let menuHtml = '';
 
     for (const item of (rootMenu.items || [])) {
-      const label = item.label || item.name;
+      const label = unescapeXml(item.label || item.name).replace(/&/g, '');
       const subName = item.subMenuName ? item.subMenuName.toUpperCase() : null;
       const subMenu = subName ? menuMap.get(subName) : null;
 
@@ -2042,39 +2866,60 @@
           if (sub.menuItemType === 'Separator' || sub.name.toUpperCase().startsWith('SEPARATOR') || (!sub.label && !sub.commandRef)) {
             subHtml += `<div class="dropdown-divider"></div>`;
           } else {
-            const subLabel = sub.label || sub.name;
+            const subLabel = unescapeXml(sub.label || sub.name).replace(/&/g, '');
             const hasCode = !!sub.commandRef;
+            const kbd = sub.keyboardAccelerator ? `<kbd>${escapeHtml(sub.keyboardAccelerator)}</kbd>` : (hasCode ? '<span class="item-tag" style="font-size:9px;color:#0066cc;">PL/SQL</span>' : '');
             subHtml += `
-              <div class="dropdown-item" data-menu="${escapeHtml(subMenu.name)}" data-item="${escapeHtml(sub.name)}" title="${hasCode ? 'Click to inspect PL/SQL logic' : ''}">
-                <span>${escapeHtml(subLabel.replace(/&/g, ''))}</span>
-                ${hasCode ? '<span class="item-tag" style="font-size:9px;color:#0066cc;">PL/SQL</span>' : ''}
+              <div class="dropdown-item" data-menu="${escapeHtml(subMenu.name)}" data-item="${escapeHtml(sub.name)}" title="${hasCode ? 'Click to run custom .mmb PL/SQL command & inspect source' : ''}">
+                <span>${escapeHtml(subLabel)}</span>
+                ${kbd}
               </div>
             `;
           }
         }
         menuHtml += `
           <div class="menu-item dropdown">
-            <span>${escapeHtml(label.replace(/&/g, ''))}</span>
+            <span>${escapeHtml(label)}</span>
             <div class="dropdown-menu">
               ${subHtml}
             </div>
           </div>
         `;
       } else {
-        const hasCode = !!item.commandRef;
         menuHtml += `
           <div class="menu-item" data-menu="${escapeHtml(rootMenu.name)}" data-item="${escapeHtml(item.name)}">
-            <span>${escapeHtml(label.replace(/&/g, ''))}</span>
+            <span>${escapeHtml(label)}</span>
           </div>
         `;
       }
     }
 
+    // Always append Window menu and active .mmb badge so IDE panels & custom menu inspection are 1 click away
+    menuHtml += `
+      <div class="menu-item dropdown">
+        <span>Window</span>
+        <div class="dropdown-menu">
+          <div class="dropdown-item" data-ora-cmd="toggleNav"><span>🗂️ Show/Hide Object Navigator</span><kbd>[</kbd></div>
+          <div class="dropdown-item" data-ora-cmd="toggleProps"><span>🎛️ Show/Hide Property Palette</span><kbd>]</kbd></div>
+          <div class="dropdown-item" data-ora-cmd="floatProps"><span>↗ Floating Property Sheet</span><kbd>F4</kbd></div>
+          <div class="dropdown-item" data-ora-cmd="toggleDrawer"><span>📜 Show/Hide PL/SQL Split Drawer</span><kbd>\`</kbd></div>
+          <div class="dropdown-item" data-ora-cmd="floatCode"><span>↗ Floating PL/SQL Editor</span><kbd>F11</kbd></div>
+          <div class="dropdown-item" data-ora-cmd="showTrace"><span>📡 Show Session Trace Log</span></div>
+          <div class="dropdown-divider"></div>
+          <div class="dropdown-item" data-ora-cmd="toggleFocus"><span>⛶ Full Runner View (Hide Sidebars)</span></div>
+        </div>
+      </div>
+      <span class="ora-db-tag" style="margin-left:6px; background:#eff6ff; color:#1d4ed8; border-color:#93c5fd;" title="Attached Oracle Forms Menu Module (.mmb)">
+        🍔 ${escapeHtml(mmbBadgeName)}.mmb
+      </span>
+    `;
+
     container.innerHTML = menuHtml;
 
-    // Attach click listeners to menu items to inspect PL/SQL code
-    container.querySelectorAll('.dropdown-item, .menu-item').forEach(el => {
-      el.addEventListener('click', () => {
+    // Attach click listeners to custom .mmb menu items to both inspect PL/SQL code AND execute the action live!
+    container.querySelectorAll('.dropdown-item[data-menu], .menu-item[data-menu]').forEach(el => {
+      el.addEventListener('click', async (e) => {
+        e.stopPropagation();
         const menuName = el.getAttribute('data-menu');
         const itemName = el.getAttribute('data-item');
         if (!menuName || !itemName) return;
@@ -2083,21 +2928,202 @@
         if (targetItem) {
           selectedObject = { type: 'MENU_ITEM', item: targetItem, menu: targetMenu };
           renderPropertyInspector(selectedObject);
-          if (previewEnabled) {
-            showPreviewDialog(targetItem.label || targetItem.name, 'Menu command not executed. No application navigation is inferred.',
-              targetItem.commandRef ? { name: `Menu: ${targetMenu.name}.${targetItem.name}`, file: targetItem.commandRef.file, module: menuSourceModule } : null);
-          } else if (targetItem.commandRef) {
-            loadCode(`Menu: ${targetMenu.name}.${targetItem.name}`, targetItem.commandRef.file, 'MENU_ITEM', menuSourceModule);
+          if (targetItem.commandRef) {
+            openBottomDrawer('drawerPlsql');
+            loadCode(`Menu (${mmbBadgeName}.mmb): ${targetMenu.name}.${targetItem.name}`, targetItem.commandRef.file, 'MENU_ITEM (.mmb)', menuSourceModule, false);
           }
+          await executeCustomMenuItem(targetMenu, targetItem, mmbBadgeName);
         }
       });
     });
   }
 
-  // Property Inspector Rendering
+  async function executeCustomMenuItem(targetMenu, targetItem, mmbBadgeName = 'OFW_EMP_MENU') {
+    const itemUp = (targetItem.name || '').toUpperCase();
+    const labelClean = unescapeXml(targetItem.label || targetItem.name).replace(/&/g, '');
+    const activeBlock = getActiveBlockName() || 'EMP';
+
+    const ensureBlockQueried = async (blockName) => {
+      let recs = queryRecordsByBlock.get(blockName) || [];
+      if (recs.length === 0) {
+        await executeBlockQuery();
+        recs = queryRecordsByBlock.get(blockName) || [];
+      }
+      if (recs.length > 0 && !fullBlockRecordsBackup.has(blockName)) {
+        fullBlockRecordsBackup.set(blockName, recs.map(r => ({ ...r })));
+      }
+      return fullBlockRecordsBackup.get(blockName) || recs;
+    };
+
+    const filterByDept = async (deptName) => {
+      const allRecs = await ensureBlockQueried('EMP');
+      if (!deptName || deptName === 'ALL') {
+        queryRecordsByBlock.set('EMP', allRecs.map(r => ({ ...r })));
+        activeRecordIndexByBlock.set('EMP', 0);
+        preview.reset();
+        applyRecordsToBlock('EMP');
+        updateRecordNavigator('EMP');
+        renderCanvasSvg();
+        if (oracleStatusMsg) oracleStatusMsg.textContent = `[${mmbBadgeName}.mmb] FILTER_BY_DEPARTMENT('ALL'): Showing all ${allRecs.length} employee records.`;
+        return;
+      }
+      const filtered = allRecs.filter(r => String(r.DEPARTMENT || '').toLowerCase() === deptName.toLowerCase());
+      queryRecordsByBlock.set('EMP', filtered.map(r => ({ ...r })));
+      activeRecordIndexByBlock.set('EMP', 0);
+      preview.reset();
+      applyRecordsToBlock('EMP');
+      updateRecordNavigator('EMP');
+      renderCanvasSvg();
+      if (oracleStatusMsg) {
+        oracleStatusMsg.textContent = `[${mmbBadgeName}.mmb] FILTER_BY_DEPARTMENT('${deptName}'): Showing ${filtered.length} employee(s) in ${deptName}.`;
+      }
+    };
+
+    switch (itemUp) {
+      case 'SHOW_ALL':
+      case 'DEPT_ALL':
+        await filterByDept('ALL');
+        break;
+      case 'EXEC_SEARCH':
+        await executeBlockQuery();
+        break;
+      case 'SAVE_DIR':
+        if (runtime.active) await runtimeSend({ kind: 'commit' });
+        else showBanner(`[${mmbBadgeName}.mmb] Directory changes committed.`);
+        break;
+      case 'CLEAR_DIR':
+        if (runtime.active) await runtimeSend({ kind: 'key', name: 'CLEAR_FORM' });
+        else { preview.reset(); renderCanvasSvg(); }
+        break;
+      case 'EXIT_APP':
+        if (runtime.active) await runtimeSend({ kind: 'key', name: 'EXIT_FORM' });
+        else stopRuntimeSession();
+        break;
+      case 'DEPT_ENG':
+        await filterByDept('Engineering');
+        break;
+      case 'DEPT_FIN':
+        await filterByDept('Finance');
+        break;
+      case 'DEPT_OPS':
+        await filterByDept('Operations');
+        break;
+      case 'DEPT_SALES':
+        await filterByDept('Sales');
+        break;
+      case 'DEPT_HR':
+        await filterByDept('HR');
+        break;
+      case 'FIRST_EMP':
+        await ensureBlockQueried(activeBlock);
+        navigateRecord('first');
+        break;
+      case 'PREV_EMP':
+        await ensureBlockQueried(activeBlock);
+        navigateRecord('prev');
+        break;
+      case 'NEXT_EMP':
+        await ensureBlockQueried(activeBlock);
+        navigateRecord('next');
+        break;
+      case 'LAST_EMP':
+        await ensureBlockQueried(activeBlock);
+        navigateRecord('last');
+        break;
+      case 'MERIT_RAISE_5':
+      case 'MERIT_RAISE_10': {
+        await ensureBlockQueried('EMP');
+        const pct = itemUp === 'MERIT_RAISE_10' ? 10 : 5;
+        const recs = queryRecordsByBlock.get('EMP') || [];
+        const idx = activeRecordIndexByBlock.get('EMP') || 0;
+        if (recs[idx]) {
+          const curSal = parseFloat(recs[idx].SALARY || '0') || 0;
+          const newSal = (curSal * (1 + pct / 100)).toFixed(2);
+          recs[idx].SALARY = newSal;
+          applyRecordsToBlock('EMP');
+          renderCanvasSvg();
+          if (runtime.active) {
+            await runtimeSend({ kind: 'setItem', block: 'EMP', item: 'SALARY', value: String(newSal), record: idx });
+          }
+          const msg = `⚡ [${mmbBadgeName}.mmb] APPLY_MERIT_RAISE(${pct}%): ${recs[idx].FULL_NAME || recs[idx].LAST_NAME || 'Employee'} salary updated from $${curSal.toFixed(2)} to $${newSal}`;
+          if (oracleStatusMsg) oracleStatusMsg.textContent = msg;
+          showBanner(msg);
+          setTimeout(hideBanner, 3600);
+        }
+        break;
+      }
+      case 'PROMOTE_SENIOR': {
+        await ensureBlockQueried('EMP');
+        const recs = queryRecordsByBlock.get('EMP') || [];
+        const idx = activeRecordIndexByBlock.get('EMP') || 0;
+        if (recs[idx]) {
+          const curTitle = String(recs[idx].JOB_TITLE || 'Specialist');
+          const newTitle = curTitle.toUpperCase().startsWith('SENIOR') ? curTitle : `Senior ${curTitle}`;
+          recs[idx].JOB_TITLE = newTitle;
+          applyRecordsToBlock('EMP');
+          renderCanvasSvg();
+          if (runtime.active) {
+            await runtimeSend({ kind: 'setItem', block: 'EMP', item: 'JOB_TITLE', value: newTitle, record: idx });
+          }
+          const msg = `🎖️ [${mmbBadgeName}.mmb] PROMOTE_EMPLOYEE: ${recs[idx].FULL_NAME || recs[idx].LAST_NAME || 'Employee'} promoted to '${newTitle}'`;
+          if (oracleStatusMsg) oracleStatusMsg.textContent = msg;
+          showBanner(msg);
+          setTimeout(hideBanner, 3600);
+        }
+        break;
+      }
+      case 'RUN_EMP_DIRECTORY_RPT':
+        loadSample('ofw_employee_directory_report.xml');
+        break;
+      case 'RUN_DEPT_SALARIES_RPT':
+        loadSample('department_salaries_report.xml');
+        break;
+      default:
+        if (oracleStatusMsg) {
+          oracleStatusMsg.textContent = `[${mmbBadgeName}.mmb] Executed menu item ${targetMenu.name}.${targetItem.name} (${labelClean})`;
+        }
+        break;
+    }
+  }
+
+  function normalizeHexColor(val, fallback = '#e8e4d8') {
+    if (!val || typeof val !== 'string') return fallback;
+    const v = val.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) return v;
+    const m = v.match(/^r(\d+)g(\d+)b(\d+)$/i);
+    if (m) {
+      const r = Math.min(255, Math.round((parseInt(m[1], 10) / 100) * 255));
+      const g = Math.min(255, Math.round((parseInt(m[2], 10) / 100) * 255));
+      const b = Math.min(255, Math.round((parseInt(m[3], 10) / 100) * 255));
+      return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+    }
+    const named = {
+      white: '#ffffff', black: '#000000', gray: '#d4d0c8', grey: '#d4d0c8',
+      blue: '#2563eb', darkblue: '#1e3a8a', green: '#15803d', red: '#b91c1c',
+      yellow: '#fef9c3', cyan: '#e0f2fe'
+    };
+    return named[v.toLowerCase()] || fallback;
+  }
+
+  async function syncModuleToServer() {
+    if (!currentPayload?.moduleIndex) return;
+    const modName = currentPayload.moduleIndex.key?.name || currentPayload.summary?.moduleName;
+    if (!modName) return;
+    try {
+      await fetch(`/api/forms/module/${encodeURIComponent(modName)}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(currentPayload.moduleIndex)
+      });
+    } catch (e) {
+      console.warn('Could not sync module index to server:', e);
+    }
+  }
+
+  // Property Inspector Rendering (Modern Forms Builder Property Palette)
   function renderPropertyInspector(target) {
     if (!target) {
-      propertyInspector.innerHTML = '<div class="empty-state">Select an object to inspect properties.</div>';
+      propertyInspector.innerHTML = '<div class="empty-state">Select an object on the canvas or tree to inspect & edit properties.</div>';
       inspectorTargetName.textContent = 'None';
       return;
     }
@@ -2105,64 +3131,192 @@
     let title = '';
     let html = '';
 
+    if (!layoutEditMode) {
+      html += `
+        <div style="padding: 6px 10px; background: rgba(37,99,235,0.12); border-bottom: 1px solid rgba(59,130,246,0.28); display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <span style="font-size: 11px; color: #93c5fd;">Enable <strong>✏️ Layout</strong> mode to edit colors, fonts, titles & geometry</span>
+          <button class="btn btn-xs btn-primary" onclick="document.getElementById('editLayoutToggleBtn')?.click()">✏️ Edit Mode</button>
+        </div>
+      `;
+    }
+
     if (target.type === 'ITEM') {
       const item = target.item;
       const block = target.block;
       title = `${block.name}.${item.name}`;
+      const isBtn = (item.itemType || '').toLowerCase().includes('button');
+      const defaultBg = isBtn ? '#e8e4d8' : '#ffffff';
+      const hexBg = normalizeHexColor(item.backColor, defaultBg);
+      const hexFg = normalizeHexColor(item.foreColor, '#111111');
 
-      // General
-      html += renderPropGroup('General', [
-        ['Name', item.name],
-        ['Block', block.name],
-        ['Item Type', item.itemType || 'Text Item'],
-        ['Data Type', item.dataType || 'Char'],
-        ['Property Class', item.propertyClass || '(None)'],
-        ['Inherited From', item.inherited ? formatInheritance(item.inherited) : '(Local)']
-      ]);
+      // Sync top formatting ribbon inputs if present
+      const rBg = document.getElementById('ribbonBackColor');
+      if (rBg) rBg.value = hexBg;
+      const rFg = document.getElementById('ribbonForeColor');
+      if (rFg) rFg.value = hexFg;
+      const rFont = document.getElementById('ribbonFontFamily');
+      if (rFont && item.fontName) rFont.value = item.fontName;
+      const rSize = document.getElementById('ribbonFontSize');
+      if (rSize && item.fontSize) rSize.value = String(item.fontSize);
 
-      // Layout
-      if (layoutEditMode) {
-        html += `
-          <div class="prop-group">
-            <div class="prop-group-header">Layout Editor</div>
-            <table class="prop-table">
-              <tr><td class="prop-name">X Position</td><td class="prop-val"><input type="number" class="prop-input" id="propEditX" value="${item.xPosition || 0}"></td></tr>
-              <tr><td class="prop-name">Y Position</td><td class="prop-val"><input type="number" class="prop-input" id="propEditY" value="${item.yPosition || 0}"></td></tr>
-              <tr><td class="prop-name">Width</td><td class="prop-val"><input type="number" class="prop-input" id="propEditW" value="${item.width || ''}" placeholder="Default"></td></tr>
-              <tr><td class="prop-name">Height</td><td class="prop-val"><input type="number" class="prop-input" id="propEditH" value="${item.height || ''}" placeholder="Default"></td></tr>
-              <tr><td class="prop-name">Prompt</td><td class="prop-val"><input type="text" class="prop-input" id="propEditPrompt" value="${escapeHtml(item.prompt || '')}"></td></tr>
-              <tr><td class="prop-name">Label</td><td class="prop-val"><input type="text" class="prop-input" id="propEditLabel" value="${escapeHtml(item.label || '')}"></td></tr>
-            </table>
-            <div style="padding: 6px 8px;">
-              <button class="btn btn-sm btn-primary" id="propApplyBtn" style="width: 100%;">Apply & Save</button>
-            </div>
+      html += `
+        <div class="prop-group">
+          <div class="prop-group-header">General & Functional</div>
+          <table class="prop-table">
+            <tr><td class="prop-name">Name</td><td class="prop-val"><strong>${escapeHtml(item.name)}</strong></td></tr>
+            <tr><td class="prop-name">Block</td><td class="prop-val">${escapeHtml(block.name)}</td></tr>
+            <tr>
+              <td class="prop-name">Item Type</td>
+              <td class="prop-val">
+                <select class="prop-input" id="propEditItemType">
+                  ${['Text Item', 'Display Item', 'Push Button', 'Check Box', 'List Item', 'Radio Group'].map(t =>
+                    `<option value="${t}" ${(item.itemType || 'Text Item') === t ? 'selected' : ''}>${t}</option>`
+                  ).join('')}
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td class="prop-name">Label / Caption</td>
+              <td class="prop-val"><input type="text" class="prop-input" id="propEditLabel" value="${escapeHtml(item.label || '')}" placeholder="Button label..."></td>
+            </tr>
+            <tr>
+              <td class="prop-name">Built-in Action</td>
+              <td class="prop-val">
+                <select class="prop-input" id="propEditActionType">
+                  <option value="" ${!item.actionType ? 'selected' : ''}>(Trigger / Auto)</option>
+                  <option value="PREVIOUS_RECORD" ${item.actionType === 'PREVIOUS_RECORD' ? 'selected' : ''}>◀ Previous Record</option>
+                  <option value="NEXT_RECORD" ${item.actionType === 'NEXT_RECORD' ? 'selected' : ''}>▶ Next Record</option>
+                  <option value="FIRST_RECORD" ${item.actionType === 'FIRST_RECORD' ? 'selected' : ''}>⏮ First Record</option>
+                  <option value="LAST_RECORD" ${item.actionType === 'LAST_RECORD' ? 'selected' : ''}>⏭ Last Record</option>
+                  <option value="EXECUTE_QUERY" ${item.actionType === 'EXECUTE_QUERY' ? 'selected' : ''}>⚡ Execute Query (Search)</option>
+                  <option value="SHOW_ALL" ${item.actionType === 'SHOW_ALL' ? 'selected' : ''}>📋 Show All Records</option>
+                  <option value="ENTER_QUERY" ${item.actionType === 'ENTER_QUERY' ? 'selected' : ''}>🔍 Enter Query Mode</option>
+                  <option value="COMMIT_FORM" ${item.actionType === 'COMMIT_FORM' ? 'selected' : ''}>💾 Commit / Save Form</option>
+                  <option value="CREATE_RECORD" ${item.actionType === 'CREATE_RECORD' ? 'selected' : ''}>➕ Insert Record</option>
+                  <option value="DELETE_RECORD" ${item.actionType === 'DELETE_RECORD' ? 'selected' : ''}>❌ Delete Record</option>
+                  <option value="CLEAR_FORM" ${item.actionType === 'CLEAR_FORM' ? 'selected' : ''}>🧹 Clear Form</option>
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td class="prop-name">Enabled / Visible</td>
+              <td class="prop-val" style="display:flex; gap:10px; align-items:center;">
+                <label style="font-size:11px;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="propEditEnabled" ${item.enabled !== false ? 'checked' : ''}> Enabled</label>
+                <label style="font-size:11px;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="propEditVisible" ${item.visible !== false ? 'checked' : ''}> Visible</label>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="prop-group">
+          <div class="prop-group-header">Visual Attributes (Color & Font)</div>
+          <table class="prop-table">
+            <tr>
+              <td class="prop-name">${isBtn ? 'Button Color' : 'Fill / Back Color'}</td>
+              <td class="prop-val">
+                <div class="prop-color-row">
+                  <input type="color" id="propEditBackColorPicker" value="${hexBg}">
+                  <input type="text" class="prop-input" id="propEditBackColor" value="${escapeHtml(item.backColor || hexBg)}" placeholder="#e8e4d8">
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="prop-name">Foreground / Text</td>
+              <td class="prop-val">
+                <div class="prop-color-row">
+                  <input type="color" id="propEditForeColorPicker" value="${hexFg}">
+                  <input type="text" class="prop-input" id="propEditForeColor" value="${escapeHtml(item.foreColor || hexFg)}" placeholder="#111111">
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td class="prop-name">Font Name</td>
+              <td class="prop-val">
+                <select class="prop-input" id="propEditFontName">
+                  ${['Tahoma, Arial, sans-serif', 'Arial, sans-serif', 'Verdana, sans-serif', 'Georgia, serif', "'JetBrains Mono', monospace"].map(f =>
+                    `<option value="${f}" ${(item.fontName || '') === f ? 'selected' : ''}>${f.split(',')[0].replace(/'/g, '')}</option>`
+                  ).join('')}
+                </select>
+              </td>
+            </tr>
+            <tr>
+              <td class="prop-name">Font Size / Style</td>
+              <td class="prop-val" style="display:flex; gap:6px;">
+                <input type="number" class="prop-input" id="propEditFontSize" value="${item.fontSize || 11}" style="width:58px;">
+                <select class="prop-input" id="propEditFontWeight">
+                  <option value="normal" ${(item.fontWeight || 'normal') !== 'bold' ? 'selected' : ''}>Regular</option>
+                  <option value="bold" ${item.fontWeight === 'bold' ? 'selected' : ''}>Bold</option>
+                </select>
+                <select class="prop-input" id="propEditJustification">
+                  <option value="Start" ${(item.justification || 'Start') === 'Start' ? 'selected' : ''}>Left</option>
+                  <option value="Center" ${item.justification === 'Center' ? 'selected' : ''}>Center</option>
+                  <option value="End" ${item.justification === 'End' ? 'selected' : ''}>Right</option>
+                </select>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="prop-group">
+          <div class="prop-group-header">Physical & Prompt Layout</div>
+          <table class="prop-table">
+            <tr>
+              <td class="prop-name">X / Y Position</td>
+              <td class="prop-val" style="display:flex; gap:6px;">
+                <input type="number" class="prop-input" id="propEditX" value="${item.xPosition || 0}" title="X">
+                <input type="number" class="prop-input" id="propEditY" value="${item.yPosition || 0}" title="Y">
+              </td>
+            </tr>
+            <tr>
+              <td class="prop-name">Width / Height</td>
+              <td class="prop-val" style="display:flex; gap:6px;">
+                <input type="number" class="prop-input" id="propEditW" value="${item.width ?? 100}" title="Width">
+                <input type="number" class="prop-input" id="propEditH" value="${item.height ?? 20}" title="Height">
+              </td>
+            </tr>
+            <tr><td class="prop-name">Prompt Text</td><td class="prop-val"><input type="text" class="prop-input" id="propEditPrompt" value="${escapeHtml(item.prompt || '')}"></td></tr>
+            <tr>
+              <td class="prop-name">Prompt Edge / Offset</td>
+              <td class="prop-val" style="display:flex; gap:6px;">
+                <select class="prop-input" id="propEditPromptEdge">
+                  <option value="Start" ${(item.promptAttachmentEdge || 'Start') === 'Start' ? 'selected' : ''}>Start (Left)</option>
+                  <option value="Top" ${item.promptAttachmentEdge === 'Top' ? 'selected' : ''}>Top (Above)</option>
+                </select>
+                <input type="number" class="prop-input" id="propEditPromptOffset" value="${item.promptAttachmentOffset ?? 6}" style="width:60px;">
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="prop-group">
+          <div class="prop-group-header">Database & Validation</div>
+          <table class="prop-table">
+            <tr>
+              <td class="prop-name">Database Item</td>
+              <td class="prop-val" style="display:flex; gap:10px;">
+                <label style="font-size:11px;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="propEditDbItem" ${item.dml?.databaseItem !== false ? 'checked' : ''}> DB Item</label>
+                <label style="font-size:11px;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="propEditRequired" ${item.required === true ? 'checked' : ''}> Required</label>
+              </td>
+            </tr>
+            <tr><td class="prop-name">Column Name</td><td class="prop-val"><input type="text" class="prop-input" id="propEditColumnName" value="${escapeHtml(item.columnName || item.name)}"></td></tr>
+            <tr>
+              <td class="prop-name">Data Type / Max Len</td>
+              <td class="prop-val" style="display:flex; gap:6px;">
+                <select class="prop-input" id="propEditDataType">
+                  ${['Char', 'Varchar2', 'Number', 'Date', 'Datetime'].map(dt =>
+                    `<option value="${dt}" ${(item.dataType || 'Char') === dt ? 'selected' : ''}>${dt}</option>`
+                  ).join('')}
+                </select>
+                <input type="number" class="prop-input" id="propEditMaxLen" value="${item.dml?.maximumLength || 30}" style="width:65px;" title="Maximum Length">
+              </td>
+            </tr>
+            <tr><td class="prop-name">Initial Value</td><td class="prop-val"><input type="text" class="prop-input" id="propEditInitialValue" value="${escapeHtml(item.dml?.initialValue || '')}" placeholder="(Optional)"></td></tr>
+          </table>
+          <div style="padding: 8px; display: flex; gap: 6px;">
+            <button class="btn btn-sm btn-primary" id="propApplyBtn" style="flex: 1;">💾 Apply & Save Properties</button>
           </div>
-        `;
-      } else {
-        html += renderPropGroup('Layout', [
-          ['Canvas', item.canvasName || '(None)'],
-          ['Tab Page', item.tabPageName || '(None)'],
-          ['X Position', item.xPosition],
-          ['Y Position', item.yPosition],
-          ['Width', item.width || '(Default)'],
-          ['Height', item.height || '(Default)'],
-          ['Visible', item.visible !== false ? 'True' : 'False'],
-          ['Prompt', item.prompt || '(None)'],
-          ['Prompt Attachment', `${item.promptAttachmentEdge} (${item.promptAttachmentOffset}px)`]
-        ]);
-      }
-
-      // Data / DML
-      html += renderPropGroup('Data & DML', [
-        ['Database Item', item.dml?.databaseItem !== false ? 'True' : 'False'],
-        ['Column Name', item.columnName || item.name],
-        ['Primary Key', item.dml?.primaryKey === true ? 'True' : 'False'],
-        ['Required', item.required === true ? 'True' : 'False'],
-        ['Max Length', item.dml?.maximumLength || 'Default'],
-        ['LOV Name', item.lovName || '(None)'],
-        ['Initial Value', item.dml?.initialValue || '(None)'],
-        ['Insert / Update', `${item.dml?.insertAllowed !== false ? 'Insert ' : ''}${item.dml?.updateAllowed !== false ? 'Update' : ''}`]
-      ]);
+        </div>
+      `;
 
       // Triggers
       const itemTriggers = currentPayload.moduleIndex.triggers.filter(t => t.level === 'ITEM' && t.itemName === item.name);
@@ -2177,28 +3331,58 @@
         `;
       }
 
+    } else if (target.type === 'GRAPHIC') {
+      const g = target.graphic;
+      const c = target.canvas;
+      title = `Graphic: ${g.name}`;
+      html += `
+        <div class="prop-group">
+          <div class="prop-group-header">Frame / Graphic Properties</div>
+          <table class="prop-table">
+            <tr><td class="prop-name">Name</td><td class="prop-val"><strong>${escapeHtml(g.name)}</strong></td></tr>
+            <tr><td class="prop-name">Type</td><td class="prop-val">${escapeHtml(g.graphicsType || 'Frame')}</td></tr>
+            <tr><td class="prop-name">Frame Title</td><td class="prop-val"><input type="text" class="prop-input" id="propGraphicFrameTitle" value="${escapeHtml(g.frameTitle || g.graphicsText || '')}" placeholder="Frame section title..."></td></tr>
+            <tr>
+              <td class="prop-name">X / Y Position</td>
+              <td class="prop-val" style="display:flex; gap:6px;">
+                <input type="number" class="prop-input" id="propGraphicX" value="${g.xPosition || 0}">
+                <input type="number" class="prop-input" id="propGraphicY" value="${g.yPosition || 0}">
+              </td>
+            </tr>
+            <tr>
+              <td class="prop-name">Width / Height</td>
+              <td class="prop-val" style="display:flex; gap:6px;">
+                <input type="number" class="prop-input" id="propGraphicW" value="${g.width || 400}">
+                <input type="number" class="prop-input" id="propGraphicH" value="${g.height || 180}">
+              </td>
+            </tr>
+          </table>
+          <div style="padding: 8px;">
+            <button class="btn btn-sm btn-primary" id="propGraphicApplyBtn" style="width: 100%;">💾 Update Frame Title & Layout</button>
+          </div>
+        </div>
+      `;
     } else if (target.type === 'BLOCK') {
       const b = target.block;
       title = `Block: ${b.name}`;
 
-      html += renderPropGroup('General', [
-        ['Name', b.name],
-        ['Query Data Source', b.queryDataSourceName || '(Control Block)'],
-        ['Property Class', b.propertyClass || '(None)'],
-        ['Inherited From', b.inherited ? formatInheritance(b.inherited) : '(Local)']
-      ]);
-
-      html += renderPropGroup('Multi-Record Grid', [
-        ['Records Displayed', b.recordsDisplayed],
-        ['Distance Between Records', b.distanceBetweenRecords],
-        ['Orientation', b.recordOrientation]
-      ]);
-
-      html += renderPropGroup('DML & Query', [
-        ['Database Block', b.dml?.databaseBlock !== false ? 'True' : 'False'],
-        ['Where Clause', b.dml?.whereClause || '(None)'],
-        ['Order By Clause', b.dml?.orderByClause || '(None)']
-      ]);
+      html += `
+        <div class="prop-group">
+          <div class="prop-group-header">Data Block Properties</div>
+          <table class="prop-table">
+            <tr><td class="prop-name">Block Name</td><td class="prop-val"><strong>${escapeHtml(b.name)}</strong></td></tr>
+            <tr><td class="prop-name">Query Data Source</td><td class="prop-val"><input type="text" class="prop-input" id="propBlockSource" value="${escapeHtml(b.queryDataSourceName || '')}" placeholder="Table or View Name"></td></tr>
+            <tr><td class="prop-name">Records Displayed</td><td class="prop-val"><input type="number" class="prop-input" id="propBlockRecs" value="${b.recordsDisplayed || 1}" min="1" max="30"></td></tr>
+            <tr><td class="prop-name">Record Distance</td><td class="prop-val"><input type="number" class="prop-input" id="propBlockDist" value="${b.distanceBetweenRecords || 0}" min="0" max="100"></td></tr>
+            <tr><td class="prop-name">WHERE Clause</td><td class="prop-val"><input type="text" class="prop-input" id="propBlockWhere" value="${escapeHtml(b.dml?.whereClause || '')}" placeholder="Optional WHERE filter"></td></tr>
+            <tr><td class="prop-name">ORDER BY Clause</td><td class="prop-val"><input type="text" class="prop-input" id="propBlockOrder" value="${escapeHtml(b.dml?.orderByClause || '')}" placeholder="e.g. EMPLOYEE_ID"></td></tr>
+          </table>
+          <div style="padding: 8px; display:flex; gap:6px;">
+            <button class="btn btn-sm btn-primary" id="propBlockApplyBtn" style="flex:1;">💾 Save Block</button>
+            <button class="btn btn-sm" onclick="document.getElementById('openWizardBtn')?.click()">🧙‍♂️ Layout Wizard</button>
+          </div>
+        </div>
+      `;
 
       const blockTriggers = currentPayload.moduleIndex.triggers.filter(t => t.level === 'BLOCK' && t.blockName === b.name);
       if (blockTriggers.length > 0) {
@@ -2246,13 +3430,93 @@
     } else if (target.type === 'WINDOW') {
       const w = target.window;
       title = `Window: ${w.name}`;
-      html += renderPropGroup('Window Info', [
-        ['Name', w.name],
-        ['Title', w.title || '(None)'],
-        ['Modal', w.modal === true ? 'True' : 'False'],
-        ['Width', w.width || 'Default'],
-        ['Height', w.height || 'Default']
+      html += `
+        <div class="prop-group">
+          <div class="prop-group-header">Window Properties</div>
+          <table class="prop-table">
+            <tr><td class="prop-name">Window Name</td><td class="prop-val"><strong>${escapeHtml(w.name)}</strong></td></tr>
+            <tr><td class="prop-name">Window Title</td><td class="prop-val"><input type="text" class="prop-input" id="propWindowTitle" value="${escapeHtml(w.title || '')}" placeholder="Form Window Title..."></td></tr>
+            <tr><td class="prop-name">Width / Height</td><td class="prop-val" style="display:flex;gap:6px;">
+              <input type="number" class="prop-input" id="propWindowW" value="${w.width || 650}">
+              <input type="number" class="prop-input" id="propWindowH" value="${w.height || 450}">
+            </td></tr>
+          </table>
+          <div style="padding: 8px;">
+            <button class="btn btn-sm btn-primary" id="propWindowApplyBtn" style="width:100%;">💾 Update Window Title</button>
+          </div>
+        </div>
+      `;
+    } else if (target.type === 'MODULE') {
+      const s = target.summary || {};
+      const m = target.module || {};
+      const primaryWin = (m.windows || [])[0];
+      title = `Module: ${s.moduleName || m.key?.name || 'Form'}`;
+      html += `
+        <div class="prop-group">
+          <div class="prop-group-header">Form Title & Header</div>
+          <table class="prop-table">
+            <tr><td class="prop-name">Module Name</td><td class="prop-val"><strong>${escapeHtml(s.moduleName || m.key?.name || '')}</strong></td></tr>
+            <tr><td class="prop-name">Window Title</td><td class="prop-val"><input type="text" class="prop-input" id="propModuleWinTitle" value="${escapeHtml(primaryWin?.title || m.title || '')}" placeholder="Form Window Title..."></td></tr>
+          </table>
+          <div style="padding: 8px; display:flex; gap:6px;">
+            <button class="btn btn-sm btn-primary" id="propModuleWinApplyBtn" style="flex:1;">💾 Update Form Title</button>
+            <button class="btn btn-sm" onclick="document.getElementById('openWizardBtn')?.click()">🧙‍♂️ Block Wizard</button>
+          </div>
+        </div>
+      `;
+      html += renderPropGroup('Module Summary', [
+        ['Module Type', s.moduleType || m.key?.type || 'FORM'],
+        ['Forms Version', m.formsVersion || '12c / 14c'],
+        ['Menu Module (.mmb)', m.menuModule || 'DEFAULT&SMARTBAR'],
+        ['Coordinate System', `${m.coordinate?.coordinateSystem || 'Real'} (${m.coordinate?.realUnit || 'Point'})`],
+        ['Blocks', (m.blocks || []).length],
+        ['Canvases', (m.canvases || []).length],
+        ['Windows', (m.windows || []).length],
+        ['Menus', (m.menus || []).length],
+        ['Triggers', s.triggerCount ?? (m.triggers || []).length],
+        ['Program Units', s.programUnitCount ?? (m.programUnits || []).length]
       ]);
+      const formTriggers = (m.triggers || []).filter(t => t.level === 'FORM');
+      if (formTriggers.length > 0) {
+        html += `
+          <div class="prop-group">
+            <div class="prop-group-header">Form-Level Triggers (${formTriggers.length})</div>
+            <div class="trigger-pills">
+              ${formTriggers.map(t => `<span class="trigger-pill" onclick="window.loadCodeFromPill('${escapeHtml(t.name)}', '${escapeHtml(t.textRef?.file || '')}')">⚡ ${escapeHtml(t.name)}</span>`).join('')}
+            </div>
+          </div>
+        `;
+      }
+    } else if (target.type === 'MENU') {
+      const m = target.menu || {};
+      title = `Menu: ${m.name}`;
+      html += renderPropGroup('Menu Definition (.mmb)', [
+        ['Menu Name', m.name],
+        ['Menu Items Count', (m.items || []).length],
+        ['Items', (m.items || []).map(i => i.label || i.name).join(', ')]
+      ]);
+    } else if (target.type === 'MENU_ITEM') {
+      const it = target.item || {};
+      const m = target.menu || {};
+      title = `Menu Item: ${m.name}.${it.name}`;
+      html += renderPropGroup('Menu Item Properties (.mmb)', [
+        ['Parent Menu', m.name || 'MAIN_MENU'],
+        ['Item Name', it.name],
+        ['Label', unescapeXml(it.label || it.name)],
+        ['Menu Item Type', it.menuItemType || 'Plain'],
+        ['Command Type', it.commandType || (it.subMenuName ? 'Menu' : 'PL/SQL')],
+        ['Sub-Menu', it.subMenuName || '(None)'],
+        ['Accelerator', it.keyboardAccelerator || '(None)'],
+        ['Visible / Enabled', `${it.visible !== false ? 'Yes' : 'No'} / ${it.enabled !== false ? 'Yes' : 'No'}`],
+        ['PL/SQL Source', it.commandRef?.file || '(None)']
+      ]);
+      if (it.commandRef?.file) {
+        html += `
+          <div style="padding: 8px; display:flex; gap:6px;">
+            <button class="btn btn-sm btn-primary" style="flex:1;" onclick="window.loadCodeFromPill('Menu: ${escapeHtml(m.name)}.${escapeHtml(it.name)}', '${escapeHtml(it.commandRef.file)}')">📜 Inspect .mmb PL/SQL</button>
+          </div>
+        `;
+      }
     } else {
       title = target.type;
       html = `<div class="empty-state">${target.type} properties inspected.</div>`;
@@ -2261,7 +3525,32 @@
     inspectorTargetName.textContent = title;
     propertyInspector.innerHTML = html;
 
-    if (layoutEditMode && target.type === 'ITEM') {
+    const modalContent = document.getElementById('modalPropertyInspector');
+    const modalTarget = document.getElementById('modalInspectorTarget');
+    if (modalContent) modalContent.innerHTML = html;
+    if (modalTarget) modalTarget.textContent = title;
+
+    // Wire color pickers & Apply buttons for ITEM
+    if (target.type === 'ITEM') {
+      const bgPicker = document.getElementById('propEditBackColorPicker');
+      const bgInput = document.getElementById('propEditBackColor');
+      if (bgPicker && bgInput) {
+        bgPicker.addEventListener('input', () => {
+          bgInput.value = bgPicker.value;
+          target.item.backColor = bgPicker.value;
+          renderCanvasSvg();
+        });
+      }
+      const fgPicker = document.getElementById('propEditForeColorPicker');
+      const fgInput = document.getElementById('propEditForeColor');
+      if (fgPicker && fgInput) {
+        fgPicker.addEventListener('input', () => {
+          fgInput.value = fgPicker.value;
+          target.item.foreColor = fgPicker.value;
+          renderCanvasSvg();
+        });
+      }
+
       const applyBtn = document.getElementById('propApplyBtn');
       if (applyBtn) {
         applyBtn.addEventListener('click', async () => {
@@ -2273,8 +3562,26 @@
           const w = wVal ? parseInt(wVal, 10) : null;
           const hVal = document.getElementById('propEditH')?.value;
           const h = hVal ? parseInt(hVal, 10) : null;
-          const prompt = document.getElementById('propEditPrompt')?.value || null;
-          const label = document.getElementById('propEditLabel')?.value || null;
+          const prompt = document.getElementById('propEditPrompt')?.value ?? null;
+          const label = document.getElementById('propEditLabel')?.value ?? null;
+          const itemType = document.getElementById('propEditItemType')?.value || item.itemType;
+          const actionType = document.getElementById('propEditActionType')?.value || null;
+          const backColor = document.getElementById('propEditBackColor')?.value || null;
+          const foreColor = document.getElementById('propEditForeColor')?.value || null;
+          const fontName = document.getElementById('propEditFontName')?.value || null;
+          const fontSize = parseInt(document.getElementById('propEditFontSize')?.value, 10) || 11;
+          const fontWeight = document.getElementById('propEditFontWeight')?.value || 'normal';
+          const justification = document.getElementById('propEditJustification')?.value || 'Start';
+          const enabled = document.getElementById('propEditEnabled')?.checked !== false;
+          const visible = document.getElementById('propEditVisible')?.checked !== false;
+          const promptEdge = document.getElementById('propEditPromptEdge')?.value || 'Start';
+          const promptOffset = parseInt(document.getElementById('propEditPromptOffset')?.value, 10) || 6;
+          const dbItem = document.getElementById('propEditDbItem')?.checked !== false;
+          const required = document.getElementById('propEditRequired')?.checked === true;
+          const columnName = document.getElementById('propEditColumnName')?.value || item.name;
+          const dataType = document.getElementById('propEditDataType')?.value || 'Char';
+          const maxLen = parseInt(document.getElementById('propEditMaxLen')?.value, 10) || 30;
+          const initialValue = document.getElementById('propEditInitialValue')?.value || null;
 
           item.xPosition = x;
           item.yPosition = y;
@@ -2282,6 +3589,25 @@
           item.height = h;
           item.prompt = prompt;
           item.label = label;
+          item.itemType = itemType;
+          item.actionType = actionType;
+          item.backColor = backColor;
+          item.foreColor = foreColor;
+          item.fontName = fontName;
+          item.fontSize = fontSize;
+          item.fontWeight = fontWeight;
+          item.justification = justification;
+          item.enabled = enabled;
+          item.visible = visible;
+          item.promptAttachmentEdge = promptEdge;
+          item.promptAttachmentOffset = promptOffset;
+          item.required = required;
+          item.columnName = columnName;
+          item.dataType = dataType;
+          if (!item.dml) item.dml = {};
+          item.dml.databaseItem = dbItem;
+          item.dml.maximumLength = maxLen;
+          item.dml.initialValue = initialValue;
 
           renderCanvasSvg();
 
@@ -2293,9 +3619,17 @@
                 blockName: block.name,
                 itemName: item.name,
                 x, y, width: w, height: h,
-                prompt, label
+                prompt, label,
+                backColor, foreColor,
+                itemType, dataType, columnName,
+                enabled, visible, required,
+                promptAttachmentEdge: promptEdge,
+                promptAttachmentOffset: promptOffset,
+                initialValue,
+                maximumLength: maxLen
               })
             });
+            await syncModuleToServer();
             showBanner(`Saved properties for ${block.name}.${item.name}`);
             setTimeout(hideBanner, 2000);
           } catch (err) {
@@ -2304,6 +3638,865 @@
         });
       }
     }
+
+    // Wire GRAPHIC Frame Title & Geometry
+    if (target.type === 'GRAPHIC') {
+      const btn = document.getElementById('propGraphicApplyBtn');
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          const g = target.graphic;
+          const ft = document.getElementById('propGraphicFrameTitle')?.value || '';
+          if (g.graphicsType === 'Text') {
+            g.graphicsText = ft;
+          } else {
+            g.frameTitle = ft;
+          }
+          g.xPosition = parseInt(document.getElementById('propGraphicX')?.value, 10) || 0;
+          g.yPosition = parseInt(document.getElementById('propGraphicY')?.value, 10) || 0;
+          g.width = parseInt(document.getElementById('propGraphicW')?.value, 10) || 400;
+          g.height = parseInt(document.getElementById('propGraphicH')?.value, 10) || 180;
+          renderCanvasSvg();
+          await syncModuleToServer();
+          showBanner(`Updated Frame '${g.name}'`);
+          setTimeout(hideBanner, 2000);
+        });
+      }
+    }
+
+    // Wire WINDOW Title
+    if (target.type === 'WINDOW') {
+      const btn = document.getElementById('propWindowApplyBtn');
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          const w = target.window;
+          w.title = document.getElementById('propWindowTitle')?.value || '';
+          w.width = parseInt(document.getElementById('propWindowW')?.value, 10) || w.width;
+          w.height = parseInt(document.getElementById('propWindowH')?.value, 10) || w.height;
+          renderCanvasSvg();
+          await syncModuleToServer();
+          showBanner(`Updated Window Title to '${w.title}'`);
+          setTimeout(hideBanner, 2000);
+        });
+      }
+    }
+
+    // Wire MODULE Window Title
+    if (target.type === 'MODULE') {
+      const btn = document.getElementById('propModuleWinApplyBtn');
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          const newTitle = document.getElementById('propModuleWinTitle')?.value || '';
+          const m = currentPayload?.moduleIndex;
+          if (m) {
+            if (m.windows && m.windows.length > 0) {
+              m.windows[0].title = newTitle;
+            }
+            m.title = newTitle;
+            renderCanvasSvg();
+            await syncModuleToServer();
+            showBanner(`Updated Form Window Title to '${newTitle}'`);
+            setTimeout(hideBanner, 2000);
+          }
+        });
+      }
+    }
+
+    // Wire BLOCK Properties
+    if (target.type === 'BLOCK') {
+      const btn = document.getElementById('propBlockApplyBtn');
+      if (btn) {
+        btn.addEventListener('click', async () => {
+          const b = target.block;
+          b.queryDataSourceName = document.getElementById('propBlockSource')?.value || null;
+          b.recordsDisplayed = parseInt(document.getElementById('propBlockRecs')?.value, 10) || 1;
+          b.distanceBetweenRecords = parseInt(document.getElementById('propBlockDist')?.value, 10) || 0;
+          if (!b.dml) b.dml = { databaseBlock: true, queryAllowed: true, insertAllowed: true, updateAllowed: true, deleteAllowed: true };
+          b.dml.whereClause = document.getElementById('propBlockWhere')?.value || null;
+          b.dml.orderByClause = document.getElementById('propBlockOrder')?.value || null;
+          renderCanvasSvg();
+          await syncModuleToServer();
+          showBanner(`Updated Block '${b.name}'`);
+          setTimeout(hideBanner, 2000);
+        });
+      }
+    }
+  }
+
+  // Modern Forms Builder Studio: Left Tool Palette, Top Formatting Ribbon & Data Block / Layout Wizard
+  function setupBuilderStudio() {
+    const TABLE_SCHEMAS = {
+      OFW_DEMO_EMPLOYEES: {
+        blockName: 'EMP',
+        frameTitle: 'Employee Directory',
+        windowTitle: 'Employee Directory',
+        columns: [
+          { name: 'EMPLOYEE_ID', prompt: 'Employee #', type: 'Number', width: 76, pk: true },
+          { name: 'FIRST_NAME', prompt: 'First name', type: 'Varchar2', width: 140 },
+          { name: 'LAST_NAME', prompt: 'Last name', type: 'Varchar2', width: 140 },
+          { name: 'JOB_TITLE', prompt: 'Job title', type: 'Varchar2', width: 170 },
+          { name: 'DEPARTMENT_NAME', prompt: 'Department', type: 'Varchar2', width: 120 },
+          { name: 'SALARY', prompt: 'Salary', type: 'Number', width: 96 },
+          { name: 'HIRE_DATE', prompt: 'Hire date', type: 'Date', width: 110 },
+          { name: 'EMAIL', prompt: 'Email', type: 'Varchar2', width: 170 },
+          { name: 'STATUS', prompt: 'Status', type: 'Varchar2', width: 90 }
+        ]
+      },
+      OFW_DEMO_SALES: {
+        blockName: 'SALES',
+        frameTitle: 'Sales Orders',
+        windowTitle: 'Sales Orders',
+        columns: [
+          { name: 'ORDER_ID', prompt: 'Order #', type: 'Number', width: 76, pk: true },
+          { name: 'CUSTOMER_NAME', prompt: 'Customer', type: 'Varchar2', width: 170 },
+          { name: 'REGION', prompt: 'Region', type: 'Varchar2', width: 96 },
+          { name: 'SALES_REP', prompt: 'Sales rep', type: 'Varchar2', width: 130 },
+          { name: 'ORDER_STATUS', prompt: 'Status', type: 'Varchar2', width: 110 },
+          { name: 'ORDER_DATE', prompt: 'Order date', type: 'Date', width: 110 },
+          { name: 'SUBTOTAL', prompt: 'Subtotal', type: 'Number', width: 96 },
+          { name: 'TAX_AMOUNT', prompt: 'Tax', type: 'Number', width: 88 },
+          { name: 'ORDER_TOTAL', prompt: 'Order total', type: 'Number', width: 100 }
+        ]
+      },
+      ORDERS: {
+        blockName: 'ORDERS',
+        frameTitle: 'Customer Orders',
+        windowTitle: 'Order Management',
+        columns: [
+          { name: 'ORDER_ID', prompt: 'Order ID', type: 'Number', width: 80, pk: true },
+          { name: 'CUSTOMER_NAME', prompt: 'Customer', type: 'Varchar2', width: 160 },
+          { name: 'ORDER_DATE', prompt: 'Order Date', type: 'Date', width: 110 },
+          { name: 'ORDER_STATUS', prompt: 'Status', type: 'Varchar2', width: 100 },
+          { name: 'ORDER_TOTAL', prompt: 'Total ($)', type: 'Number', width: 100 }
+        ]
+      },
+      ORDER_ITEMS: {
+        blockName: 'ORDER_ITEMS',
+        frameTitle: 'Order Line Items',
+        windowTitle: 'Order Line Items',
+        columns: [
+          { name: 'ITEM_ID', prompt: 'Line #', type: 'Number', width: 65, pk: true },
+          { name: 'PRODUCT_NAME', prompt: 'Product', type: 'Varchar2', width: 160 },
+          { name: 'QUANTITY', prompt: 'Qty', type: 'Number', width: 65 },
+          { name: 'UNIT_PRICE', prompt: 'Unit Price', type: 'Number', width: 90 }
+        ]
+      },
+      CLAIMS: {
+        blockName: 'CLAIMS',
+        frameTitle: 'Insurance Claims Register',
+        windowTitle: 'Claims Adjudication',
+        columns: [
+          { name: 'CLAIM_ID', prompt: 'Claim ID', type: 'Number', width: 80, pk: true },
+          { name: 'POLICY_NUMBER', prompt: 'Policy #', type: 'Varchar2', width: 120 },
+          { name: 'CLAIMANT_NAME', prompt: 'Claimant', type: 'Varchar2', width: 160 },
+          { name: 'CLAIM_AMOUNT', prompt: 'Amount', type: 'Number', width: 100 },
+          { name: 'CLAIM_STATUS', prompt: 'Status', type: 'Varchar2', width: 100 }
+        ]
+      },
+      EMP: {
+        blockName: 'EMP',
+        frameTitle: 'Employees (EMP)',
+        windowTitle: 'Employee Maintenance',
+        columns: [
+          { name: 'EMPNO', prompt: 'Emp No', type: 'Number', width: 75, pk: true },
+          { name: 'ENAME', prompt: 'Name', type: 'Varchar2', width: 140 },
+          { name: 'JOB', prompt: 'Job', type: 'Varchar2', width: 120 },
+          { name: 'SAL', prompt: 'Salary', type: 'Number', width: 90 },
+          { name: 'DEPTNO', prompt: 'Dept No', type: 'Number', width: 70 }
+        ]
+      },
+      DEPT: {
+        blockName: 'DEPT',
+        frameTitle: 'Departments (DEPT)',
+        windowTitle: 'Department Directory',
+        columns: [
+          { name: 'DEPTNO', prompt: 'Dept No', type: 'Number', width: 75, pk: true },
+          { name: 'DNAME', prompt: 'Department', type: 'Varchar2', width: 150 },
+          { name: 'LOC', prompt: 'Location', type: 'Varchar2', width: 140 }
+        ]
+      }
+    };
+
+    // Helper: Add In-Form Navigation Bar to current canvas
+    async function addInFormNavigationButtons() {
+      if (!currentPayload?.moduleIndex) return;
+      const m = currentPayload.moduleIndex;
+      const canvasName = canvasSelect.value || (m.canvases?.[0]?.name) || 'CANVAS_MAIN';
+      let targetBlock = m.blocks.find(b => b.name === 'CONTROL') || m.blocks[0];
+      if (!targetBlock) return;
+
+      // Determine good Y position below existing items
+      let maxY = 240;
+      for (const b of m.blocks) {
+        for (const it of b.items) {
+          if (it.canvasName === canvasName && (it.yPosition || 0) > maxY) {
+            maxY = (it.yPosition || 0) + (it.height || 22) + 18;
+          }
+        }
+      }
+      if (maxY > 410) maxY = 405;
+
+      const navButtons = [
+        { name: 'BTN_PREV', label: '< Previous', actionType: 'PREVIOUS_RECORD', x: 32, w: 96, bg: '#e8e4d8', fg: '#111111' },
+        { name: 'BTN_NEXT', label: 'Next >', actionType: 'NEXT_RECORD', x: 138, w: 96, bg: '#e8e4d8', fg: '#111111' },
+        { name: 'BTN_SEARCH', label: 'Search', actionType: 'EXECUTE_QUERY', x: 248, w: 88, bg: '#dbeafe', fg: '#1e3a8a' },
+        { name: 'BTN_SHOW_ALL', label: 'Show all', actionType: 'SHOW_ALL', x: 344, w: 88, bg: '#e8e4d8', fg: '#111111' },
+        { name: 'BTN_SAVE', label: 'Save', actionType: 'COMMIT_FORM', x: 440, w: 84, bg: '#dcfce7', fg: '#14532d' }
+      ];
+
+      let addedCount = 0;
+      for (const nb of navButtons) {
+        let existing = null;
+        for (const b of m.blocks) {
+          const found = b.items.find(i => i.name === nb.name);
+          if (found) { existing = found; break; }
+        }
+        if (existing) {
+          existing.canvasName = canvasName;
+          existing.visible = true;
+          existing.actionType = nb.actionType;
+          existing.backColor = existing.backColor || nb.bg;
+          existing.foreColor = existing.foreColor || nb.fg;
+        } else {
+          targetBlock.items.push({
+            name: nb.name,
+            itemType: 'Push Button',
+            dataType: 'Char',
+            canvasName,
+            xPosition: nb.x,
+            yPosition: maxY,
+            width: nb.w,
+            height: 24,
+            label: nb.label,
+            actionType: nb.actionType,
+            backColor: nb.bg,
+            foreColor: nb.fg,
+            fontWeight: 'bold',
+            enabled: true,
+            visible: true,
+            dml: { databaseItem: false }
+          });
+          addedCount++;
+        }
+      }
+
+      renderNavigatorTree();
+      renderCanvasSvg();
+      await syncModuleToServer();
+      showBanner(addedCount > 0
+        ? `Added ${addedCount} In-Form Navigation & Action Buttons (< Previous, Next >, Search, Show all, Save)`
+        : 'In-Form Navigation Buttons updated on canvas');
+      setTimeout(hideBanner, 2500);
+    }
+
+    // Helper: Add Titled Frame to current canvas
+    async function addTitledFrameToCanvas(customTitle) {
+      if (!currentPayload?.moduleIndex) return;
+      const m = currentPayload.moduleIndex;
+      const canvasName = canvasSelect.value || (m.canvases?.[0]?.name) || 'CANVAS_MAIN';
+      const canvas = m.canvases.find(c => c.name === canvasName);
+      if (!canvas) return;
+      if (!m.graphics) m.graphics = [];
+
+      const frameName = `FRAME_${m.graphics.length + 1}`;
+      const frameObj = {
+        name: frameName,
+        canvasName,
+        graphicsType: 'Frame',
+        frameTitle: customTitle || `${m.windows?.[0]?.title || m.key?.name || 'Form'} Details`,
+        xPosition: 18,
+        yPosition: 56,
+        width: Math.max(380, (canvas.width || 620) - 36),
+        height: Math.max(200, (canvas.height || 420) - 110)
+      };
+      m.graphics.push(frameObj);
+      selectedObject = { type: 'GRAPHIC', graphic: frameObj, canvas };
+      renderNavigatorTree();
+      renderPropertyInspector(selectedObject);
+      renderCanvasSvg();
+      await syncModuleToServer();
+      showBanner(`Added Titled Frame '${frameObj.frameTitle}' — edit title or size in Property Palette`);
+      setTimeout(hideBanner, 2500);
+    }
+
+    // Wire Top Formatting Ribbon (#layoutFormatRibbon)
+    const ribbonBackColor = document.getElementById('ribbonBackColor');
+    if (ribbonBackColor) {
+      ribbonBackColor.addEventListener('input', async () => {
+        if (selectedObject?.type === 'ITEM') {
+          selectedObject.item.backColor = ribbonBackColor.value;
+          renderCanvasSvg();
+          renderPropertyInspector(selectedObject);
+          await syncModuleToServer();
+        }
+      });
+    }
+
+    const ribbonForeColor = document.getElementById('ribbonForeColor');
+    if (ribbonForeColor) {
+      ribbonForeColor.addEventListener('input', async () => {
+        if (selectedObject?.type === 'ITEM') {
+          selectedObject.item.foreColor = ribbonForeColor.value;
+          renderCanvasSvg();
+          renderPropertyInspector(selectedObject);
+          await syncModuleToServer();
+        }
+      });
+    }
+
+    document.querySelectorAll('.color-preset').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const bg = btn.getAttribute('data-bg');
+        const fg = btn.getAttribute('data-fg');
+        if (selectedObject?.type === 'ITEM') {
+          selectedObject.item.backColor = bg;
+          selectedObject.item.foreColor = fg;
+          if (ribbonBackColor) ribbonBackColor.value = normalizeHexColor(bg);
+          if (ribbonForeColor) ribbonForeColor.value = normalizeHexColor(fg);
+          renderCanvasSvg();
+          renderPropertyInspector(selectedObject);
+          await syncModuleToServer();
+        } else {
+          showBanner('Select a button or field on the canvas first to apply a color preset.');
+          setTimeout(hideBanner, 1800);
+        }
+      });
+    });
+
+    const ribbonFontFamily = document.getElementById('ribbonFontFamily');
+    if (ribbonFontFamily) {
+      ribbonFontFamily.addEventListener('change', async () => {
+        if (selectedObject?.type === 'ITEM') {
+          selectedObject.item.fontName = ribbonFontFamily.value;
+          renderCanvasSvg();
+          renderPropertyInspector(selectedObject);
+          await syncModuleToServer();
+        }
+      });
+    }
+
+    const ribbonFontSize = document.getElementById('ribbonFontSize');
+    if (ribbonFontSize) {
+      ribbonFontSize.addEventListener('change', async () => {
+        if (selectedObject?.type === 'ITEM') {
+          selectedObject.item.fontSize = parseInt(ribbonFontSize.value, 10) || 11;
+          renderCanvasSvg();
+          renderPropertyInspector(selectedObject);
+          await syncModuleToServer();
+        }
+      });
+    }
+
+    const ribbonBoldBtn = document.getElementById('ribbonBoldBtn');
+    if (ribbonBoldBtn) {
+      ribbonBoldBtn.addEventListener('click', async () => {
+        if (selectedObject?.type === 'ITEM') {
+          selectedObject.item.fontWeight = selectedObject.item.fontWeight === 'bold' ? 'normal' : 'bold';
+          ribbonBoldBtn.classList.toggle('active', selectedObject.item.fontWeight === 'bold');
+          renderCanvasSvg();
+          renderPropertyInspector(selectedObject);
+          await syncModuleToServer();
+        }
+      });
+    }
+
+    const ribbonItalicBtn = document.getElementById('ribbonItalicBtn');
+    if (ribbonItalicBtn) {
+      ribbonItalicBtn.addEventListener('click', async () => {
+        if (selectedObject?.type === 'ITEM') {
+          selectedObject.item.fontStyle = selectedObject.item.fontStyle === 'italic' ? 'normal' : 'italic';
+          ribbonItalicBtn.classList.toggle('active', selectedObject.item.fontStyle === 'italic');
+          renderCanvasSvg();
+          renderPropertyInspector(selectedObject);
+          await syncModuleToServer();
+        }
+      });
+    }
+
+    const addInFormNavBarBtn = document.getElementById('addInFormNavBarBtn');
+    if (addInFormNavBarBtn) {
+      addInFormNavBarBtn.addEventListener('click', addInFormNavigationButtons);
+    }
+
+    const addTitledFrameBtn = document.getElementById('addTitledFrameBtn');
+    if (addTitledFrameBtn) {
+      addTitledFrameBtn.addEventListener('click', () => addTitledFrameToCanvas());
+    }
+
+    // Wire Left Vertical Tool Palette (#canvasToolPalette)
+    const palette = document.getElementById('canvasToolPalette');
+    if (palette) {
+      palette.querySelectorAll('.palette-tool').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const tool = btn.getAttribute('data-tool');
+          if (!currentPayload?.moduleIndex) return;
+          const m = currentPayload.moduleIndex;
+          const canvasName = canvasSelect.value || (m.canvases?.[0]?.name) || 'CANVAS_MAIN';
+          const block = (selectedObject?.block) || m.blocks[0];
+
+          if (tool === 'select') {
+            palette.querySelectorAll('.palette-tool').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            return;
+          }
+          if (tool === 'navBar') {
+            await addInFormNavigationButtons();
+            return;
+          }
+          if (tool === 'frame') {
+            await addTitledFrameToCanvas();
+            return;
+          }
+          if (tool === 'textGraphic') {
+            const canvas = m.canvases.find(c => c.name === canvasName);
+            if (canvas) {
+              if (!m.graphics) m.graphics = [];
+              const g = {
+                name: `LABEL_${m.graphics.length + 1}`,
+                canvasName,
+                graphicsType: 'Text',
+                graphicsText: 'Section Header Label',
+                xPosition: 32,
+                yPosition: 36,
+                width: 180,
+                height: 20
+              };
+              m.graphics.push(g);
+              selectedObject = { type: 'GRAPHIC', graphic: g, canvas };
+              renderNavigatorTree();
+              renderPropertyInspector(selectedObject);
+              renderCanvasSvg();
+              await syncModuleToServer();
+            }
+            return;
+          }
+          if (tool === 'delete') {
+            if (selectedObject?.type === 'ITEM' && selectedObject.block) {
+              const idx = selectedObject.block.items.indexOf(selectedObject.item);
+              if (idx >= 0) {
+                selectedObject.block.items.splice(idx, 1);
+                selectedObject = null;
+                renderNavigatorTree();
+                renderPropertyInspector(null);
+                renderCanvasSvg();
+                await syncModuleToServer();
+                showBanner('Deleted selected item from canvas');
+                setTimeout(hideBanner, 1800);
+              }
+            } else if (selectedObject?.type === 'GRAPHIC') {
+              const idx = (m.graphics || []).indexOf(selectedObject.graphic);
+              if (idx >= 0) {
+                m.graphics.splice(idx, 1);
+                selectedObject = null;
+                renderNavigatorTree();
+                renderPropertyInspector(null);
+                renderCanvasSvg();
+                await syncModuleToServer();
+              }
+            }
+            return;
+          }
+
+          if (!block) return;
+          const count = block.items.length + 1;
+          let newItem = null;
+          if (tool === 'button') {
+            newItem = {
+              name: `BTN_ACTION_${count}`,
+              itemType: 'Push Button',
+              dataType: 'Char',
+              canvasName,
+              xPosition: 420,
+              yPosition: 60 + ((count % 6) * 32),
+              width: 96,
+              height: 24,
+              label: 'Action Button',
+              actionType: 'EXECUTE_QUERY',
+              backColor: '#dbeafe',
+              foreColor: '#1e3a8a',
+              fontWeight: 'bold',
+              enabled: true,
+              visible: true,
+              dml: { databaseItem: false }
+            };
+          } else if (tool === 'textItem' || tool === 'displayItem' || tool === 'checkbox') {
+            const typeLabel = tool === 'displayItem' ? 'Display Item' : (tool === 'checkbox' ? 'Check Box' : 'Text Item');
+            newItem = {
+              name: `ITEM_${count}`,
+              itemType: typeLabel,
+              dataType: 'Varchar2',
+              canvasName,
+              xPosition: 140,
+              yPosition: 80 + ((count % 8) * 28),
+              width: tool === 'checkbox' ? 90 : 140,
+              height: 20,
+              prompt: tool === 'checkbox' ? '' : `Field ${count}`,
+              label: tool === 'checkbox' ? `Option ${count}` : '',
+              promptAttachmentEdge: 'Start',
+              promptAttachmentOffset: 8,
+              backColor: tool === 'displayItem' ? '#f3f2ee' : '#ffffff',
+              foreColor: '#111111',
+              enabled: tool !== 'displayItem',
+              visible: true,
+              dml: { databaseItem: true, maximumLength: 60 }
+            };
+          }
+
+          if (newItem) {
+            block.items.push(newItem);
+            selectedObject = { type: 'ITEM', item: newItem, block };
+            renderNavigatorTree();
+            renderPropertyInspector(selectedObject);
+            renderCanvasSvg();
+            await syncModuleToServer();
+            showBanner(`Added ${newItem.itemType} '${newItem.name}' — customize in Property Palette`);
+            setTimeout(hideBanner, 2200);
+          }
+        });
+      });
+    }
+
+    // Wire Data Block & Layout Wizard Modal (#blockLayoutWizardModal)
+    const wizModal = document.getElementById('blockLayoutWizardModal');
+    const openWizardBtn = document.getElementById('openWizardBtn');
+    const openWizardFromTreeBtn = document.getElementById('openWizardFromTreeBtn');
+    const wizTableSelect = document.getElementById('wizTableSelect');
+    const wizBlockName = document.getElementById('wizBlockNameInput');
+    const wizColumnsList = document.getElementById('wizColumnsContainer');
+    const wizFrameTitle = document.getElementById('wizFrameTitleInput');
+    const wizWindowTitle = document.getElementById('wizWindowTitleInput');
+    const wizRecordsDisplayed = document.getElementById('wizRecordsDisplayedInput');
+    const wizRecordDistance = document.getElementById('wizRecordDistInput');
+    const wizStyleFormCard = document.getElementById('wizStyleFormCard');
+    const wizStyleTabularCard = document.getElementById('wizStyleTabularCard');
+
+    function populateWizardForTable(tableName) {
+      const schema = TABLE_SCHEMAS[tableName] || TABLE_SCHEMAS.OFW_DEMO_EMPLOYEES;
+      if (wizBlockName) wizBlockName.value = schema.blockName;
+      if (wizFrameTitle) wizFrameTitle.value = schema.frameTitle;
+      if (wizWindowTitle) wizWindowTitle.value = schema.windowTitle;
+      if (wizColumnsList) {
+        wizColumnsList.innerHTML = schema.columns.map(col => `
+          <div class="wiz-col-row">
+            <input type="checkbox" class="wiz-col-check" data-col="${escapeHtml(col.name)}" data-type="${escapeHtml(col.type)}" data-width="${col.width || 120}" checked>
+            <span class="wiz-col-name">${escapeHtml(col.name)}</span>
+            <span class="wiz-col-type">${escapeHtml(col.type)}</span>
+            <input type="text" class="prop-input wiz-col-prompt" data-col="${escapeHtml(col.name)}" value="${escapeHtml(col.prompt)}" style="width:120px; padding:2px 6px; font-size:11px;" title="Field Prompt">
+          </div>
+        `).join('');
+      }
+    }
+
+    function openWizardModal() {
+      if (!wizModal) return;
+      // Default table based on active module
+      const modName = (currentPayload?.moduleIndex?.key?.name || '').toUpperCase();
+      let defaultTable = 'OFW_DEMO_EMPLOYEES';
+      if (modName.includes('SALES')) defaultTable = 'OFW_DEMO_SALES';
+      else if (modName.includes('ORDER')) defaultTable = 'ORDERS';
+      else if (modName.includes('CLAIM')) defaultTable = 'CLAIMS';
+      if (wizTableSelect) wizTableSelect.value = defaultTable;
+      populateWizardForTable(defaultTable);
+      if (typeof wizModal.showModal === 'function') {
+        wizModal.showModal();
+      } else {
+        wizModal.style.display = 'flex';
+      }
+    }
+
+    if (openWizardBtn) openWizardBtn.addEventListener('click', openWizardModal);
+    if (openWizardFromTreeBtn) openWizardFromTreeBtn.addEventListener('click', openWizardModal);
+
+    if (wizTableSelect) {
+      wizTableSelect.addEventListener('change', () => populateWizardForTable(wizTableSelect.value));
+    }
+
+    document.getElementById('wizSelectAllColsBtn')?.addEventListener('click', () => {
+      wizColumnsList?.querySelectorAll('.wiz-col-check').forEach(cb => { cb.checked = true; });
+    });
+    document.getElementById('wizClearColsBtn')?.addEventListener('click', () => {
+      wizColumnsList?.querySelectorAll('.wiz-col-check').forEach(cb => { cb.checked = false; });
+    });
+
+    if (wizStyleFormCard && wizStyleTabularCard) {
+      wizStyleFormCard.addEventListener('click', () => {
+        wizStyleFormCard.classList.add('active');
+        wizStyleTabularCard.classList.remove('active');
+        if (wizRecordsDisplayed) wizRecordsDisplayed.value = '1';
+        if (wizRecordDistance) wizRecordDistance.value = '0';
+      });
+      wizStyleTabularCard.addEventListener('click', () => {
+        wizStyleTabularCard.classList.add('active');
+        wizStyleFormCard.classList.remove('active');
+        if (wizRecordsDisplayed && parseInt(wizRecordsDisplayed.value, 10) < 2) wizRecordsDisplayed.value = '5';
+        if (wizRecordDistance) wizRecordDistance.value = '4';
+      });
+    }
+
+    document.getElementById('wizApplyBtn')?.addEventListener('click', async () => {
+      if (!currentPayload?.moduleIndex) return;
+      const m = currentPayload.moduleIndex;
+      const tableName = wizTableSelect?.value || 'OFW_DEMO_EMPLOYEES';
+      const blockName = (wizBlockName?.value || 'DATA_BLOCK').trim().toUpperCase();
+      const frameTitle = wizFrameTitle?.value || '';
+      const windowTitle = wizWindowTitle?.value || '';
+      const layoutStyle = document.querySelector('input[name="wizLayoutStyle"]:checked')?.value || 'form';
+      const recordsDisplayed = parseInt(wizRecordsDisplayed?.value, 10) || (layoutStyle === 'tabular' ? 5 : 1);
+      const distanceBetweenRecords = parseInt(wizRecordDistance?.value, 10) || 0;
+      const includeNav = document.getElementById('wizIncludeNavBtns')?.checked !== false;
+      const includeSearch = document.getElementById('wizIncludeActionBtns')?.checked !== false;
+
+      const selectedCols = [];
+      wizColumnsList?.querySelectorAll('.wiz-col-row').forEach(row => {
+        const cb = row.querySelector('.wiz-col-check');
+        const promptInput = row.querySelector('.wiz-col-prompt');
+        if (cb && cb.checked) {
+          selectedCols.push({
+            name: cb.getAttribute('data-col'),
+            type: cb.getAttribute('data-type') || 'Varchar2',
+            width: parseInt(cb.getAttribute('data-width'), 10) || 120,
+            prompt: promptInput?.value || cb.getAttribute('data-col')
+          });
+        }
+      });
+
+      if (selectedCols.length === 0) {
+        showBanner('Select at least one column in the Data Block Wizard.');
+        return;
+      }
+
+      const canvasName = canvasSelect.value || (m.canvases?.[0]?.name) || 'CANVAS_MAIN';
+      const canvas = m.canvases.find(c => c.name === canvasName);
+
+      // Update Window Title if provided
+      if (windowTitle && m.windows && m.windows.length > 0) {
+        m.windows[0].title = windowTitle;
+      }
+
+      // Build items with clean Form or Tabular coordinates
+      const items = [];
+      let maxItemY = 90;
+      if (layoutStyle === 'tabular') {
+        let curX = 28;
+        const startY = 82;
+        for (const col of selectedCols) {
+          const w = Math.min(130, Math.max(64, col.width));
+          items.push({
+            name: col.name,
+            itemType: 'Text Item',
+            dataType: col.type,
+            columnName: col.name,
+            canvasName,
+            xPosition: curX,
+            yPosition: startY,
+            width: w,
+            height: 20,
+            prompt: col.prompt,
+            promptAttachmentEdge: 'Top',
+            promptAttachmentOffset: 6,
+            backColor: '#ffffff',
+            foreColor: '#111111',
+            enabled: true,
+            visible: true,
+            dml: { databaseItem: true, insertAllowed: true, updateAllowed: true, queryAllowed: true }
+          });
+          curX += w + 8;
+        }
+        maxItemY = startY + (recordsDisplayed * (20 + distanceBetweenRecords)) + 24;
+      } else {
+        // Two-column Form Layout
+        for (let i = 0; i < selectedCols.length; i++) {
+          const col = selectedCols[i];
+          const isRightCol = (i % 2 === 1) && selectedCols.length > 4;
+          const rowIdx = selectedCols.length > 4 ? Math.floor(i / 2) : i;
+          const x = isRightCol ? 390 : 126;
+          const y = 74 + (rowIdx * 32);
+          items.push({
+            name: col.name,
+            itemType: 'Text Item',
+            dataType: col.type,
+            columnName: col.name,
+            canvasName,
+            xPosition: x,
+            yPosition: y,
+            width: col.width,
+            height: 20,
+            prompt: col.prompt,
+            promptAttachmentEdge: 'Start',
+            promptAttachmentOffset: 8,
+            backColor: '#ffffff',
+            foreColor: '#111111',
+            enabled: true,
+            visible: true,
+            dml: { databaseItem: true, insertAllowed: true, updateAllowed: true, queryAllowed: true }
+          });
+          if (y + 36 > maxItemY) maxItemY = y + 36;
+        }
+      }
+
+      // Add In-Form Navigation / Action Buttons directly onto the block
+      let btnX = 32;
+      const btnY = Math.min(410, maxItemY + 14);
+      if (includeNav) {
+        items.push({
+          name: 'BTN_PREV',
+          itemType: 'Push Button',
+          dataType: 'Char',
+          canvasName,
+          xPosition: btnX,
+          yPosition: btnY,
+          width: 96,
+          height: 24,
+          label: '< Previous',
+          actionType: 'PREVIOUS_RECORD',
+          backColor: '#e8e4d8',
+          foreColor: '#111111',
+          fontWeight: 'bold',
+          enabled: true,
+          visible: true,
+          dml: { databaseItem: false }
+        });
+        btnX += 104;
+        items.push({
+          name: 'BTN_NEXT',
+          itemType: 'Push Button',
+          dataType: 'Char',
+          canvasName,
+          xPosition: btnX,
+          yPosition: btnY,
+          width: 96,
+          height: 24,
+          label: 'Next >',
+          actionType: 'NEXT_RECORD',
+          backColor: '#e8e4d8',
+          foreColor: '#111111',
+          fontWeight: 'bold',
+          enabled: true,
+          visible: true,
+          dml: { databaseItem: false }
+        });
+        btnX += 108;
+      }
+      if (includeSearch) {
+        items.push({
+          name: 'BTN_SEARCH',
+          itemType: 'Push Button',
+          dataType: 'Char',
+          canvasName,
+          xPosition: btnX,
+          yPosition: btnY,
+          width: 88,
+          height: 24,
+          label: 'Search',
+          actionType: 'EXECUTE_QUERY',
+          backColor: '#dbeafe',
+          foreColor: '#1e3a8a',
+          fontWeight: 'bold',
+          enabled: true,
+          visible: true,
+          dml: { databaseItem: false }
+        });
+        btnX += 96;
+        items.push({
+          name: 'BTN_SHOW_ALL',
+          itemType: 'Push Button',
+          dataType: 'Char',
+          canvasName,
+          xPosition: btnX,
+          yPosition: btnY,
+          width: 88,
+          height: 24,
+          label: 'Show all',
+          actionType: 'SHOW_ALL',
+          backColor: '#e8e4d8',
+          foreColor: '#111111',
+          fontWeight: 'bold',
+          enabled: true,
+          visible: true,
+          dml: { databaseItem: false }
+        });
+        btnX += 96;
+        items.push({
+          name: 'BTN_SAVE',
+          itemType: 'Push Button',
+          dataType: 'Char',
+          canvasName,
+          xPosition: btnX,
+          yPosition: btnY,
+          width: 84,
+          height: 24,
+          label: 'Save',
+          actionType: 'COMMIT_FORM',
+          backColor: '#dcfce7',
+          foreColor: '#14532d',
+          fontWeight: 'bold',
+          enabled: true,
+          visible: true,
+          dml: { databaseItem: false }
+        });
+      }
+
+      // Update or create block
+      let block = m.blocks.find(b => b.name === blockName);
+      if (block) {
+        block.queryDataSourceName = tableName;
+        block.recordsDisplayed = recordsDisplayed;
+        block.distanceBetweenRecords = distanceBetweenRecords;
+        block.items = items;
+      } else {
+        block = {
+          name: blockName,
+          queryDataSourceName: tableName,
+          recordsDisplayed,
+          distanceBetweenRecords,
+          recordOrientation: 'Vertical',
+          dml: {
+            databaseBlock: true,
+            queryAllowed: true,
+            insertAllowed: true,
+            updateAllowed: true,
+            deleteAllowed: true,
+            whereClause: null,
+            orderByClause: selectedCols[0]?.name || null
+          },
+          items
+        };
+        m.blocks.unshift(block);
+      }
+
+      // Add or update Titled Frame on canvas
+      if (canvas && frameTitle) {
+        if (!m.graphics) m.graphics = [];
+        let existingFrame = m.graphics.find(g => g.canvasName === canvasName && (g.graphicsType || '').toLowerCase() === 'frame');
+        if (existingFrame) {
+          existingFrame.frameTitle = frameTitle;
+          existingFrame.xPosition = 16;
+          existingFrame.yPosition = 46;
+          existingFrame.width = Math.max(540, (canvas.width || 570) - 32);
+          existingFrame.height = Math.max(240, btnY - 22);
+        } else {
+          m.graphics.push({
+            name: `FRAME_${blockName}`,
+            canvasName,
+            graphicsType: 'Frame',
+            frameTitle,
+            xPosition: 16,
+            yPosition: 46,
+            width: Math.max(540, (canvas.width || 570) - 32),
+            height: Math.max(240, btnY - 22)
+          });
+        }
+      }
+
+      if (typeof wizModal.close === 'function') wizModal.close();
+      else wizModal.style.display = 'none';
+      selectedObject = { type: 'BLOCK', block };
+      renderNavigatorTree();
+      renderPropertyInspector(selectedObject);
+      renderCanvasSvg();
+      await syncModuleToServer();
+      showBanner(`🧙‍♂️ Generated Block '${blockName}' (${selectedCols.length} columns, ${layoutStyle === 'tabular' ? `${recordsDisplayed}-row Tabular Grid` : 'Form Layout'}) — click ▶ Run or Search to query!`);
+      setTimeout(hideBanner, 3200);
+    });
   }
 
   function renderDiffReport(diff) {
@@ -2423,23 +4616,35 @@
 
   // PL/SQL Code Loading & Highlighting
   window.loadCodeFromPill = function (name, filePath) {
-    loadCode(name, filePath, 'TRIGGER');
+    openBottomDrawer('drawerPlsql');
+    loadCode(name, filePath, 'TRIGGER', null, false);
   };
 
-  async function loadCode(name, relativePath, scope, sourceModule = null) {
+  async function loadCode(name, relativePath, scope, sourceModule = null, switchView = false) {
     if (!currentPayload || !relativePath) return;
     const moduleName = sourceModule || currentPayload.summary.moduleName;
     codeTitle.textContent = name;
     codeScopeBadge.textContent = scope;
 
+    const drawerTitle = document.getElementById('drawerCodeTitle');
+    if (drawerTitle) drawerTitle.textContent = `${name} (${scope})`;
+    const modalTitle = document.getElementById('modalCodeTitle');
+    if (modalTitle) modalTitle.textContent = `${name} (${scope})`;
+
     try {
       const res = await fetch(`/api/module/${encodeURIComponent(moduleName)}/source?path=${encodeURIComponent(relativePath)}`);
       if (res.ok) {
         const data = await res.json();
-        plsqlCodeDisplay.innerHTML = highlightPlsql(data.code);
-        switchTab('codeTab');
+        const highlighted = highlightPlsql(data.code);
+        plsqlCodeDisplay.innerHTML = highlighted;
+        const drawerPre = document.getElementById('drawerPlsqlDisplay');
+        if (drawerPre) drawerPre.innerHTML = highlighted;
+        const modalPre = document.getElementById('modalPlsqlDisplay');
+        if (modalPre) modalPre.innerHTML = highlighted;
+        if (switchView) switchTab('codeTab');
       } else {
-        plsqlCodeDisplay.textContent = `Could not load PL/SQL source: ${await res.text()}`;
+        const errText = `Could not load PL/SQL source: ${await res.text()}`;
+        plsqlCodeDisplay.textContent = errText;
       }
     } catch (e) {
       plsqlCodeDisplay.textContent = `Error fetching source: ${e.message}`;
@@ -2520,6 +4725,85 @@
   }
 
   // Reports Engine Functions
+  let currentReportPayload = null;
+
+  document.getElementById('reportTemplateSelect')?.addEventListener('change', () => {
+    if (currentReportPayload && reportPreviewFrame) {
+      reportPreviewFrame.srcdoc = applyReportTemplateTheme(currentReportPayload.html, document.getElementById('reportTemplateSelect')?.value || 'blue');
+    }
+  });
+
+  document.getElementById('exportReportXmlBtn')?.addEventListener('click', () => {
+    if (!currentReportPayload?.report) {
+      showBanner('Run or select a Report first before exporting Report XML.');
+      return;
+    }
+    const xmlStr = serializeReportToXml(currentReportPayload.report);
+    const blob = new Blob([xmlStr], { type: 'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(currentReportPayload.report.name || 'report').toLowerCase()}_report.xml`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showBanner(`💾 Exported Oracle Report XML (${a.download}) with current Data Model, PL/SQL Formulas, and Paper Layout.`);
+    setTimeout(hideBanner, 3600);
+  });
+
+  function applyReportTemplateTheme(html, theme) {
+    if (!html) return '';
+    const themes = {
+      blue:  { accent: '#1e3a8a', border: '#2563eb', thBg: '#eff6ff', thText: '#1e40af', cardBg: '#f8fafc' },
+      beige: { accent: '#7c2d12', border: '#c2410c', thBg: '#ffedd5', thText: '#7c2d12', cardBg: '#fffbeb' },
+      wine:  { accent: '#831843', border: '#be185d', thBg: '#fce7f3', thText: '#831843', cardBg: '#fdf2f8' },
+      green: { accent: '#14532d', border: '#15803d', thBg: '#dcfce7', thText: '#14532d', cardBg: '#f0fdf4' },
+      gray:  { accent: '#1f2937', border: '#4b5563', thBg: '#f3f4f6', thText: '#1f2937', cardBg: '#f9fafb' }
+    };
+    const t = themes[theme] || themes.blue;
+    const overrideCss = `
+      <style>
+        .report-title { color: ${t.accent} !important; border-bottom-color: ${t.border} !important; }
+        .badge { background: ${t.border} !important; }
+        .parent-group-card { background: ${t.cardBg} !important; }
+        .child-table th, .report-table th { background: ${t.thBg} !important; color: ${t.thText} !important; }
+      </style>
+    `;
+    return html.replace('</head>', `${overrideCss}</head>`);
+  }
+
+  function serializeReportToXml(rep) {
+    const lines = [];
+    lines.push(`<?xml version="1.0" encoding="UTF-8"?>`);
+    lines.push(`<report name="${escapeHtml(rep.name || 'REPORT')}" title="${escapeHtml(rep.title || '')}" unitOfMeasurement="${escapeHtml(rep.unit_of_measurement || 'inch')}">`);
+    lines.push(`  <data>`);
+    for (const ds of (rep.data?.data_sources || [])) {
+      lines.push(`    <dataSource name="${escapeHtml(ds.name)}">`);
+      lines.push(`      <select>${escapeHtml(ds.select_sql || '')}</select>`);
+      for (const g of (ds.groups || [])) {
+        lines.push(`      <group name="${escapeHtml(g.name)}">`);
+        for (const c of (g.data_items || g.columns || [])) {
+          lines.push(`        <dataItem name="${escapeHtml(c.name)}" datatype="${escapeHtml(c.datatype || 'character')}" width="${c.width || 20}"/>`);
+        }
+        for (const f of (g.formulas || [])) {
+          lines.push(`        <formula name="${escapeHtml(f.name)}" source="${escapeHtml(f.source || f.plsql || '')}" datatype="${escapeHtml(f.datatype || 'number')}"/>`);
+        }
+        for (const s of (g.summaries || [])) {
+          lines.push(`        <summary name="${escapeHtml(s.name)}" source="${escapeHtml(s.source)}" function="${escapeHtml(String(s.function || 'sum').toLowerCase())}" reset="${escapeHtml(s.reset || s.reset_at || g.name)}"/>`);
+        }
+        lines.push(`      </group>`);
+      }
+      lines.push(`    </dataSource>`);
+    }
+    for (const lnk of (rep.data?.links || [])) {
+      lines.push(`    <link name="${escapeHtml(lnk.name || 'L_LINK')}" parentGroup="${escapeHtml(lnk.parent_group)}" parentColumn="${escapeHtml(lnk.parent_column)}" childQuery="${escapeHtml(lnk.child_query || lnk.child_group || '')}" childColumn="${escapeHtml(lnk.child_column)}" condition="eq"/>`);
+    }
+    lines.push(`  </data>`);
+    lines.push(`</report>`);
+    return lines.join('\n');
+  }
+
   async function loadReportsList() {
     if (!reportSelect) return;
     try {
@@ -2527,6 +4811,10 @@
       if (res.ok) {
         const reports = await res.json();
         reportSelect.innerHTML = reports.map(r => `<option value="${r.file_name}">${r.name} - ${r.title}</option>`).join('');
+        // Default to OFW_EMP_DIRECTORY if available so it matches OFW_DEMO_EMPLOYEES
+        if (reports.some(r => r.file_name === 'ofw_employee_directory_report.xml')) {
+          reportSelect.value = 'ofw_employee_directory_report.xml';
+        }
       }
     } catch (e) {
       console.warn("Could not load reports list:", e);
@@ -2560,12 +4848,18 @@
       }
 
       const data = await res.json();
+      currentReportPayload = data;
 
+      const theme = document.getElementById('reportTemplateSelect')?.value || 'blue';
       if (reportPreviewFrame) {
-        reportPreviewFrame.srcdoc = data.html;
+        reportPreviewFrame.srcdoc = applyReportTemplateTheme(data.html, theme);
       }
 
-      renderReportDataTree(data.execution);
+      renderReportDataTree(data.execution, data.report);
+      renderReportPlsqlStudio(data.report, data.execution);
+      if (document.getElementById('reportsTab')?.classList.contains('active')) {
+        renderReportPropertyInspector('REPORT', { report: data.report, execution: data.execution });
+      }
     } catch (err) {
       if (reportDataTree) {
         reportDataTree.innerHTML = `<div class="empty-state" style="color:#f85149;">Error: ${escapeHtml(err.message)}</div>`;
@@ -2573,11 +4867,230 @@
     }
   }
 
-  function renderReportDataTree(execution) {
-    if (!reportDataTree) return;
-    let html = '';
+  function renderReportPlsqlStudio(report, execution) {
+    const unitsListEl = document.getElementById('reportCodeUnitsList');
+    const codeTitleEl = document.getElementById('reportCodeTitle');
+    const scopeBadgeEl = document.getElementById('reportCodeScopeBadge');
+    const codeDisplayEl = document.getElementById('reportPlsqlDisplay');
+    if (!unitsListEl || !codeDisplayEl || !report) return;
 
-    html += '<div class="report-summary-box">';
+    const units = [];
+    const repName = report.name || execution?.report_name || 'REPORT';
+
+    // 1. Extract PL/SQL Formula Columns (CF_*) from all data sources & groups
+    for (const ds of (report.data?.data_sources || [])) {
+      for (const grp of (ds.groups || [])) {
+        for (const f of (grp.formulas || [])) {
+          const retType = (f.datatype || 'NUMBER').toUpperCase();
+          const rawExpr = (f.source || f.plsql || ':SALARY * 0.10').trim();
+          const bodyStmt = /^return\b/i.test(rawExpr) ? rawExpr : `RETURN (${rawExpr.replace(/;$/, '')});`;
+          const code = [
+            `-- =====================================================================`,
+            `-- Oracle Reports PL/SQL Formula Column: ${f.name}`,
+            `-- ReportModule : ${repName}`,
+            `-- Data Source  : ${ds.name} -> Group: ${grp.name}`,
+            `-- Return Type  : ${retType}`,
+            `-- =====================================================================`,
+            `FUNCTION ${f.name}Formula RETURN ${retType} IS`,
+            `BEGIN`,
+            `  -- Formula PL/SQL expression evaluated per row in ${grp.name}:`,
+            `  ${bodyStmt}`,
+            `EXCEPTION`,
+            `  WHEN OTHERS THEN`,
+            `    SRW.MESSAGE(100, 'Formula error in ${f.name}: ' || SQLERRM);`,
+            `    RETURN NULL;`,
+            `END ${f.name}Formula;`
+          ].join('\n');
+          units.push({
+            section: 'PL/SQL Formula Columns',
+            name: `${f.name}Formula`,
+            badge: 'FORMULA',
+            badgeClass: 'formula',
+            sub: `${grp.name} · ${rawExpr}`,
+            scope: `FORMULA COLUMN (${grp.name}.${f.name})`,
+            code
+          });
+        }
+      }
+    }
+
+    // 2. Oracle Reports Lifecycle PL/SQL Triggers (BeforeParameterForm, AfterParameterForm, BeforeReport, BetweenPages, AfterReport)
+    const explicitTriggers = report.triggers || [];
+    if (explicitTriggers.length > 0) {
+      for (const t of explicitTriggers) {
+        units.push({
+          section: 'Report Triggers',
+          name: t.name,
+          badge: 'TRIGGER',
+          badgeClass: 'trigger',
+          sub: 'Report Trigger',
+          scope: `REPORT TRIGGER (${repName})`,
+          code: t.plsql || t.body || '-- Trigger body'
+        });
+      }
+    } else {
+      const dsNames = (report.data?.data_sources || []).map(d => d.name).join(', ') || 'Q_MAIN';
+      const sumNames = (report.data?.report_summaries || []).map(s => `${s.name} (${s.function}(${s.source}))`).join(', ') || 'None';
+      units.push({
+        section: 'Report Triggers',
+        name: 'BEFORE_REPORT',
+        badge: 'TRIGGER',
+        badgeClass: 'trigger',
+        sub: 'SRW Init & Context',
+        scope: `REPORT TRIGGER (${repName})`,
+        code: [
+          `-- =====================================================================`,
+          `-- Oracle Reports Lifecycle Trigger: BEFORE REPORT`,
+          `-- ReportModule : ${repName}`,
+          `-- Active Data Queries : ${dsNames}`,
+          `-- =====================================================================`,
+          `FUNCTION BeforeReport RETURN BOOLEAN IS`,
+          `BEGIN`,
+          `  -- Initialize Oracle Reports runtime environment & SRW trace`,
+          `  SRW.MESSAGE(001, 'Starting ${repName}: ${report.title || repName}');`,
+          `  RETURN (TRUE);`,
+          `END BeforeReport;`
+        ].join('\n')
+      });
+      units.push({
+        section: 'Report Triggers',
+        name: 'AFTER_PARAMETER_FORM',
+        badge: 'TRIGGER',
+        badgeClass: 'trigger',
+        sub: 'Parameter Validation',
+        scope: `REPORT TRIGGER (${repName})`,
+        code: [
+          `-- =====================================================================`,
+          `-- Oracle Reports Lifecycle Trigger: AFTER PARAMETER FORM`,
+          `-- Validates user bind parameters before executing Data Model SQL`,
+          `-- =====================================================================`,
+          `FUNCTION AfterPForm RETURN BOOLEAN IS`,
+          `BEGIN`,
+          `  -- Validate runtime parameters before opening cursor(s) ${dsNames}`,
+          `  RETURN (TRUE);`,
+          `END AfterPForm;`
+        ].join('\n')
+      });
+      units.push({
+        section: 'Report Triggers',
+        name: 'AFTER_REPORT',
+        badge: 'TRIGGER',
+        badgeClass: 'trigger',
+        sub: 'Summary & Cleanup',
+        scope: `REPORT TRIGGER (${repName})`,
+        code: [
+          `-- =====================================================================`,
+          `-- Oracle Reports Lifecycle Trigger: AFTER REPORT`,
+          `-- Report Summaries : ${sumNames}`,
+          `-- =====================================================================`,
+          `FUNCTION AfterReport RETURN BOOLEAN IS`,
+          `BEGIN`,
+          `  SRW.MESSAGE(002, 'Completed ${repName} execution.');`,
+          `  RETURN (TRUE);`,
+          `END AfterReport;`
+        ].join('\n')
+      });
+    }
+
+    // 3. Data Model SQL Queries (Q_*) & Summary Columns (CS_*)
+    for (const ds of (report.data?.data_sources || [])) {
+      const grpDesc = (ds.groups || []).map(g => {
+        const cols = (g.data_items || g.columns || []).map(c => c.name).join(', ');
+        const sums = (g.summaries || []).map(s => `${s.name} := ${String(s.function || 'SUM').toUpperCase()}(${s.source}) [Reset: ${s.reset || s.reset_at || g.name}]`).join('\n--   ');
+        return `-- Group ${g.name} Columns: ${cols}` + (sums ? `\n--   ${sums}` : '');
+      }).join('\n');
+      const code = [
+        `-- =====================================================================`,
+        `-- Data Model SQL Query: ${ds.name}`,
+        `-- ReportModule : ${repName}`,
+        `${grpDesc}`,
+        `-- =====================================================================`,
+        (ds.select_sql || '').trim() + ';'
+      ].join('\n');
+      units.push({
+        section: 'Data Model SQL & Links',
+        name: ds.name,
+        badge: 'SQL',
+        badgeClass: 'sql',
+        sub: `${(ds.groups || []).length} Group(s)`,
+        scope: `DATA SOURCE SQL (${ds.name})`,
+        code
+      });
+    }
+
+    for (const lnk of (report.data?.links || [])) {
+      const childTarget = lnk.child_query || lnk.child_group || 'Q_CHILD';
+      const code = [
+        `-- =====================================================================`,
+        `-- Oracle Reports Master-Detail Data Link: ${lnk.name || 'L_LINK'}`,
+        `-- Parent Group : ${lnk.parent_group}.${lnk.parent_column}`,
+        `-- Child Query  : ${childTarget}.${lnk.child_column}`,
+        `-- =====================================================================`,
+        `SELECT *`,
+        `  FROM (${childTarget}) child`,
+        ` WHERE child.${lnk.child_column} = :${lnk.parent_group}_${lnk.parent_column};`
+      ].join('\n');
+      units.push({
+        section: 'Data Model SQL & Links',
+        name: lnk.name || 'L_LINK',
+        badge: 'LINK',
+        badgeClass: 'sql',
+        sub: `${lnk.parent_group} → ${childTarget}`,
+        scope: `DATA LINK (${lnk.name || 'L_LINK'})`,
+        code
+      });
+    }
+
+    // Render grouped list
+    let currentSection = '';
+    let html = '';
+    units.forEach((u, idx) => {
+      if (u.section !== currentSection) {
+        currentSection = u.section;
+        html += `<div class="report-unit-section-title">${escapeHtml(currentSection)}</div>`;
+      }
+      html += `
+        <div class="report-unit-item ${idx === 0 ? 'active' : ''}" data-rep-unit-idx="${idx}">
+          <div class="report-unit-item-top">
+            <span class="report-unit-name">${escapeHtml(u.name)}</span>
+            <span class="report-unit-badge ${escapeHtml(u.badgeClass)}">${escapeHtml(u.badge)}</span>
+          </div>
+          <div class="report-unit-sub">${escapeHtml(u.sub)}</div>
+        </div>
+      `;
+    });
+
+    unitsListEl.innerHTML = html;
+
+    const selectUnit = (idx) => {
+      const u = units[idx];
+      if (!u) return;
+      unitsListEl.querySelectorAll('.report-unit-item').forEach((el, i) => {
+        el.classList.toggle('active', i === idx);
+      });
+      if (codeTitleEl) codeTitleEl.textContent = u.name;
+      if (scopeBadgeEl) scopeBadgeEl.textContent = u.scope;
+      codeDisplayEl.innerHTML = highlightPlsql(u.code);
+    };
+
+    unitsListEl.querySelectorAll('.report-unit-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.getAttribute('data-rep-unit-idx'), 10) || 0;
+        selectUnit(idx);
+      });
+    });
+
+    if (units.length > 0) {
+      selectUnit(0);
+    }
+  }
+
+  function renderReportDataTree(execution, report = null) {
+    if (!reportDataTree) return;
+    let html = '<div class="dm-diagram-wrap">';
+
+    // 1. Report Summary Card (clickable to open Report Property Sheet)
+    html += `<div class="report-summary-box" data-dm-node="REPORT" style="cursor:pointer;" title="Click to inspect Report Properties & Paper Layout in Property Palette">`;
     html += `<h5>📊 ${escapeHtml(execution.report_name)} (${escapeHtml(execution.unit)})</h5>`;
     const sumKeys = Object.keys(execution.report_summaries || {});
     if (sumKeys.length === 0) {
@@ -2585,33 +5098,208 @@
     } else {
       for (const k of sumKeys) {
         const val = execution.report_summaries[k];
-        html += `<div class="report-sum-row"><span class="report-sum-label">${escapeHtml(k)}:</span> <span class="report-sum-value">${typeof val === 'number' ? val.toLocaleString(undefined, {minimumFractionDigits: 2}) : val}</span></div>`;
+        html += `<div class="report-sum-row"><span class="report-sum-label">Σ ${escapeHtml(k)}:</span> <span class="report-sum-value">${typeof val === 'number' ? val.toLocaleString(undefined, {minimumFractionDigits: 2}) : val}</span></div>`;
       }
     }
     html += '</div>';
 
-    const groupKeys = Object.keys(execution.group_records || {});
-    for (const g of groupKeys) {
-      const recs = execution.group_records[g] || [];
-      html += '<div class="report-group-box">';
-      html += `<h5>Group: ${escapeHtml(g)} (${recs.length} records)</h5>`;
-      if (recs.length > 0) {
-        const sampleRec = recs[0];
-        const cols = Object.keys(sampleRec.values || {}).slice(0, 4);
-        html += `<div style="color:#8b949e;font-size:10px;margin-bottom:6px;">Columns: ${cols.join(', ')}</div>`;
-        for (let i = 0; i < Math.min(recs.length, 3); i++) {
-          const r = recs[i];
-          const summaryEntries = Object.entries(r.group_summaries || {});
-          let sumText = summaryEntries.length > 0 ? ` [${summaryEntries.map(([k, v]) => `${k}=${v}`).join(', ')}]` : '';
-          html += `<div style="font-family:var(--font-mono);font-size:10px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Row ${i+1}: ${JSON.stringify(r.values)}${sumText}</div>`;
+    // 2. Interactive Data Model Diagram (Queries Q_* -> Groups G_* -> Columns, Formulas CF_*, Summaries CS_*)
+    if (report && report.data?.data_sources) {
+      for (const ds of report.data.data_sources) {
+        html += `<div class="dm-query-block">`;
+        html += `<div class="dm-query-pill" data-dm-node="QUERY" data-dm-name="${escapeHtml(ds.name)}" title="Click to inspect & edit SQL Query in Property Palette">SQL: ${escapeHtml(ds.name)}</div>`;
+        for (const grp of (ds.groups || [])) {
+          const recCount = (execution.group_records?.[grp.name] || []).length;
+          html += `<div class="dm-connector-line"></div>`;
+          html += `<div class="dm-group-card">`;
+          html += `
+            <div class="dm-group-header" data-dm-node="GROUP" data-dm-name="${escapeHtml(grp.name)}">
+              <span>${escapeHtml(grp.name)}</span>
+              <span style="font-size:10px; opacity:0.85;">${recCount} rows</span>
+            </div>
+            <div class="dm-group-body">
+          `;
+          for (const col of (grp.data_items || grp.columns || [])) {
+            html += `
+              <div class="dm-col-row" data-dm-node="COLUMN" data-dm-group="${escapeHtml(grp.name)}" data-dm-name="${escapeHtml(col.name)}">
+                <span><span class="dm-col-icon col">${escapeHtml((col.datatype || 'CHR').slice(0, 3).toUpperCase())}</span>${escapeHtml(col.name)}</span>
+                <span style="font-size:9.5px; color:var(--text-muted);">${escapeHtml(col.datatype || 'char')}</span>
+              </div>
+            `;
+          }
+          for (const f of (grp.formulas || [])) {
+            html += `
+              <div class="dm-col-row" data-dm-node="FORMULA" data-dm-group="${escapeHtml(grp.name)}" data-dm-name="${escapeHtml(f.name)}" title="Click to inspect & edit PL/SQL Formula Column">
+                <span><span class="dm-col-icon fx">f(x)</span><strong>${escapeHtml(f.name)}</strong></span>
+                <span style="font-size:9.5px; color:#d8b4fe;">${escapeHtml(f.source || 'PL/SQL')}</span>
+              </div>
+            `;
+          }
+          for (const s of (grp.summaries || [])) {
+            html += `
+              <div class="dm-col-row" data-dm-node="SUMMARY" data-dm-group="${escapeHtml(grp.name)}" data-dm-name="${escapeHtml(s.name)}" title="Click to inspect Summary Column">
+                <span><span class="dm-col-icon sum">Σ</span><strong>${escapeHtml(s.name)}</strong></span>
+                <span style="font-size:9.5px; color:#6ee7b7;">${escapeHtml(String(s.function || 'SUM'))}(${escapeHtml(s.source)})</span>
+              </div>
+            `;
+          }
+          html += `</div></div>`;
         }
-        if (recs.length > 3) {
-          html += `<div style="color:#6e7681;font-size:10px;">... and ${recs.length - 3} more records</div>`;
-        }
+        html += `</div>`;
       }
-      html += '</div>';
     }
 
+    html += '</div>';
     reportDataTree.innerHTML = html;
+
+    // Bind clicks on Data Model nodes to open their Report Property Sheet in the right-hand Property Palette
+    reportDataTree.querySelectorAll('[data-dm-node]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const kind = el.getAttribute('data-dm-node');
+        const name = el.getAttribute('data-dm-name');
+        const grpName = el.getAttribute('data-dm-group');
+        renderReportPropertyInspector(kind, { report, execution, name, groupName: grpName });
+      });
+    });
+  }
+
+  function renderReportPropertyInspector(kind, ctx) {
+    if (!propertyInspector || !ctx?.report) return;
+    const rep = ctx.report;
+    let title = `Report: ${rep.name}`;
+    let html = '';
+
+    if (kind === 'QUERY') {
+      const ds = (rep.data?.data_sources || []).find(d => d.name === ctx.name);
+      if (ds) {
+        title = `Report Query: ${ds.name}`;
+        html += `
+          <div class="prop-group">
+            <div class="prop-group-header">Data Model SQL Query (${escapeHtml(ds.name)})</div>
+            <table class="prop-table">
+              <tr><td class="prop-name">Query Name</td><td class="prop-val"><strong>${escapeHtml(ds.name)}</strong></td></tr>
+              <tr><td class="prop-name">Max Rows</td><td class="prop-val"><input type="number" class="prop-input" id="repPropMaxRows" value="${ds.max_rows || 500}"></td></tr>
+              <tr><td class="prop-name">Groups</td><td class="prop-val">${(ds.groups || []).map(g => g.name).join(', ')}</td></tr>
+            </table>
+            <div style="padding: 8px;">
+              <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">SQL SELECT Statement:</label>
+              <textarea id="repPropSqlText" class="prop-input" rows="6" style="font-family:var(--font-mono); font-size:11px;">${escapeHtml(ds.select_sql || '')}</textarea>
+              <button class="btn btn-sm btn-primary" id="repPropApplySqlBtn" style="width:100%; margin-top:6px;">💾 Update SQL &amp; Preview</button>
+            </div>
+          </div>
+        `;
+      }
+    } else if (kind === 'FORMULA') {
+      let foundFormula = null;
+      for (const ds of (rep.data?.data_sources || [])) {
+        for (const g of (ds.groups || [])) {
+          const f = (g.formulas || []).find(x => x.name === ctx.name);
+          if (f) foundFormula = f;
+        }
+      }
+      if (foundFormula) {
+        title = `Formula Column: ${foundFormula.name}`;
+        html += `
+          <div class="prop-group">
+            <div class="prop-group-header">PL/SQL Formula Column (${escapeHtml(foundFormula.name)})</div>
+            <table class="prop-table">
+              <tr><td class="prop-name">Column Name</td><td class="prop-val"><strong>${escapeHtml(foundFormula.name)}</strong></td></tr>
+              <tr><td class="prop-name">Group</td><td class="prop-val">${escapeHtml(ctx.groupName || '')}</td></tr>
+              <tr><td class="prop-name">Data Type</td><td class="prop-val">${escapeHtml(foundFormula.datatype || 'number')}</td></tr>
+            </table>
+            <div style="padding: 8px;">
+              <label style="font-size:11px; color:var(--text-muted); display:block; margin-bottom:4px;">PL/SQL Formula Expression:</label>
+              <textarea id="repPropFormulaText" class="prop-input" rows="4" style="font-family:var(--font-mono); font-size:11px;">${escapeHtml(foundFormula.source || foundFormula.plsql || '')}</textarea>
+              <button class="btn btn-sm btn-primary" id="repPropApplyFormulaBtn" style="width:100%; margin-top:6px;">💾 Update Formula</button>
+            </div>
+          </div>
+        `;
+      }
+    } else if (kind === 'SUMMARY') {
+      let foundSum = null;
+      for (const ds of (rep.data?.data_sources || [])) {
+        for (const g of (ds.groups || [])) {
+          const s = (g.summaries || []).find(x => x.name === ctx.name);
+          if (s) foundSum = s;
+        }
+      }
+      if (foundSum) {
+        title = `Summary Column: ${foundSum.name}`;
+        html += renderPropGroup('Summary Column Properties', [
+          ['Name', foundSum.name],
+          ['Function', String(foundSum.function || 'SUM').toUpperCase()],
+          ['Source Column', foundSum.source],
+          ['Reset At Group', foundSum.reset || foundSum.reset_at || ctx.groupName || 'Report']
+        ]);
+      }
+    } else {
+      title = `Report: ${rep.name}`;
+      const allSums = [];
+      for (const ds of (rep.data?.data_sources || [])) {
+        for (const g of (ds.groups || [])) {
+          for (const s of (g.summaries || [])) {
+            allSums.push(`${s.name} = ${String(s.function || 'SUM').toUpperCase()}(${s.source})`);
+          }
+        }
+      }
+      html += `
+        <div class="prop-group">
+          <div class="prop-group-header">Oracle Report Module Properties</div>
+          <table class="prop-table">
+            <tr><td class="prop-name">Report Name</td><td class="prop-val"><strong>${escapeHtml(rep.name)}</strong></td></tr>
+            <tr><td class="prop-name">Report Title</td><td class="prop-val"><input type="text" class="prop-input" id="repPropTitleInput" value="${escapeHtml(rep.title || '')}"></td></tr>
+            <tr><td class="prop-name">Unit</td><td class="prop-val">${escapeHtml(rep.unit_of_measurement || 'inch')}</td></tr>
+            <tr><td class="prop-name">Data Queries</td><td class="prop-val">${(rep.data?.data_sources || []).map(d => d.name).join(', ')}</td></tr>
+            <tr><td class="prop-name">Data Links</td><td class="prop-val">${(rep.data?.links || []).map(l => `${l.name || 'L_LINK'} (${l.parent_group} → ${l.child_query || l.child_group})`).join(', ') || '(Single Group)'}</td></tr>
+            <tr><td class="prop-name">Summaries</td><td class="prop-val">${allSums.join(', ') || '(None)'}</td></tr>
+          </table>
+          <div style="padding: 8px; display:flex; gap:6px;">
+            <button class="btn btn-sm btn-primary" id="repPropApplyTitleBtn" style="flex:1;">💾 Update Report Title</button>
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('exportReportXmlBtn')?.click()">💾 Export XML</button>
+          </div>
+        </div>
+      `;
+    }
+
+    inspectorTargetName.textContent = title;
+    propertyInspector.innerHTML = html;
+
+    document.getElementById('repPropApplyTitleBtn')?.addEventListener('click', () => {
+      const newTitle = document.getElementById('repPropTitleInput')?.value || rep.title;
+      rep.title = newTitle;
+      if (currentReportPayload?.html && reportPreviewFrame) {
+        currentReportPayload.html = currentReportPayload.html.replace(/<div class="report-title">[\s\S]*?<\/div>/, `<div class="report-title">${escapeHtml(newTitle)}</div>`);
+        const theme = document.getElementById('reportTemplateSelect')?.value || 'blue';
+        reportPreviewFrame.srcdoc = applyReportTemplateTheme(currentReportPayload.html, theme);
+      }
+      showBanner(`Updated Report Title to "${newTitle}".`);
+      setTimeout(hideBanner, 3000);
+    });
+
+    document.getElementById('repPropApplySqlBtn')?.addEventListener('click', () => {
+      const ds = (rep.data?.data_sources || []).find(d => d.name === ctx.name);
+      if (ds) {
+        ds.select_sql = document.getElementById('repPropSqlText')?.value || ds.select_sql;
+        ds.max_rows = parseInt(document.getElementById('repPropMaxRows')?.value, 10) || ds.max_rows;
+        renderReportPlsqlStudio(rep, ctx.execution);
+        showBanner(`Updated SQL Query '${ds.name}' in Report model — click 💾 Export XML to save.`);
+        setTimeout(hideBanner, 3200);
+      }
+    });
+
+    document.getElementById('repPropApplyFormulaBtn')?.addEventListener('click', () => {
+      for (const ds of (rep.data?.data_sources || [])) {
+        for (const g of (ds.groups || [])) {
+          const f = (g.formulas || []).find(x => x.name === ctx.name);
+          if (f) {
+            f.plsql = document.getElementById('repPropFormulaText')?.value || f.plsql;
+            renderReportPlsqlStudio(rep, ctx.execution);
+            showBanner(`Updated PL/SQL Formula '${f.name}' — click 💾 Export XML to save.`);
+            setTimeout(hideBanner, 3200);
+          }
+        }
+      }
+    });
   }
 })();

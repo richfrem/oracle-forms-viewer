@@ -61,12 +61,15 @@ The native Rust web interface (`http://127.0.0.1:7070`) features an integrated *
    - `ORDERS_SUMMARY - Customer Orders Summary Report`
    - `DEPARTMENT_SALARIES - Department Salaries Master-Detail Report`
 5. **Select Backend**: Choose `Oracle Thin (Pure-Rust :1521)` from the dropdown.
-6. **Click ▶ Run Report**:
+6. **Click ▶️ Run**:
    - Executes the report data model query via async Tokio TCP.
-   - Computes group breaks and summary calculations.
-   - Renders the interactive report canvas in the center pane.
-   - Displays calculated summary metrics (`CS_AVG_ORDER`, `CS_TOTAL_SALES`, `CS_ORDER_COUNT`) and record groups in the right-hand **Data Model & Summaries** sidebar.
-7. **Print / PDF**: Click **Print / Save as PDF** to invoke browser print styles configured for page headers, margins, and column alignment.
+   - Computes group breaks, PL/SQL formula columns (`CF_*`), and summary calculations (`CS_*`).
+   - Renders the interactive Paper Preview canvas in the center pane (with selectable **Paper Layout Templates**: `Blue`, `Beige`, `Wine`, `Green`, `Gray`).
+   - Displays the interactive **Data Model Diagram** (`SQL: Q_*` -> `G_*` groups with columns, `f(x)` Formula Columns, and `Σ` Summary Columns) in the right-hand pane.
+7. **Inspect PL/SQL, SQL & Property Sheets (Zero Reports Builder Install Required)**:
+   - Click **`📐 Split + PL/SQL`** or **`📜 PL/SQL & SQL`** (or the top **`📜 PL/SQL Split`** button) to view syntax-highlighted **PL/SQL Formula Columns (`CF_*Formula`)**, **Report Lifecycle Triggers (`BEFORE_REPORT`, `AFTER_PARAMETER_FORM`, `AFTER_REPORT`)**, **Data Model SQL Queries (`Q_*`)**, and **Data Links (`L_*`)**.
+   - Click any node in the **Data Model Diagram** (`Q_*`, `G_*`, `CF_*`, `CS_*`, or Report Header) to open its **Report Property Sheet** in the right-hand Property Palette, edit the Report Title, SQL Query, or PL/SQL Formula expression, and click **`💾 Export XML`** to save the updated `_report.xml`.
+8. **Print / PDF**: Click **🖨️ PDF** to invoke browser print styles configured for page headers, margins, and column alignment.
 
 ---
 

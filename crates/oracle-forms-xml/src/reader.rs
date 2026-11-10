@@ -6,7 +6,7 @@ use quick_xml::reader::Reader;
 use oracle_forms_core::error::{FormsError, Result};
 use oracle_forms_core::model::*;
 use oracle_forms_core::sidecars::{
-    cache_relative, decode_double_escaped, first_code_line, line_count_of, PlsqlSidecars,
+    cache_relative, decode_double_escaped, first_code_line, line_count_of, unescape_xml_entities, PlsqlSidecars,
 };
 use crate::pld::chrono_iso_now;
 
@@ -945,7 +945,9 @@ impl FormsXmlParser {
 fn get_attr(e: &BytesStart, name: &str) -> Option<String> {
     for a in e.attributes().flatten() {
         if a.key.as_ref() == name.as_bytes() {
-            return String::from_utf8(a.value.to_vec()).ok();
+            return String::from_utf8(a.value.to_vec())
+                .ok()
+                .map(|raw| unescape_xml_entities(&raw));
         }
     }
     None

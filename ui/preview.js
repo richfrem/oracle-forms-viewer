@@ -96,7 +96,7 @@ window.FormsPreview = class FormsPreview {
       control.title = 'List of Values';
     } else {
       control = document.createElement('input');
-      control.type = checkbox ? 'checkbox' : radio ? 'radio' : 'text';
+      control.type = checkbox ? 'checkbox' : radio ? 'radio' : (item.concealData ? 'password' : 'text');
       if (checkbox || radio) {
         control.checked = !!this.values.get(key);
         control.addEventListener('change', () => {
@@ -117,6 +117,33 @@ window.FormsPreview = class FormsPreview {
         control.disabled = true;
         control.title = 'Radio choices are not available in the parsed index.';
       }
+    }
+    const normColor = (c) => {
+      if (!c) return null;
+      const s = String(c).trim();
+      const m = /^r(\d+)g(\d+)b(\d+)$/i.exec(s);
+      if (m) {
+        const scale = (Number(m[1]) <= 100 && Number(m[2]) <= 100 && Number(m[3]) <= 100 && s === s.toLowerCase()) ? 2.55 : 1;
+        return `rgb(${Math.round(Number(m[1]) * scale)}, ${Math.round(Number(m[2]) * scale)}, ${Math.round(Number(m[3]) * scale)})`;
+      }
+      return s;
+    };
+    const bg = normColor(item.backColor);
+    const fg = normColor(item.foreColor);
+    if (bg) control.style.background = bg;
+    if (fg) control.style.color = fg;
+    if (item.fontName) control.style.fontFamily = item.fontName;
+    if (item.fontSize) control.style.fontSize = `${item.fontSize}px`;
+    if (item.fontWeight) control.style.fontWeight = item.fontWeight.toLowerCase();
+    if (item.fontStyle) control.style.fontStyle = item.fontStyle.toLowerCase();
+    if (item.justification) {
+      const j = item.justification.toLowerCase();
+      control.style.textAlign = (j === 'end' || j === 'right') ? 'right' : (j === 'center' ? 'center' : 'left');
+    }
+    if (item.caseRestriction) {
+      const cr = item.caseRestriction.toLowerCase();
+      if (cr === 'upper') control.style.textTransform = 'uppercase';
+      else if (cr === 'lower') control.style.textTransform = 'lowercase';
     }
     control.disabled = control.disabled || item.enabled === false || dml.enabled === false;
     control.setAttribute('aria-label', `${block.name}.${item.name}, record ${row + 1}`);

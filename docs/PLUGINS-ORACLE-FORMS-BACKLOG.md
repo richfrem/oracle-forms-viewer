@@ -121,3 +121,10 @@ plugins/oracle-forms/
 | **Phase 3** | Conversion & Runner Skills | Scaffold `converting-oracle-forms-xml`, `converting-oracle-reports`, and `running-forms-standalone-launcher`. | `authoring-skills` |
 | **Phase 4** | Sub-Agent Definition | Scaffold `.apm/agents/oracle-forms-engineer.md` with bounded tool permissions and persona. | `authoring-subagents` |
 | **Phase 5** | APM Audit & Packaging | Run `scripts/audit_plugin_structure.py` and compile into APM package. Verify installation with `apm-cli`. | `packaging-with-apm` |
+
+## Backlog (from UI review)
+
+- Standalone `.mmb` inspector canvas (menu tree) instead of stale form canvas.
+- Remove `overflow-x` on `.top-bar`/`.canvas-toolbar`; compact header controls at 1280px.
+- Filter `<New_Item>` placeholder menu items in binary `.mmb` extraction.
+- Cache-busting / `no-store` headers for embedded UI assets.

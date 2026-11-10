@@ -3,107 +3,89 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Oracle Forms Viewer POC</title>
+  <title>Oracle Forms Workbench — Native Rust IDE & Runtime</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app" class="app-container">
-    <!-- Top Bar -->
+    <!-- ==================== PRIMARY IDE HEADER BAR ==================== -->
     <header class="top-bar">
-      <div class="brand">
-        <span class="brand-icon">📐</span>
-        <strong>Forms Viewer</strong>
-        <span id="moduleBadge" class="badge module-badge">NO MODULE</span>
-      </div>
-
-      <div class="toolbar-controls">
-        <label class="btn btn-primary" title="Open local FMB or XML file">
-          📂 Open File...
-          <input type="file" id="fileInput" accept=".fmb,.xml,.mmb,.olb,.pld,.rdf,.rpt" style="display:none;">
-        </label>
-
-        <div class="input-with-button">
-          <input type="text" id="filePathInput" placeholder="/path/to/module.fmb or _fmb.xml">
-          <button id="openPathBtn" class="btn btn-secondary" title="Load path from disk">Load</button>
-        </div>
-
-        <div class="sample-picker">
-          <label for="sampleSelect">Sample:</label>
-          <select id="sampleSelect">
-            <option value="">(Loading samples...)</option>
-          </select>
-          <button id="loadSampleBtn" class="btn btn-outline">Load</button>
-        </div>
-
-        <div class="separator"></div>
-
-        <div class="db-controls" id="dbControls">
-          <label for="dbBackendSelect" style="font-weight: 600; color: #a0c4ff;">DB:</label>
-          <select id="dbBackendSelect" title="Select Database Backend">
-            <option value="oracle-thin">Oracle Thin (Pure-Rust :1521)</option>
-            <option value="oracle">Oracle (testbed sqlplus)</option>
-            <option value="sqlite">SQLite</option>
-            <option value="mock">Mock</option>
-          </select>
-          <input id="dbUserInput" class="db-cred-input" type="text" placeholder="DB user" autocomplete="username" aria-label="Database user" title="Database user (sent to this local server only; never stored)">
-          <input id="dbPassInput" class="db-cred-input" type="password" placeholder="password" autocomplete="current-password" aria-label="Database password" title="Database password (sent to this local server only; never stored)">
-          <button id="dbQueryBtn" class="btn btn-sm btn-primary" title="Execute Query on Active Block (Ctrl+F11 / F8)">⚡ Query DB</button>
-          <button id="runFormBtn" class="btn btn-sm btn-primary" title="Run the form: triggers and PL/SQL execute on the server against the selected database">▶ Run Form</button>
-          <label class="toggle-label" title="Allow INSERT/UPDATE/DELETE and COMMIT against the database. Off: the session is read-only.">
-            <input type="checkbox" id="allowWritesToggle">
-            <span>Allow writes</span>
-          </label>
-          <button id="runtimeCommitBtn" class="btn btn-sm btn-secondary hidden" title="COMMIT_FORM (runs the commit triggers)">💾 Commit</button>
-          <button id="stopFormBtn" class="btn btn-sm btn-secondary hidden" title="End the running form session">■ Stop</button>
-          <span id="sessionBadge" class="session-badge hidden" aria-live="polite"></span>
-          <div id="recordNavControls" class="record-nav-controls hidden">
-            <button id="prevRecordBtn" class="btn btn-sm btn-icon" title="Previous Record (Up Arrow)">◀</button>
-            <span id="recordNavBadge" class="record-nav-badge">1 / 1</span>
-            <button id="nextRecordBtn" class="btn btn-sm btn-icon" title="Next Record (Down Arrow)">▶</button>
+      <!-- Left: Brand & Module Selector -->
+      <div class="header-left">
+        <div class="brand" title="Oracle Forms Workbench (Pure-Rust Stack)">
+          <span class="brand-icon">📐</span>
+          <div class="brand-text">
+            <strong>Forms Workbench</strong>
+            <span class="brand-sub">Native Rust IDE</span>
           </div>
         </div>
 
-        <div class="separator"></div>
+        <div class="module-selector-group">
+          <button id="openFileModalBtn" class="btn btn-sm btn-primary" title="Browse or upload .fmb, .xml, .mmb, .olb, .pll, .pld, .rdf, or .rpt files">
+            📂 Browse / Open...
+          </button>
+          <div class="sample-picker">
+            <select id="sampleSelect" aria-label="Select Sample Module" title="Switch Form, Menu, Library, or Report">
+              <option value="">(Loading samples...)</option>
+            </select>
+            <button id="loadSampleBtn" class="btn btn-sm btn-secondary" title="Reload selected module">↻</button>
+          </div>
+          <span id="moduleBadge" class="badge module-badge">NO MODULE</span>
+        </div>
+      </div>
 
-        <div class="canvas-controls" id="canvasControls">
-          <label for="canvasSelect">Canvas:</label>
-          <select id="canvasSelect"></select>
+      <!-- Center: Primary Workspace Views -->
+      <nav class="center-tabs" aria-label="Workspace Views">
+        <button class="tab-btn active" data-tab="canvasTab" title="Form Designer & Live Runtime Window">
+          <span class="tab-icon">🎨</span>
+          <span>Form Designer</span>
+        </button>
+        <button class="tab-btn" data-tab="codeTab" title="PL/SQL Triggers & Program Units Studio">
+          <span class="tab-icon">📜</span>
+          <span>PL/SQL Studio</span>
+          <span id="codeTabBadge" class="pill-badge">0</span>
+        </button>
+        <button class="tab-btn" data-tab="xmlTab" title="Raw Forms2XML Inspector">
+          <span class="tab-icon">📄</span>
+          <span>XML Source</span>
+        </button>
+        <button class="tab-btn" data-tab="diffTab" title="Compare Two Form Modules">
+          <span class="tab-icon">⚖️</span>
+          <span>Form Diff</span>
+        </button>
+        <button class="tab-btn" data-tab="reportsTab" title="Oracle Reports Engine & HTML5 Preview">
+          <span class="tab-icon">📊</span>
+          <span>Reports Engine</span>
+        </button>
+      </nav>
 
-          <div id="tabPagePills" class="tab-page-pills"></div>
-
-          <label for="zoomSlider" class="zoom-label">Zoom:</label>
-          <button id="zoomOutBtn" class="btn btn-sm btn-icon" title="Zoom out">−</button>
-          <input type="range" id="zoomSlider" min="20" max="250" value="100" step="5">
-          <button id="zoomInBtn" class="btn btn-sm btn-icon" title="Zoom in">+</button>
-          <span id="zoomValue">100%</span>
-          <button id="zoomFitBtn" class="btn btn-sm btn-secondary" title="Fit canvas to screen">Fit</button>
-
-          <label class="toggle-label" title="Show items without canvas or hidden items in auto-layout flow">
-            <input type="checkbox" id="showNullCanvasToggle">
-            <span>Show Off-Canvas</span>
-          </label>
-
-          <label class="toggle-label" title="Wrap canvas inside classic Oracle Forms runtime window frame (menus, toolbar, status bar)">
-            <input type="checkbox" id="runtimeFrameToggle">
-            <span>Runtime Frame</span>
-          </label>
-          <label class="toggle-label" title="Local UI simulation only: no database or PL/SQL execution">
-            <input type="checkbox" id="previewToggle">
-            <span>Interactive Preview</span>
-          </label>
-          <button id="previewResetBtn" class="btn btn-sm btn-secondary" disabled>Reset Preview</button>
-          <select id="previewAlertSelect" aria-label="Preview declared alert" disabled>
-            <option value="">Preview Alert...</option>
-          </select>
-          <button id="editLayoutToggleBtn" class="btn btn-sm btn-secondary" title="Enable interactive visual layout editing on canvas">✏️ Edit Layout</button>
-          <button id="exportXmlBtn" class="btn btn-sm btn-primary" title="Export module to Forms2XML XML">💾 Export XML</button>
-          <button id="loadMenuBtn" class="btn btn-sm btn-secondary">Load Menu XML</button>
-          <input type="file" id="menuFileInput" accept=".xml" hidden>
+      <!-- Right: Windows & Panels Visibility Bar -->
+      <div class="header-right">
+        <div class="panel-toggles" role="group" aria-label="Show or Hide IDE Windows & Panels">
+          <button id="toggleLeftPaneBtn" class="btn btn-sm btn-toggle active" title="Show/Hide Object Navigator Tree (F3 or [)">
+            🗂️ Navigator
+          </button>
+          <button id="toggleRightPaneBtn" class="btn btn-sm btn-toggle active" title="Show/Hide Property Palette Sidebar (])">
+            🎛️ Properties
+          </button>
+          <button id="popoutPropsBtn" class="btn btn-sm btn-icon" title="Open Property Sheet as Floating Window (F4)">
+            ↗
+          </button>
+          <button id="toggleCodeDrawerBtn" class="btn btn-sm btn-toggle" title="Show/Hide Bottom PL/SQL & Trace Split Panel (`)">
+            📜 PL/SQL Split
+          </button>
+          <button id="popoutCodeTopBtn" class="btn btn-sm btn-icon" title="Open PL/SQL Editor as Floating Window (F11)">
+            ↗
+          </button>
+          <div class="separator"></div>
+          <button id="focusModeBtn" class="btn btn-sm btn-outline" title="Runner Focus Mode: hide IDE sidebars and center the Oracle Forms window">
+            ⛶ Runner View
+          </button>
         </div>
       </div>
     </header>
 
-    <!-- Banner for conversion warnings -->
+    <!-- ==================== BANNER FOR WARNINGS / NOTIFICATIONS ==================== -->
     <div id="conversionBanner" class="conversion-banner hidden">
       <div class="banner-content">
         <span class="banner-icon">⚠️</span>
@@ -115,14 +97,29 @@
       </div>
     </div>
 
-    <!-- Main Workspace -->
-    <div class="workspace">
+    <!-- ==================== MAIN 3-PANE WORKSPACE ==================== -->
+    <div class="workspace" id="workspaceContainer">
       <!-- Left Pane: Object Navigator -->
       <aside class="left-pane" id="leftPane">
         <div class="pane-header">
-          <h3>Object Navigator</h3>
+          <div class="pane-title-row">
+            <h3>Object Navigator</h3>
+            <div class="pane-header-actions">
+              <button id="openWizardFromTreeBtn" class="btn-micro btn-micro-emerald" title="Launch Data Block &amp; Layout Wizard (+)">＋</button>
+              <button id="expandAllTreeBtn" class="btn-micro" title="Expand All Nodes">⊞</button>
+              <button id="collapseAllTreeBtn" class="btn-micro" title="Collapse All Nodes">⊟</button>
+              <button id="closeLeftPaneBtn" class="btn-micro" title="Hide Object Navigator ( [ )">✕</button>
+            </div>
+          </div>
           <div class="tree-filter">
-            <input type="text" id="treeFilterInput" placeholder="Filter objects...">
+            <input type="text" id="treeFilterInput" placeholder="Search blocks, items, triggers...">
+          </div>
+          <div class="tree-category-pills" id="treeCategoryPills">
+            <button class="cat-pill active" data-cat="ALL">All</button>
+            <button class="cat-pill" data-cat="BLOCKS">Blocks</button>
+            <button class="cat-pill" data-cat="TRIGGERS">Triggers</button>
+            <button class="cat-pill" data-cat="CANVASES">Canvases</button>
+            <button class="cat-pill" data-cat="UNITS">PL/SQL</button>
           </div>
         </div>
         <div class="pane-content tree-content" id="navigatorTree">
@@ -130,114 +127,269 @@
         </div>
       </aside>
 
-      <!-- Center Pane: Tabbed Views -->
+      <!-- Center Pane: Active View -->
       <main class="center-pane">
-        <nav class="center-tabs">
-          <button class="tab-btn active" data-tab="canvasTab">🎨 Visual Canvas Preview</button>
-          <button class="tab-btn" data-tab="codeTab">📜 PL/SQL Viewer <span id="codeTabBadge" class="pill-badge">0</span></button>
-          <button class="tab-btn" data-tab="xmlTab">📄 Raw XML Slice</button>
-          <button class="tab-btn" data-tab="diffTab">⚖️ Form Diff Tool</button>
-          <button class="tab-btn" data-tab="reportsTab">📊 Reports Engine</button>
-        </nav>
-
         <div class="tab-views">
-          <!-- Canvas Tab -->
+          <!-- ==================== 1. VISUAL CANVAS & RUNTIME TAB ==================== -->
           <div id="canvasTab" class="tab-view active">
+            <!-- Slim Designer Bar (Canvas, Zoom & Layout Editing) -->
+            <div class="canvas-controls" id="canvasControls">
+              <div class="canvas-bar-left">
+                <select id="canvasSelect" class="compact-select" title="Active Canvas"></select>
+                <div id="tabPagePills" class="tab-page-pills"></div>
+              </div>
+
+              <div class="canvas-bar-center">
+                <div class="zoom-group">
+                  <button id="zoomOutBtn" class="btn btn-sm btn-icon" title="Zoom out">−</button>
+                  <input type="range" id="zoomSlider" min="20" max="250" value="100" step="5" title="Canvas Zoom">
+                  <button id="zoomInBtn" class="btn btn-sm btn-icon" title="Zoom in">+</button>
+                  <span id="zoomValue" class="zoom-readout">100%</span>
+                  <button id="zoomFitBtn" class="btn btn-sm btn-secondary" title="Fit canvas to viewport">Fit</button>
+                </div>
+
+                <div class="mode-pills-group">
+                  <label class="chip-toggle" title="Wrap canvas inside classic Oracle Forms runtime window frame (menus, toolbar, status bar)">
+                    <input type="checkbox" id="runtimeFrameToggle" checked>
+                    <span>🖼 Frame</span>
+                  </label>
+                  <label class="chip-toggle" title="Interactive widget controls (inputs, buttons, poplists)">
+                    <input type="checkbox" id="previewToggle" checked>
+                    <span>🕹 Live UI</span>
+                  </label>
+                  <label class="chip-toggle" title="Show items without canvas or hidden items in auto-layout flow">
+                    <input type="checkbox" id="showNullCanvasToggle">
+                    <span>👻 Hidden</span>
+                  </label>
+                  <button id="editLayoutToggleBtn" class="btn btn-sm btn-secondary" title="Enable Forms Builder visual layout &amp; property editor">
+                    ✏️ Layout
+                  </button>
+                  <button id="openWizardBtn" class="btn btn-sm btn-primary" title="Open Data Block &amp; Layout Wizard (Select Tables, Columns, Frame Title, Form/Tabular)">
+                    🧙‍♂️ Wizard
+                  </button>
+                </div>
+              </div>
+
+              <div class="canvas-bar-right">
+                <select id="menuModuleSelect" class="compact-select" aria-label="Attached Custom Menu Module (.mmb)" title="Switch or attach a custom .mmb Menu Module onto this Form">
+                  <option value="OFW_EMP_MENU">🍔 Menu: OFW_EMP_MENU.mmb</option>
+                  <option value="MAINMENU">🍔 Menu: MAINMENU.mmb</option>
+                  <option value="DEFAULT">🍔 Menu: Standard Oracle Menu</option>
+                  <option value="__BROWSE_MMB__">📂 Browse .mmb / _mmb.xml...</option>
+                </select>
+                <select id="previewAlertSelect" class="compact-select" aria-label="Preview declared alert" disabled>
+                  <option value="">🔔 Alert...</option>
+                </select>
+                <button id="previewResetBtn" class="btn btn-sm btn-secondary" title="Reset preview field values" disabled>↺</button>
+                <button id="exportXmlBtn" class="btn btn-sm btn-outline" title="Export module to lossless Forms2XML">💾 XML</button>
+              </div>
+            </div>
+
+            <!-- ==================== FORMS BUILDER VISUAL FORMATTING & ALIGNMENT RIBBON (EDIT MODE) ==================== -->
+            <div id="layoutFormatRibbon" class="layout-format-ribbon hidden">
+              <div class="ribbon-group">
+                <span class="ribbon-label">Font:</span>
+                <select id="fmtFontFamily" class="compact-select" title="Item Font Family">
+                  <option value="Tahoma, sans-serif">Tahoma</option>
+                  <option value="'Segoe UI', sans-serif">Segoe UI</option>
+                  <option value="Arial, sans-serif">Arial</option>
+                  <option value="Inter, sans-serif">Inter</option>
+                  <option value="Verdana, sans-serif">Verdana</option>
+                  <option value="'Courier New', monospace">Courier New</option>
+                </select>
+                <select id="fmtFontSize" class="compact-select" style="width:54px;" title="Font Size (pt)">
+                  <option value="9">9</option>
+                  <option value="10">10</option>
+                  <option value="11" selected>11</option>
+                  <option value="12">12</option>
+                  <option value="14">14</option>
+                  <option value="16">16</option>
+                </select>
+                <button id="fmtBoldBtn" class="btn-micro" title="Bold"><strong>B</strong></button>
+                <button id="fmtItalicBtn" class="btn-micro" title="Italic"><em>I</em></button>
+              </div>
+
+              <div class="separator"></div>
+
+              <div class="ribbon-group">
+                <span class="ribbon-label">Fill / Button Color:</span>
+                <input type="color" id="fmtBackColor" value="#ece9d8" class="color-swatch-input" title="Background / Button Fill Color">
+                <div class="preset-swatches">
+                  <button class="swatch-btn" data-fill="#ece9d8" data-fg="#111111" style="background:#ece9d8;" title="Classic Forms Beige"></button>
+                  <button class="swatch-btn" data-fill="#2563eb" data-fg="#ffffff" style="background:#2563eb;" title="Primary Blue Button"></button>
+                  <button class="swatch-btn" data-fill="#059669" data-fg="#ffffff" style="background:#059669;" title="Emerald Save/Action Button"></button>
+                  <button class="swatch-btn" data-fill="#d97706" data-fg="#ffffff" style="background:#d97706;" title="Amber Highlight"></button>
+                  <button class="swatch-btn" data-fill="#dc2626" data-fg="#ffffff" style="background:#dc2626;" title="Danger / Delete Red"></button>
+                  <button class="swatch-btn" data-fill="#ffffff" data-fg="#111111" style="background:#ffffff;" title="Pure White Input"></button>
+                </div>
+                <span class="ribbon-label" style="margin-left:4px;">Text:</span>
+                <input type="color" id="fmtForeColor" value="#111111" class="color-swatch-input" title="Foreground / Text Color">
+              </div>
+
+              <div class="separator"></div>
+
+              <div class="ribbon-group">
+                <button id="alignLeftBtn" class="btn btn-sm btn-secondary" title="Align selected item X to grid">⫷ Snap Grid</button>
+                <button id="addInFormNavBarBtn" class="btn btn-sm btn-emerald" title="Add in-form < Previous, Next >, Query, and Save buttons directly onto this form canvas">
+                  🧭 + In-Form Nav Buttons
+                </button>
+                <button id="addTitledFrameBtn" class="btn btn-sm btn-secondary" title="Add or update a titled Frame box around the active block">
+                  ▭ + Frame Title
+                </button>
+              </div>
+            </div>
+
+            <!-- Main Canvas Viewport -->
             <div class="canvas-viewport" id="canvasViewport">
-              <div id="oracleWindowShell" class="oracle-window-shell hidden-frame">
-                <!-- Menu Bar -->
+              <!-- Left Vertical Forms Builder Tool Palette (shown in Layout Edit Mode) -->
+              <aside id="canvasToolPalette" class="canvas-tool-palette hidden" aria-label="Canvas Layout Tool Palette">
+                <div class="palette-title">TOOLS</div>
+                <button class="palette-tool active" data-tool="select" title="Select &amp; Drag Items (Pointer)">↖<span>Select</span></button>
+                <button class="palette-tool" data-tool="button" title="Add Push Button to Canvas">🔘<span>Button</span></button>
+                <button class="palette-tool" data-tool="textItem" title="Add Text Item Field to Block">🔤<span>Field</span></button>
+                <button class="palette-tool" data-tool="displayItem" title="Add Read-Only Display Item">🏷️<span>Display</span></button>
+                <button class="palette-tool" data-tool="checkbox" title="Add Check Box Item">☑️<span>Check</span></button>
+                <button class="palette-tool" data-tool="frame" title="Add Titled Frame Graphic">▭<span>Frame</span></button>
+                <button class="palette-tool" data-tool="textGraphic" title="Add Canvas Heading / Label">T<span>Label</span></button>
+                <button class="palette-tool" data-tool="navBar" title="Insert < Previous, Next >, Search &amp; Save Buttons on Form">🧭<span>Nav Bar</span></button>
+                <div class="palette-sep"></div>
+                <button class="palette-tool palette-danger" data-tool="delete" title="Delete Selected Item or Frame">🗑️<span>Delete</span></button>
+              </aside>
+
+              <div id="oracleWindowShell" class="oracle-window-shell">
+                <!-- ==================== ORACLE FORMS IN-WINDOW MENU BAR ==================== -->
                 <div class="oracle-menu-bar">
                   <div id="oracleMenuItems" class="oracle-menu-items">
                     <div class="menu-item dropdown">
-                      <span>Action</span>
+                      <span><u>A</u>ction</span>
                       <div class="dropdown-menu">
-                        <div class="dropdown-item"><span>Save</span><kbd>Ctrl+S</kbd></div>
-                        <div class="dropdown-item"><span>Print...</span><kbd>Ctrl+P</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="logon"><span>🔑 Connect / Logon...</span><kbd>Alt+L</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="run"><span>▶ Run Form Session</span><kbd>Ctrl+R</kbd></div>
                         <div class="dropdown-divider"></div>
-                        <div class="dropdown-item"><span>Exit</span><kbd>Ctrl+Q</kbd></div>
-                      </div>
-                    </div>
-                    <div class="menu-item dropdown">
-                      <span>Edit</span>
-                      <div class="dropdown-menu">
-                        <div class="dropdown-item"><span>Cut</span><kbd>Ctrl+X</kbd></div>
-                        <div class="dropdown-item"><span>Copy</span><kbd>Ctrl+C</kbd></div>
-                        <div class="dropdown-item"><span>Paste</span><kbd>Ctrl+V</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="commit"><span>💾 Save (Commit)</span><kbd>Ctrl+S</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="clearForm"><span>🧹 Clear All</span><kbd>F5</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="print"><span>🖨️ Print Form...</span><kbd>Ctrl+P</kbd></div>
                         <div class="dropdown-divider"></div>
-                        <div class="dropdown-item"><span>Clear All</span></div>
+                        <div class="dropdown-item" data-ora-cmd="exit"><span>🚪 Exit Form</span><kbd>Ctrl+Q</kbd></div>
                       </div>
                     </div>
                     <div class="menu-item dropdown">
-                      <span>Query</span>
+                      <span><u>E</u>dit</span>
                       <div class="dropdown-menu">
-                        <div class="dropdown-item"><span>Enter</span><kbd>F7</kbd></div>
-                        <div class="dropdown-item"><span>Execute</span><kbd>Ctrl+F11</kbd></div>
-                        <div class="dropdown-item"><span>Cancel</span><kbd>Ctrl+Q</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="clearRecord"><span>🧹 Clear Record</span></div>
+                        <div class="dropdown-item" data-ora-cmd="toggleEditLayout"><span>✏️ Toggle Layout Editor</span></div>
                       </div>
                     </div>
                     <div class="menu-item dropdown">
-                      <span>Block</span>
+                      <span><u>Q</u>uery</span>
                       <div class="dropdown-menu">
-                        <div class="dropdown-item"><span>Previous</span><kbd>Shift+F5</kbd></div>
-                        <div class="dropdown-item"><span>Next</span><kbd>Shift+F6</kbd></div>
-                        <div class="dropdown-item"><span>Clear</span></div>
+                        <div class="dropdown-item" data-ora-cmd="enterQuery"><span>❓ Enter Query</span><kbd>F7</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="executeQuery"><span>⚡ Execute Query</span><kbd>F8 / Ctrl+F11</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="cancelQuery"><span>🚫 Cancel Query</span><kbd>Ctrl+Q</kbd></div>
                       </div>
                     </div>
                     <div class="menu-item dropdown">
-                      <span>Record</span>
+                      <span><u>B</u>lock</span>
                       <div class="dropdown-menu">
-                        <div class="dropdown-item"><span>Previous</span><kbd>Up</kbd></div>
-                        <div class="dropdown-item"><span>Next</span><kbd>Down</kbd></div>
-                        <div class="dropdown-item"><span>Insert</span><kbd>F6</kbd></div>
-                        <div class="dropdown-item"><span>Remove</span><kbd>Shift+F6</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="prevBlock"><span>⏮️ Previous Block</span><kbd>Shift+PgUp</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="nextBlock"><span>⏭️ Next Block</span><kbd>Shift+PgDn</kbd></div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item" data-ora-cmd="clearBlock"><span>🧹 Clear Block</span></div>
                       </div>
                     </div>
                     <div class="menu-item dropdown">
-                      <span>Field</span>
+                      <span><u>R</u>ecord</span>
                       <div class="dropdown-menu">
-                        <div class="dropdown-item"><span>Clear</span></div>
-                        <div class="dropdown-item"><span>Duplicate</span><kbd>F3</kbd></div>
-                        <div class="dropdown-item"><span>List of Values...</span><kbd>F9</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="firstRecord"><span>⏮️ First Record</span></div>
+                        <div class="dropdown-item" data-ora-cmd="prevRecord"><span>🔼 Previous Record</span><kbd>Up</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="nextRecord"><span>🔽 Next Record</span><kbd>Down</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="lastRecord"><span>⏭️ Last Record</span></div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item" data-ora-cmd="createRecord"><span>➕ Insert Record</span><kbd>F6</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="deleteRecord"><span>❌ Remove Record</span><kbd>Shift+F6</kbd></div>
                       </div>
                     </div>
                     <div class="menu-item dropdown">
-                      <span>Help</span>
+                      <span><u>F</u>ield</span>
                       <div class="dropdown-menu">
-                        <div class="dropdown-item"><span>Keys...</span><kbd>Ctrl+K</kbd></div>
-                        <div class="dropdown-item"><span>About Forms...</span></div>
+                        <div class="dropdown-item" data-ora-cmd="prevItem"><span>⏮️ Previous Field</span><kbd>Shift+Tab</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="nextItem"><span>⏭️ Next Field</span><kbd>Tab</kbd></div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item" data-ora-cmd="floatProps"><span>🎛️ Property Palette...</span><kbd>F4</kbd></div>
                       </div>
                     </div>
                     <div class="menu-item dropdown">
-                      <span>Window</span>
+                      <span><u>W</u>indow</span>
                       <div class="dropdown-menu">
-                        <div class="dropdown-item"><span>Cascade</span></div>
-                        <div class="dropdown-item"><span>Tile</span></div>
+                        <div class="dropdown-item" data-ora-cmd="toggleNav"><span>🗂️ Show/Hide Navigator</span><kbd>[</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="toggleProps"><span>🎛️ Show/Hide Properties</span><kbd>]</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="floatProps"><span>↗ Floating Property Sheet...</span><kbd>F4</kbd></div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item" data-ora-cmd="toggleDrawer"><span>📜 Show/Hide PL/SQL Split</span><kbd>`</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="floatCode"><span>↗ Floating PL/SQL Window...</span><kbd>F11</kbd></div>
+                        <div class="dropdown-item" data-ora-cmd="showTrace"><span>📡 Session & SQL Trace</span></div>
+                        <div class="dropdown-divider"></div>
+                        <div class="dropdown-item" data-ora-cmd="toggleFocus"><span>⛶ Runner Focus Mode</span></div>
+                      </div>
+                    </div>
+                    <div class="menu-item dropdown">
+                      <span><u>H</u>elp</span>
+                      <div class="dropdown-menu">
+                        <div class="dropdown-item" data-ora-cmd="showTrace"><span>📡 View Session Trace...</span></div>
+                        <div class="dropdown-item" data-ora-cmd="about"><span>ℹ️ About Oracle Forms Workbench</span></div>
                       </div>
                     </div>
                   </div>
                   <div class="oracle-header-logo">ORACLE</div>
                 </div>
 
-                <!-- Action Toolbar -->
-                <div class="oracle-action-toolbar">
-                  <button class="tool-btn" title="Save (Ctrl+S)">💾</button>
-                  <button class="tool-btn" title="Print (Ctrl+P)">🖨️</button>
-                  <button class="tool-btn" title="Exit (Ctrl+Q)">🚪</button>
+                <!-- ==================== ORACLE FORMS IN-WINDOW ACTION TOOLBAR ==================== -->
+                <div class="oracle-action-toolbar" id="dbControls">
+                  <!-- Session & Logon Controls inside Form Toolbar -->
+                  <button id="runFormBtn" class="ora-run-pill" title="Start Interactive Form Session (Triggers & PL/SQL)">▶ Run</button>
+                  <button id="stopFormBtn" class="ora-stop-pill hidden" title="Stop Running Form Session">■ Stop</button>
+                  <button id="dbConfigBtn" class="tool-btn" title="Database Logon & Connection Settings (Action -> Connect)">🔑</button>
+                  <button id="runtimeCommitBtn" class="tool-btn hidden" title="Save / Commit Changes (Ctrl+S)">💾</button>
+                  <button class="tool-btn" data-ora-cmd="commit" title="Save (Ctrl+S)">💾</button>
+                  <button class="tool-btn" data-ora-cmd="print" title="Print (Ctrl+P)">🖨️</button>
+                  <button class="tool-btn" data-ora-cmd="exit" title="Exit Form (Ctrl+Q)">🚪</button>
+
                   <span class="tool-sep"></span>
-                  <button class="tool-btn" title="Cut">✂️</button>
-                  <button class="tool-btn" title="Copy">📋</button>
-                  <button class="tool-btn" title="Paste">📄</button>
-                  <span class="tool-sep"></span>
-                  <button class="tool-btn" title="Clear Block">🧹</button>
-                  <button class="tool-btn" title="Previous Block">⏮️</button>
-                  <button class="tool-btn" title="Next Block">⏭️</button>
-                  <span class="tool-sep"></span>
-                  <button class="tool-btn" id="runtimePrevRecordBtn" title="Previous Record">🔼</button>
-                  <button class="tool-btn" id="runtimeNextRecordBtn" title="Next Record">🔽</button>
-                  <span class="tool-sep"></span>
-                  <button class="tool-btn" id="runtimeEnterQueryBtn" title="Enter Query (F7)">❓</button>
-                  <button class="tool-btn" id="runtimeExecuteQueryBtn" title="Execute Query (Ctrl+F11)">⚡</button>
+
+                  <!-- Query Controls inside Form Toolbar -->
+                  <button class="tool-btn" id="runtimeEnterQueryBtn" title="Enter Query Mode (F7)">❓</button>
+                  <button class="tool-btn" id="runtimeExecuteQueryBtn" title="Execute Query (F8 / Ctrl+F11)">⚡</button>
+                  <button id="dbQueryBtn" class="tool-btn hidden" title="Execute Query">⚡</button>
                   <button class="tool-btn" id="runtimeCancelQueryBtn" title="Cancel Query">🚫</button>
+
+                  <span class="tool-sep"></span>
+
+                  <!-- Block & Record Navigation inside Form Toolbar -->
+                  <button class="tool-btn" data-ora-cmd="prevBlock" title="Previous Block">⏮️</button>
+                  <button class="tool-btn" data-ora-cmd="nextBlock" title="Next Block">⏭️</button>
+                  <span class="tool-sep"></span>
+                  <button class="tool-btn" data-ora-cmd="firstRecord" title="First Record">⏫</button>
+                  <button class="tool-btn" id="runtimePrevRecordBtn" title="Previous Record (Up Arrow)">🔼</button>
+                  <button class="tool-btn" id="runtimeNextRecordBtn" title="Next Record (Down Arrow)">🔽</button>
+                  <button class="tool-btn" data-ora-cmd="lastRecord" title="Last Record">⏬</button>
+
+                  <span class="tool-sep"></span>
+
+                  <!-- Record DML inside Form Toolbar -->
+                  <button class="tool-btn" data-ora-cmd="createRecord" title="Insert Record (F6)">➕</button>
+                  <button class="tool-btn" data-ora-cmd="deleteRecord" title="Remove Record (Shift+F6)">❌</button>
+                  <button class="tool-btn" data-ora-cmd="clearBlock" title="Clear Block">🧹</button>
+
+                  <!-- Right-aligned In-Form Status & Record Counter -->
+                  <div class="ora-toolbar-right">
+                    <span id="dbStatusLabel" class="ora-db-tag" data-ora-cmd="logon" title="Click to open Oracle Forms Logon / Database Settings">Oracle Thin :1521</span>
+                    <span id="sessionBadge" class="ora-session-tag hidden" aria-live="polite"></span>
+                    <div id="recordNavControls" class="ora-record-nav hidden">
+                      <button id="prevRecordBtn" class="ora-micro-btn" title="Previous Record">◀</button>
+                      <span id="recordNavBadge" class="ora-rec-count">1 / 1</span>
+                      <button id="nextRecordBtn" class="ora-micro-btn" title="Next Record">▶</button>
+                    </div>
+                  </div>
                 </div>
 
                 <!-- Title Bar (MDI Child Window Title) -->
@@ -248,8 +400,8 @@
                   </div>
                   <div class="oracle-title-controls">
                     <button class="win-btn win-min" title="Minimize">−</button>
-                    <button class="win-btn win-max" title="Maximize">□</button>
-                    <button class="win-btn win-close" title="Close">✕</button>
+                    <button class="win-btn win-max" data-ora-cmd="toggleFocus" title="Maximize / Focus Window">□</button>
+                    <button class="win-btn win-close" data-ora-cmd="exit" title="Close / Exit Form">✕</button>
                   </div>
                 </div>
 
@@ -257,39 +409,86 @@
                 <div id="svgContainer" class="svg-container">
                   <svg id="formsSvg" xmlns="http://www.w3.org/2000/svg"></svg>
                 </div>
-                <details id="sessionTracePanel" class="session-trace hidden">
-                  <summary>Session trace (triggers, SQL, built-ins)</summary>
-                  <pre id="sessionTrace"></pre>
-                </details>
 
                 <!-- Status Bar -->
                 <div class="oracle-status-bar">
                   <div id="oracleStatusMsg" class="status-msg">Record: 1/1</div>
                   <div class="status-lamps">
+                    <span class="lamp" data-ora-cmd="showTrace" style="cursor:pointer;" title="Click to open Session & SQL Trace">Trace</span>
                     <span class="lamp active">&lt;Replace&gt;</span>
                     <span class="lamp">&lt;List&gt;</span>
                   </div>
                 </div>
               </div>
             </div>
+
+            <!-- ==================== BOTTOM SPLIT DRAWER (PL/SQL & TRACE) ==================== -->
+            <section id="bottomCodeDrawer" class="bottom-drawer hidden">
+              <div class="drawer-header">
+                <div class="drawer-tabs">
+                  <button class="drawer-tab active" data-drawer="drawerPlsql">
+                    📜 Quick PL/SQL <span id="drawerCodeTitle" class="drawer-sub">None selected</span>
+                  </button>
+                  <button class="drawer-tab" data-drawer="drawerTrace">
+                    📡 Session Trace (Triggers, SQL, Built-ins)
+                  </button>
+                </div>
+                <div class="drawer-actions">
+                  <button id="popoutCodeModalBtn" class="btn btn-sm btn-secondary" title="Open PL/SQL in Large Modal Window (F11)">↗ Pop-out Window</button>
+                  <button id="openFullCodeTabBtn" class="btn btn-sm btn-secondary" title="Switch to Full PL/SQL Studio Tab">Full Studio →</button>
+                  <button id="closeDrawerBtn" class="btn btn-sm btn-icon" title="Close Split Drawer">✕</button>
+                </div>
+              </div>
+              <div class="drawer-body">
+                <div id="drawerPlsql" class="drawer-pane active">
+                  <pre id="drawerPlsqlDisplay" class="code-pre"><code>-- Select an item with triggers or click a trigger pill to inspect PL/SQL right below the canvas</code></pre>
+                </div>
+                <div id="drawerTrace" class="drawer-pane">
+                  <div id="sessionTracePanel" class="session-trace">
+                    <pre id="sessionTrace">-- Start a live form session (▶ Run) to trace triggers, SQL queries, and built-in calls here.</pre>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- Canvas Status Footer -->
             <div class="canvas-footer">
               <span id="canvasStats">Dimensions: -</span>
               <span id="selectedItemStats">No item selected</span>
             </div>
           </div>
 
-          <!-- PL/SQL Code Tab -->
+          <!-- ==================== 2. PL/SQL STUDIO TAB ==================== -->
           <div id="codeTab" class="tab-view">
-            <div class="code-toolbar">
-              <span id="codeTitle" class="code-title">Select a trigger or program unit</span>
-              <span id="codeScopeBadge" class="badge"></span>
-            </div>
-            <div class="code-editor-container">
-              <pre id="plsqlCodeDisplay" class="code-pre"><code class="language-sql">-- Click a trigger in the navigator or on an item to inspect PL/SQL code</code></pre>
+            <div class="code-studio-layout">
+              <aside class="code-list-sidebar">
+                <div class="pane-header">
+                  <h3>Triggers & Program Units</h3>
+                  <input type="text" id="codeListFilterInput" placeholder="Filter triggers / units...">
+                </div>
+                <div id="codeUnitsList" class="pane-content">
+                  <div class="empty-state">Load a module to browse PL/SQL units.</div>
+                </div>
+              </aside>
+              <div class="code-main-area">
+                <div class="code-toolbar">
+                  <div class="code-toolbar-left">
+                    <span id="codeTitle" class="code-title">Select a trigger or program unit</span>
+                    <span id="codeScopeBadge" class="badge"></span>
+                  </div>
+                  <div class="code-toolbar-right">
+                    <button id="copyPlsqlBtn" class="btn btn-sm btn-secondary" title="Copy PL/SQL source to clipboard">📋 Copy Code</button>
+                    <button id="modalFromStudioBtn" class="btn btn-sm btn-secondary" title="Open in floating window (F11)">↗ Floating Window</button>
+                  </div>
+                </div>
+                <div class="code-editor-container">
+                  <pre id="plsqlCodeDisplay" class="code-pre"><code class="language-sql">-- Click a trigger in the list or navigator to inspect PL/SQL code</code></pre>
+                </div>
+              </div>
             </div>
           </div>
 
-          <!-- XML Slice Tab -->
+          <!-- ==================== 3. XML SLICE TAB ==================== -->
           <div id="xmlTab" class="tab-view">
             <div class="xml-toolbar">
               <span id="xmlTitle" class="xml-title">Source XML slice</span>
@@ -300,43 +499,90 @@
             </div>
           </div>
 
-          <!-- Form Diff Tool Tab -->
+          <!-- ==================== 4. FORM DIFF TOOL TAB ==================== -->
           <div id="diffTab" class="tab-view">
             <div class="diff-toolbar">
-              <label for="diffCompareSelect">Compare with module:</label>
+              <label for="diffCompareSelect">Compare current module with:</label>
               <select id="diffCompareSelect" class="diff-select"></select>
-              <button id="runDiffBtn" class="btn btn-sm btn-primary">Run Diff</button>
+              <button id="runDiffBtn" class="btn btn-sm btn-primary">⚖️ Run Structural & Visual Diff</button>
             </div>
             <div class="diff-container" id="diffContainer">
-              <div class="empty-state">Select another form to compare against current module.</div>
+              <div class="empty-state">Select another form module above to compare blocks, items, triggers, and coordinates.</div>
             </div>
           </div>
 
-          <!-- Reports Engine Tab -->
+          <!-- ==================== 5. REPORTS ENGINE TAB ==================== -->
           <div id="reportsTab" class="tab-view">
             <div class="reports-toolbar">
-              <label for="reportSelect">Select Report:</label>
+              <button id="browseReportBtn" class="btn btn-sm btn-secondary" title="Browse or upload .rdf, .rpt, or _report.xml file">
+                📂 Browse Report...
+              </button>
+              <label for="reportSelect">Report:</label>
               <select id="reportSelect" class="diff-select"></select>
-              <label for="reportBackendSelect" style="margin-left: 12px;">Backend:</label>
-              <select id="reportBackendSelect" class="diff-select">
-                <option value="oracle-thin">Oracle Thin (Pure-Rust :1521)</option>
+              <label for="reportBackendSelect" style="margin-left: 6px;">Backend:</label>
+              <select id="reportBackendSelect" class="diff-select" style="width: 155px;">
+                <option value="oracle-thin">Oracle Thin (:1521)</option>
                 <option value="oracle">Oracle 23ai</option>
                 <option value="sqlite">SQLite</option>
                 <option value="mock">Mock Engine</option>
               </select>
-              <button id="runReportBtn" class="btn btn-sm btn-primary">▶️ Run Report</button>
-              <button id="printReportBtn" class="btn btn-sm btn-secondary" style="margin-left: auto;">🖨️ Print / Save PDF</button>
+              <label for="reportTemplateSelect" style="margin-left: 6px;">Template:</label>
+              <select id="reportTemplateSelect" class="diff-select" style="width: 125px;" title="Oracle Reports Paper Layout Template Theme">
+                <option value="blue">🎨 Blue</option>
+                <option value="beige">🎨 Beige</option>
+                <option value="wine">🎨 Wine</option>
+                <option value="green">🎨 Green</option>
+                <option value="gray">🎨 Gray</option>
+              </select>
+              <button id="runReportBtn" class="btn btn-sm btn-primary">▶️ Run</button>
+
+              <!-- Report Mode Switcher: Preview | Split (Report + PL/SQL) | Full Report PL/SQL & SQL Studio -->
+              <div class="report-mode-group" style="margin-left: auto; display: inline-flex; gap: 4px; align-items: center;">
+                <button id="repModePreviewBtn" class="btn btn-sm btn-toggle active" data-rep-mode="preview" title="Rendered HTML5 Paper Preview + Interactive Data Model Diagram">
+                  📄 Paper Preview
+                </button>
+                <button id="repModeSplitBtn" class="btn btn-sm btn-toggle" data-rep-mode="split" title="Split View: Paper Preview + Report PL/SQL Formulas, Triggers &amp; SQL">
+                  📐 Split + PL/SQL
+                </button>
+                <button id="repModePlsqlBtn" class="btn btn-sm btn-toggle" data-rep-mode="plsql" title="Full Report PL/SQL Formula Columns, Report Triggers &amp; Data Model SQL Studio">
+                  📜 PL/SQL &amp; SQL
+                </button>
+                <button id="exportReportXmlBtn" class="btn btn-sm btn-secondary" style="margin-left: 4px;" title="Export Report XML definition (_report.xml) with any property/SQL/formula edits">
+                  💾 Export XML
+                </button>
+                <button id="printReportBtn" class="btn btn-sm btn-secondary">🖨️ PDF</button>
+              </div>
             </div>
-            <div class="reports-main-layout">
-              <div class="reports-preview-pane">
+            <div id="reportsMainLayout" class="reports-main-layout mode-preview">
+              <div id="reportsPreviewPane" class="reports-preview-pane">
                 <iframe id="reportPreviewFrame" class="report-iframe" src="about:blank"></iframe>
               </div>
+
+              <!-- Report PL/SQL Formula Columns, Report Triggers & SQL Queries Studio Pane -->
+              <div id="reportPlsqlStudioPane" class="report-plsql-studio-pane hidden">
+                <div class="reports-pane-header" style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                  <h4>📜 Report PL/SQL Formulas, Triggers &amp; SQL Queries</h4>
+                  <button id="copyReportPlsqlBtn" class="btn btn-xs btn-secondary" title="Copy PL/SQL / SQL to clipboard">📋 Copy</button>
+                </div>
+                <div class="report-plsql-body">
+                  <div id="reportCodeUnitsList" class="report-code-units-list"></div>
+                  <div class="report-code-editor-wrap">
+                    <div class="report-code-editor-header">
+                      <span id="reportCodeTitle">Select a Formula Column, Report Trigger, or SQL Query</span>
+                      <span id="reportCodeScopeBadge" class="badge">REPORT PL/SQL</span>
+                    </div>
+                    <pre id="reportPlsqlDisplay" class="code-pre" style="flex:1; margin:0;"><code>-- Run or select a report to inspect its PL/SQL Formula Columns (CF_*), Report Triggers, and SQL Data Sources (Q_*)</code></pre>
+                  </div>
+                </div>
+              </div>
+
               <div class="reports-data-pane">
-                <div class="reports-pane-header">
-                  <h4>Data Model & Summaries</h4>
+                <div class="reports-pane-header" style="display:flex; align-items:center; justify-content:space-between;">
+                  <h4>📐 Data Model Diagram &amp; Summaries</h4>
+                  <span style="font-size:10px; color:var(--text-muted);">Click node to inspect</span>
                 </div>
                 <div id="reportDataTree" class="reports-data-tree">
-                  <div class="empty-state">Run a report to inspect evaluated groups and summaries.</div>
+                  <div class="empty-state">Run a report to inspect its Data Model (Queries, Groups, Formula Columns &amp; Summaries).</div>
                 </div>
               </div>
             </div>
@@ -347,32 +593,351 @@
       <!-- Right Pane: Property Inspector -->
       <aside class="right-pane" id="rightPane">
         <div class="pane-header">
-          <h3>Property Inspector</h3>
-          <span id="inspectorTargetName" class="inspector-target">None</span>
+          <div class="pane-title-row">
+            <h3>Property Palette</h3>
+            <div class="pane-header-actions">
+              <button id="detachPropsBtn" class="btn-micro" title="Open in Floating Modal (F4)">↗</button>
+              <button id="closeRightPaneBtn" class="btn-micro" title="Hide Property Palette ( ] )">✕</button>
+            </div>
+          </div>
+          <div class="inspector-target-row">
+            <span id="inspectorTargetName" class="inspector-target">None</span>
+          </div>
+          <div class="prop-filter">
+            <input type="text" id="propFilterInput" placeholder="Filter properties (e.g. width, color, dml)...">
+          </div>
         </div>
         <div class="pane-content" id="propertyInspector">
-          <div class="empty-state">Select an object to inspect properties.</div>
+          <div class="empty-state">Select an object on the canvas or navigator to inspect properties.</div>
         </div>
       </aside>
     </div>
   </div>
 
-  <dialog id="previewDialog" class="preview-dialog">
-    <h3 id="previewDialogTitle"></h3>
-    <p id="previewDialogMessage"></p>
-    <p class="preview-disclaimer">UI simulation only. No PL/SQL, database queries, or application actions are executed.</p>
-    <button id="previewSourceBtn" class="btn btn-secondary" hidden>View Associated Source</button>
-    <button id="previewCloseBtn" class="btn btn-primary">Close</button>
+  <!-- ==================== MODALS & FLOATING WINDOWS ==================== -->
+
+  <!-- 1. Classic Oracle Forms Logon Screen Modal -->
+  <dialog id="dbConfigModal" class="oracle-logon-modal">
+    <div class="oracle-title-bar">
+      <div class="oracle-title-left">
+        <span class="oracle-title-icon">🔑</span>
+        <span class="oracle-title-text">Oracle Forms Logon</span>
+      </div>
+      <div class="oracle-title-controls">
+        <button class="win-btn win-close" data-close-modal="dbConfigModal" title="Close">✕</button>
+      </div>
+    </div>
+    <div class="oracle-logon-body">
+      <div class="oracle-logon-banner">
+        <span class="oracle-logo-large">ORACLE</span>
+        <span class="oracle-logon-subtitle">Forms Runtime Authentication &amp; Database Driver</span>
+      </div>
+      <div class="oracle-logon-fields">
+        <div class="ora-field-row">
+          <label for="dbUserInput"><u>U</u>sername:</label>
+          <input id="dbUserInput" type="text" placeholder="forms_user (blank = server env)" autocomplete="username">
+        </div>
+        <div class="ora-field-row">
+          <label for="dbPassInput"><u>P</u>assword:</label>
+          <input id="dbPassInput" type="password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <div class="ora-field-row">
+          <label for="dbBackendSelect"><u>D</u>atabase:</label>
+          <select id="dbBackendSelect">
+            <option value="oracle-thin">FREEPDB1 — Oracle Thin (Pure-Rust :1521)</option>
+            <option value="oracle">FREEPDB1 — Container SQL*Plus Bridge</option>
+            <option value="sqlite">SQLite (Local In-Memory Engine)</option>
+            <option value="mock">Mock Driver (Synthetic Sample Data)</option>
+          </select>
+        </div>
+        <div class="ora-field-row ora-check-row">
+          <label></label>
+          <label class="ora-checkbox-label">
+            <input type="checkbox" id="allowWritesToggle">
+            <span>Allow DML Writes (INSERT / UPDATE / DELETE / COMMIT)</span>
+          </label>
+        </div>
+      </div>
+      <div class="oracle-logon-buttons">
+        <button id="logonConnectRunBtn" class="ora-btn ora-btn-default">Connect &amp; Run</button>
+        <button class="ora-btn" data-close-modal="dbConfigModal">Apply Only</button>
+        <button class="ora-btn" data-close-modal="dbConfigModal">Cancel</button>
+      </div>
+    </div>
   </dialog>
-  <dialog id="runtimeAlertDialog" class="preview-dialog">
-    <h3 id="runtimeAlertTitle"></h3>
-    <p id="runtimeAlertMessage"></p>
-    <div class="runtime-alert-buttons">
+
+  <!-- 2. Open File / Path / Menu / Artifact Browser Modal -->
+  <dialog id="openFileModal" class="workbench-modal modal-xl">
+    <div class="modal-header">
+      <div>
+        <h3>📂 Browse &amp; Open Artifact — Forms (.fmb / .xml), Menus (.mmb), Libraries (.olb / .pld), Reports (.rdf / .rpt / .xml)</h3>
+      </div>
+      <button class="modal-close-btn" data-close-modal="openFileModal">✕</button>
+    </div>
+    <div class="modal-body wizard-body">
+      <div class="wizard-grid">
+        <!-- Left Column: Browse Computer / Direct Path / Attach Menu -->
+        <div class="wizard-card">
+          <div class="wizard-step-header">
+            <span class="wizard-step-badge">Local / Path</span>
+            <h4>Browse Computer or Enter File Path</h4>
+          </div>
+
+          <div class="modal-section" style="margin-bottom: 4px;">
+            <p class="modal-hint" style="margin-bottom: 8px;">Pick any Oracle Forms or Reports file directly from your computer disk:</p>
+            <label class="btn btn-primary modal-upload-label" style="width:100%; justify-content:center; padding: 10px 14px; font-size: 13px;">
+              💻 Choose File from Computer (.fmb, .mmb, .olb, .pll, .pld, .rdf, .rpt, .xml)...
+              <input type="file" id="fileInput" accept=".fmb,.fmx,.xml,.mmb,.mmx,.olb,.pll,.pld,.rdf,.rpt,.rex" style="display:none;">
+            </label>
+          </div>
+
+          <div class="modal-divider" style="margin: 8px 0;"></div>
+
+          <div class="modal-section">
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">Load by Workspace or Absolute Server File Path:</label>
+            <div class="input-with-button full-width">
+              <input type="text" id="filePathInput" placeholder="e.g. samples/ofw_demo_employees.fmb or /path/to/module.mmb">
+              <button id="openPathBtn" class="btn btn-primary">Open Path</button>
+            </div>
+          </div>
+
+          <div class="modal-divider" style="margin: 8px 0;"></div>
+
+          <div class="modal-section">
+            <label style="font-size:11.5px; font-weight:600; color:var(--text-secondary); display:block; margin-bottom:4px;">🍔 Attach Custom Menu Module (.mmb / _mmb.xml) to Active Form:</label>
+            <p class="modal-hint" style="margin-bottom: 8px;">Overlay a custom Oracle Forms menu bar with PL/SQL commands onto the currently open form:</p>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <button type="button" class="btn btn-sm btn-emerald" data-attach-menu="OFW_EMP_MENU">🍔 Attach OFW_EMP_MENU.mmb</button>
+              <button type="button" class="btn btn-sm btn-secondary" data-attach-menu="MAINMENU">🍔 Attach MAINMENU.mmb</button>
+              <button id="loadMenuBtn" class="btn btn-sm btn-outline">📂 Browse Custom .mmb / _mmb.xml...</button>
+              <input type="file" id="menuFileInput" accept=".xml,.mmb" hidden>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Server & Workspace File Browser -->
+        <div class="wizard-card">
+          <div class="wizard-step-header" style="justify-content: space-between;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="wizard-step-badge">Repository</span>
+              <h4>Browse Workspace Artifacts (.fmb, .mmb, .olb, .pld, .rdf, .xml)</h4>
+            </div>
+            <input type="text" id="browseFilterInput" placeholder="Filter files..." style="width: 150px; padding: 3px 8px; font-size: 11px;">
+          </div>
+
+          <div class="tree-Quick-filters" id="browseCategoryPills" style="padding: 2px 0;">
+            <button class="filter-pill active" data-browse-cat="ALL">All</button>
+            <button class="filter-pill" data-browse-cat="FORM">Forms (.fmb/.xml)</button>
+            <button class="filter-pill" data-browse-cat="MENU">Menus (.mmb)</button>
+            <button class="filter-pill" data-browse-cat="OBJECT_LIB">Object Libs (.olb)</button>
+            <button class="filter-pill" data-browse-cat="PLSQL_LIB">PL/SQL (.pld)</button>
+            <button class="filter-pill" data-browse-cat="REPORT">Reports (.rdf/.xml)</button>
+          </div>
+
+          <div id="workspaceFilesBrowserList" class="wiz-columns-list" style="max-height: 265px;">
+            <div class="empty-state">Loading workspace files...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close-modal="openFileModal">Close</button>
+    </div>
+  </dialog>
+
+  <!-- 3. Floating Property Sheet Modal (F4) -->
+  <dialog id="floatingPropsModal" class="workbench-modal modal-lg">
+    <div class="modal-header">
+      <h3>🎛️ Property Palette — <span id="modalInspectorTarget">None</span></h3>
+      <button class="modal-close-btn" data-close-modal="floatingPropsModal">✕</button>
+    </div>
+    <div class="modal-body modal-scroll-body">
+      <div id="modalPropertyInspector" class="modal-prop-content"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close-modal="floatingPropsModal">Close (Esc)</button>
+    </div>
+  </dialog>
+
+  <!-- 4. Floating PL/SQL Editor Modal (F11) -->
+  <dialog id="floatingCodeModal" class="workbench-modal modal-xl">
+    <div class="modal-header">
+      <div>
+        <h3>📜 PL/SQL Editor — <span id="modalCodeTitle">Trigger</span></h3>
+      </div>
+      <button class="modal-close-btn" data-close-modal="floatingCodeModal">✕</button>
+    </div>
+    <div class="modal-body modal-code-body">
+      <pre id="modalPlsqlDisplay" class="code-pre"><code></code></pre>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close-modal="floatingCodeModal">Close (Esc)</button>
+    </div>
+  </dialog>
+
+  <!-- 5. Preview & Runtime Alert Dialogs -->
+  <dialog id="previewDialog" class="preview-dialog workbench-modal">
+    <div class="modal-header">
+      <h3 id="previewDialogTitle"></h3>
+    </div>
+    <div class="modal-body">
+      <p id="previewDialogMessage"></p>
+      <p class="preview-disclaimer">Click "▶ Run" on the Oracle Forms toolbar (or Action &rarr; Run Form Session) to execute real PL/SQL triggers and database queries.</p>
+    </div>
+    <div class="modal-footer">
+      <button id="previewSourceBtn" class="btn btn-secondary" hidden>📜 View Trigger Source</button>
+      <button id="previewCloseBtn" class="btn btn-primary">Close</button>
+    </div>
+  </dialog>
+
+  <dialog id="runtimeAlertDialog" class="preview-dialog workbench-modal">
+    <div class="modal-header">
+      <h3 id="runtimeAlertTitle"></h3>
+    </div>
+    <div class="modal-body">
+      <p id="runtimeAlertMessage"></p>
+    </div>
+    <div class="modal-footer runtime-alert-buttons">
       <button id="runtimeAlertBtn1" class="btn btn-primary" data-button="1"></button>
       <button id="runtimeAlertBtn2" class="btn btn-secondary" data-button="2"></button>
       <button id="runtimeAlertBtn3" class="btn btn-secondary" data-button="3"></button>
     </div>
   </dialog>
+
+  <!-- 6. Modernized Data Block & Layout Wizard Modal -->
+  <dialog id="blockLayoutWizardModal" class="workbench-modal modal-xl">
+    <div class="modal-header">
+      <div>
+        <h3>🧙‍♂️ Data Block &amp; Layout Wizard — Modern Forms Builder Studio</h3>
+      </div>
+      <button class="modal-close-btn" data-close-modal="blockLayoutWizardModal">✕</button>
+    </div>
+    <div class="modal-body modal-scroll-body wizard-body">
+      <div class="wizard-grid">
+        <!-- Step 1: Data Block & Table/Column Selection -->
+        <div class="wizard-card">
+          <div class="wizard-step-header">
+            <span class="wizard-step-badge">Step 1</span>
+            <h4>Data Block Source — Table / View &amp; Columns</h4>
+          </div>
+
+          <div class="form-row">
+            <label for="wizTableSelect">Select Database Table or View (Oracle 23ai / Schema Catalog)</label>
+            <div class="input-with-button full-width">
+              <select id="wizTableSelect" class="full-width">
+                <option value="OFW_DEMO_EMPLOYEES">OFW_DEMO_EMPLOYEES (Employees Directory — 7 cols)</option>
+                <option value="OFW_DEMO_SALES">OFW_DEMO_SALES (Sales Orders &amp; Totals — 9 cols)</option>
+                <option value="ORDERS">ORDERS (Customer Orders — 6 cols)</option>
+                <option value="ORDER_ITEMS">ORDER_ITEMS (Order Line Items — 5 cols)</option>
+                <option value="CLAIMS">CLAIMS (Insurance Claims — 7 cols)</option>
+                <option value="EMP">EMP (Classic Scott Employees — 8 cols)</option>
+                <option value="DEPT">DEPT (Departments — 3 cols)</option>
+              </select>
+              <button id="wizSelectAllColsBtn" class="btn btn-sm btn-secondary" title="Select all columns (&gt;&gt;)">&gt;&gt; All</button>
+              <button id="wizClearColsBtn" class="btn btn-sm btn-secondary" title="Deselect all columns (&lt;&lt;)">&lt;&lt; None</button>
+            </div>
+          </div>
+
+          <div class="form-row-inline">
+            <div class="form-row" style="flex:1;">
+              <label for="wizBlockNameInput">Data Block Name</label>
+              <input type="text" id="wizBlockNameInput" value="EMP" placeholder="e.g. EMP or SALES">
+            </div>
+            <div class="form-row" style="flex:1;">
+              <label for="wizBlockModeSelect">Target Action</label>
+              <select id="wizBlockModeSelect">
+                <option value="replace">Update / Replace Block on Current Form</option>
+                <option value="append">Add as New Block to Current Form</option>
+                <option value="newForm">Create Fresh Form Module</option>
+              </select>
+            </div>
+          </div>
+
+          <label class="wiz-sub-label">Available Columns &rarr; Database Items (check columns to include &amp; customize prompts):</label>
+          <div id="wizColumnsContainer" class="wiz-columns-list"></div>
+        </div>
+
+        <!-- Step 2: Layout Wizard (Canvas, Frame Title, Form vs Tabular, In-Form Buttons) -->
+        <div class="wizard-card">
+          <div class="wizard-step-header">
+            <span class="wizard-step-badge">Step 2</span>
+            <h4>Layout Style, Frame Title &amp; In-Form Controls</h4>
+          </div>
+
+          <div class="form-row-inline">
+            <div class="form-row" style="flex:1;">
+              <label for="wizWindowTitleInput">Form / Window Title Bar Text</label>
+              <input type="text" id="wizWindowTitleInput" value="Employee Directory" placeholder="e.g. Employee Directory">
+            </div>
+            <div class="form-row" style="flex:1;">
+              <label for="wizCanvasSelect">Target Canvas</label>
+              <select id="wizCanvasSelect">
+                <option value="CANVAS_MAIN">CANVAS_MAIN (Content)</option>
+                <option value="NEW_CANVAS">(Create New Content Canvas)</option>
+              </select>
+            </div>
+          </div>
+
+          <label class="wiz-sub-label">Select Frame Layout Style:</label>
+          <div class="wiz-style-cards">
+            <label class="wiz-style-card active" id="wizStyleFormCard">
+              <input type="radio" name="wizLayoutStyle" value="form" checked>
+              <div>
+                <strong>📄 Form Layout (Single Record)</strong>
+                <span>2-column label + field card layout for detailed record entry</span>
+              </div>
+            </label>
+            <label class="wiz-style-card" id="wizStyleTabularCard">
+              <input type="radio" name="wizLayoutStyle" value="tabular">
+              <div>
+                <strong>📊 Tabular Layout (Multi-Record Grid)</strong>
+                <span>Horizontal table grid with column headers &amp; scrollbar</span>
+              </div>
+            </label>
+          </div>
+
+          <div class="form-row">
+            <label for="wizFrameTitleInput">Frame Title (drawn around block on canvas)</label>
+            <input type="text" id="wizFrameTitleInput" value="EMPLOYEE DETAILS" placeholder="e.g. AUTHOR DETAILS or ORDER LINES">
+          </div>
+
+          <div class="form-row-inline">
+            <div class="form-row" style="flex:1;">
+              <label for="wizRecordsDisplayedInput">Records Displayed</label>
+              <input type="number" id="wizRecordsDisplayedInput" value="1" min="1" max="20">
+            </div>
+            <div class="form-row" style="flex:1;">
+              <label for="wizRecordDistInput">Distance Between Records (px)</label>
+              <input type="number" id="wizRecordDistInput" value="4" min="0" max="30">
+            </div>
+          </div>
+
+          <label class="wiz-sub-label">In-Form Navigation &amp; Action Buttons (placed directly on form canvas):</label>
+          <div class="wiz-checkbox-group">
+            <label class="toggle-card">
+              <input type="checkbox" id="wizIncludeNavBtns" checked>
+              <div>
+                <strong>🧭 In-Form Record Navigation (&lt; Previous, Next &gt;, Record Info)</strong>
+                <span>Places interactive Previous / Next buttons and record counter inside the form</span>
+              </div>
+            </label>
+            <label class="toggle-card">
+              <input type="checkbox" id="wizIncludeActionBtns" checked>
+              <div>
+                <strong>⚡ In-Form Search, Show All &amp; Save Buttons</strong>
+                <span>Places Search filter bar, Execute Query, Save (Commit), and + New Record buttons on the form</span>
+              </div>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close-modal="blockLayoutWizardModal">Cancel</button>
+      <button id="wizApplyBtn" class="btn btn-emerald">✨ Generate Block &amp; Layout on Canvas</button>
+    </div>
+  </dialog>
+
   <script src="preview.js"></script>
   <script src="runtime.js"></script>
   <script src="app.js"></script>
