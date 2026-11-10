@@ -1,0 +1,30 @@
+[
+  {
+    "query": "Compare Oracle Forms 14c and the native Rust workbench side by side",
+    "should_trigger": true
+  },
+  {
+    "query": "What features of ofw_sales_fmb.xml are supported in the Rust runtime vs WebLogic?",
+    "should_trigger": true
+  },
+  {
+    "query": "Generate a feature parity report for our Oracle Forms modules",
+    "should_trigger": true
+  },
+  {
+    "query": "Check if this form uses any unsupported built-ins like HOST or OLE",
+    "should_trigger": true
+  },
+  {
+    "query": "Benchmark query latency between Oracle Forms 14c and oracle-thin",
+    "should_trigger": true
+  },
+  {
+    "query": "How do I make a chocolate cake?",
+    "should_trigger": false
+  },
+  {
+    "query": "Install docker on Ubuntu 22.04",
+    "should_trigger": false
+  }
+]
