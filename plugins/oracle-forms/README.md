@@ -13,6 +13,7 @@ List the self-contained skills, sub-agents, and hooks provided by this plugin he
 - **`converting-oracle-artifacts`**: Bidirectional conversion between Oracle binary forms (`.fmb`), XML representations, PL/SQL libraries (`.pll`/`.pld`), and Reports (`.rdf`).
 - **`compiling-and-running-oracle-forms`**: Headless batch compilation (`frmcmp_batch`) and live desktop execution via Forms Standalone Launcher (FSAL).
 - **`testing-forms-parity`**: End-to-end parity tester comparing form compilation, servlet responses, and query execution between Fusion Middleware 14c and the native pure-Rust Oracle Forms Workbench.
+- **`comparing-forms-features`**: Side-by-side feature comparison, compatibility scoring, built-in subprogram auditing, and latency benchmarking between Oracle Fusion Middleware 14c and the native pure-Rust Oracle Forms Workbench.
 
 ### Sub-Agents
 
