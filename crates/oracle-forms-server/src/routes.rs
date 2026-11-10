@@ -7,9 +7,18 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use oracle_forms_core::model::*;
 use crate::assets::static_handler;
+use crate::security::{self, SecurityConfig};
 use crate::service::FormsService;
 
+/// Router with the default (loopback-only) security policy.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn app_router(service: FormsService) -> Router {
+    app_router_with_security(service, SecurityConfig::loopback_only())
+}
+
+/// Router with an explicit security policy. Every request passes through
+/// [`security::guard`] (Host allow-list, same-origin API requests).
+pub fn app_router_with_security(service: FormsService, security_cfg: SecurityConfig) -> Router {
     Router::new()
         .route("/api/samples", get(get_samples))
         .route("/api/open-sample/{name}", post(open_sample))
@@ -27,6 +36,10 @@ pub fn app_router(service: FormsService) -> Router {
         .route("/api/reports/{name}/html", get(get_report_html))
         .fallback(static_handler)
         .with_state(service)
+        .layer(axum::middleware::from_fn_with_state(
+            std::sync::Arc::new(security_cfg),
+            security::guard,
+        ))
 }
 
 async fn get_samples(State(service): State<FormsService>) -> impl IntoResponse {
@@ -188,7 +201,10 @@ struct TestDbResponse {
     backend: oracle_forms_db::DbBackend,
 }
 
-async fn test_db_connection(Json(payload): Json<TestDbRequest>) -> Response {
+async fn test_db_connection(
+    State(service): State<FormsService>,
+    Json(payload): Json<TestDbRequest>,
+) -> Response {
     let mut config = oracle_forms_db::DbConfig {
         backend: payload.backend,
         ..Default::default()
@@ -198,6 +214,7 @@ async fn test_db_connection(Json(payload): Json<TestDbRequest>) -> Response {
     if let Some(s) = payload.service_name { config.service_name = Some(s); }
     if let Some(u) = payload.username { config.username = Some(u); }
     if let Some(pw) = payload.password { config.password = Some(pw); }
+    let config = service.apply_credential_policy(config);
 
     match oracle_forms_db::create_driver(&config) {
         Ok(driver) => match driver.test_connection().await {
@@ -411,7 +428,17 @@ async fn open_file(
                 Ok(None) => break,
                 Err(e) => return upload_error(e.status(), e.to_string()),
             };
-            if let Some(file_name) = field.file_name().map(|s| s.to_string()) {
+            if let Some(raw_name) = field.file_name().map(|s| s.to_string()) {
+                // The client controls this name. Keep only the final path component so an
+                // upload named "../../x" cannot be written outside the upload directory.
+                let file_name = match Path::new(&raw_name.replace('\\', "/"))
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(str::to_string)
+                {
+                    Some(n) if security::is_plain_file_name(&n) && !n.starts_with('.') => n,
+                    _ => return upload_error(StatusCode::BAD_REQUEST, format!("Invalid upload file name '{}'", raw_name)),
+                };
                 let temp_dir = std::env::temp_dir().join("forms-upload");
                 if let Err(e) = std::fs::create_dir_all(&temp_dir) {
                     return upload_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
@@ -786,6 +813,200 @@ mod tests {
         assert_eq!(resp.report.name, "ORDERS_SUMMARY");
         assert!(resp.html.contains("<!DOCTYPE html>"));
         assert!(resp.html.contains("Customer Orders Summary Report"));
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    // -----------------------------------------------------------------------
+    // Security regression tests (cross-origin, DNS rebinding, path traversal).
+    // -----------------------------------------------------------------------
+
+    fn security_test_service(tag: &str) -> (FormsService, std::path::PathBuf) {
+        let cache = std::env::temp_dir().join(format!("forms-sec-{}-{}", tag, std::process::id()));
+        (FormsService::new(&cache), cache)
+    }
+
+    async fn send(service: FormsService, req: Request<Body>) -> (StatusCode, String, axum::http::HeaderMap) {
+        let response = app_router(service).oneshot(req).await.unwrap();
+        let status = response.status();
+        let headers = response.headers().clone();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        (status, String::from_utf8_lossy(&body).to_string(), headers)
+    }
+
+    #[tokio::test]
+    async fn source_endpoint_rejects_path_traversal() {
+        let (service, cache) = security_test_service("traversal");
+        service.load_sample("orders_fmb.xml").expect("sample loads");
+
+        for path in [
+            "../../../../../../../etc/hosts",
+            "plsql/../../../../../../../etc/hosts",
+            "..%2F..%2F..%2Fetc%2Fhosts",
+            "/etc/hosts",
+            "\\etc\\hosts",
+        ] {
+            let uri = format!("/api/module/ORDERS/source?path={}", path.replace('/', "%2F"));
+            let (status, body, _) = send(
+                service.clone(),
+                Request::builder().uri(uri).body(Body::empty()).unwrap(),
+            )
+            .await;
+            assert_eq!(status, StatusCode::NOT_FOUND, "path {path:?} returned {status}: {body}");
+            assert!(!body.contains("localhost"), "path {path:?} leaked file contents");
+        }
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn open_sample_only_accepts_plain_sample_names() {
+        let (service, cache) = security_test_service("sample-names");
+        for name in ["..%2F..%2FCargo.toml", "%2Fetc%2Fhosts", "..%2Fsamples%2Forders_fmb.xml"] {
+            let (status, _, _) = send(
+                service.clone(),
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/open-sample/{}", name))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(status, StatusCode::NOT_FOUND, "sample name {name:?} was accepted");
+        }
+        let (status, _, _) = send(
+            service.clone(),
+            Request::builder()
+                .method("POST")
+                .uri("/api/open-sample/orders_fmb.xml")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "a real sample must still open");
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn cross_origin_api_requests_are_rejected() {
+        let (service, cache) = security_test_service("cors");
+        let cases: Vec<(&str, &str)> = vec![
+            ("origin", "https://evil.example"),
+            ("origin", "null"),
+            ("origin", "http://127.0.0.1:9999"), // another local app on a different port
+            ("sec-fetch-site", "cross-site"),
+        ];
+        for (header_name, value) in cases {
+            let (status, _, headers) = send(
+                service.clone(),
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/open-sample/orders_fmb.xml")
+                    .header("host", "127.0.0.1:7070")
+                    .header(header_name, value)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(status, StatusCode::FORBIDDEN, "{header_name}: {value} was allowed");
+            assert!(headers.get("access-control-allow-origin").is_none());
+        }
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn same_origin_api_requests_are_allowed() {
+        let (service, cache) = security_test_service("same-origin");
+        let (status, body, headers) = send(
+            service,
+            Request::builder()
+                .method("POST")
+                .uri("/api/open-sample/orders_fmb.xml")
+                .header("host", "127.0.0.1:7070")
+                .header("origin", "http://127.0.0.1:7070")
+                .header("sec-fetch-site", "same-origin")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert!(headers.get("access-control-allow-origin").is_none(), "no CORS headers expected");
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn dns_rebinding_host_is_rejected() {
+        let (service, cache) = security_test_service("rebinding");
+        for host in ["evil.example", "evil.example:7070", "192.168.1.20:7070"] {
+            let (status, _, _) = send(
+                service.clone(),
+                Request::builder()
+                    .uri("/api/samples")
+                    .header("host", host)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(status, StatusCode::MISDIRECTED_REQUEST, "Host {host} was accepted");
+        }
+        for host in ["localhost:7070", "127.0.0.1:7070", "[::1]:7070"] {
+            let (status, _, _) = send(
+                service.clone(),
+                Request::builder()
+                    .uri("/api/samples")
+                    .header("host", host)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "loopback Host {host} was rejected");
+        }
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn upload_file_name_cannot_escape_upload_dir() {
+        let marker = format!("ofw-escape-{}.xml", std::process::id());
+        let escaped = std::env::temp_dir().join(&marker);
+        let _ = std::fs::remove_file(&escaped);
+        let body = format!(
+            "--test-boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"../{}\"\r\nContent-Type: application/xml\r\n\r\n<Module><FormModule Name=\"ESC\"/></Module>\r\n--test-boundary--\r\n",
+            marker
+        );
+        let _ = upload(body).await;
+        assert!(!escaped.exists(), "upload was written outside the upload directory");
+        let inside = std::env::temp_dir().join("forms-upload").join(&marker);
+        let _ = std::fs::remove_file(inside);
+    }
+
+    #[tokio::test]
+    async fn oracle_query_without_credentials_errors_instead_of_mock_rows() {
+        let (service, cache) = security_test_service("no-mock-fallback");
+        let (status, body, _) = send(
+            service,
+            Request::builder()
+                .method("POST")
+                .uri("/api/forms/query-block")
+                .header("content-type", "application/json")
+                .body(Body::from(r#"{"moduleName": "orders_fmb.xml", "backend": "oracle-thin"}"#))
+                .unwrap(),
+        )
+        .await;
+        assert_ne!(status, StatusCode::OK, "must not return rows: {body}");
+        assert!(body.to_ascii_lowercase().contains("username") || body.to_ascii_lowercase().contains("password"), "{body}");
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn report_names_cannot_escape_samples_dir() {
+        let (service, cache) = security_test_service("report-names");
+        let (status, _, _) = send(
+            service,
+            Request::builder()
+                .uri("/api/reports/..%2F..%2FCargo.toml/html")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
         let _ = std::fs::remove_dir_all(cache);
     }
 }

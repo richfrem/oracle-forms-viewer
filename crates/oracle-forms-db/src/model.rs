@@ -86,7 +86,30 @@ pub enum DbBackend {
     Postgres,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+impl DbBackend {
+    /// Parses a user-supplied backend name. Unknown names are an error rather than a
+    /// silent fallback to the mock backend, so callers never show fake rows by accident.
+    pub fn parse(name: &str) -> Result<Self, DbError> {
+        match name.trim().to_ascii_lowercase().as_str() {
+            "mock" => Ok(DbBackend::Mock),
+            "sqlite" => Ok(DbBackend::Sqlite),
+            "oracle" | "testbed" | "testbed-sqlplus" => Ok(DbBackend::Oracle),
+            "oracle-thin" | "oracle_thin" | "thin" => Ok(DbBackend::OracleThin),
+            "postgres" | "postgresql" => Ok(DbBackend::Postgres),
+            other => Err(DbError::ConfigError(format!(
+                "Unknown database backend '{}'. Expected one of: mock, sqlite, oracle, oracle-thin",
+                other
+            ))),
+        }
+    }
+}
+
+/// Connection settings for a database backend.
+///
+/// Credentials are never defaulted: `username` and `password` are `None` unless the caller
+/// supplies them or explicitly opts in to environment credentials via
+/// [`DbConfig::with_env_credentials`].
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DbConfig {
     #[serde(default)]
@@ -99,6 +122,20 @@ pub struct DbConfig {
     pub database_path: Option<String>,
 }
 
+impl std::fmt::Debug for DbConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DbConfig")
+            .field("backend", &self.backend)
+            .field("host", &self.host)
+            .field("port", &self.port)
+            .field("service_name", &self.service_name)
+            .field("username", &self.username)
+            .field("password", &self.password.as_ref().map(|_| "<redacted>"))
+            .field("database_path", &self.database_path)
+            .finish()
+    }
+}
+
 impl Default for DbConfig {
     fn default() -> Self {
         Self {
@@ -106,8 +143,8 @@ impl Default for DbConfig {
             host: Some("localhost".to_string()),
             port: Some(1521),
             service_name: Some("FREEPDB1".to_string()),
-            username: std::env::var("OFW_DB_USER").ok().or_else(|| Some("forms_user".to_string())),
-            password: std::env::var("OFW_DB_PASSWORD").ok(),
+            username: None,
+            password: None,
             database_path: None,
         }
     }
@@ -117,24 +154,14 @@ impl DbConfig {
     pub fn oracle_default() -> Self {
         Self {
             backend: DbBackend::Oracle,
-            host: Some("localhost".to_string()),
-            port: Some(1521),
-            service_name: Some("FREEPDB1".to_string()),
-            username: std::env::var("OFW_DB_USER").ok().or_else(|| Some("forms_user".to_string())),
-            password: std::env::var("OFW_DB_PASSWORD").ok(),
-            database_path: None,
+            ..Default::default()
         }
     }
 
     pub fn oracle_thin_default() -> Self {
         Self {
             backend: DbBackend::OracleThin,
-            host: Some("localhost".to_string()),
-            port: Some(1521),
-            service_name: Some("FREEPDB1".to_string()),
-            username: std::env::var("OFW_DB_USER").ok().or_else(|| Some("forms_user".to_string())),
-            password: std::env::var("OFW_DB_PASSWORD").ok(),
-            database_path: None,
+            ..Default::default()
         }
     }
 
@@ -155,6 +182,41 @@ impl DbConfig {
             backend: DbBackend::Mock,
             ..Default::default()
         }
+    }
+
+    /// Fills any missing username/password from `OFW_DB_USER` / `OFW_DB_PASSWORD`.
+    ///
+    /// Intended for local, user-invoked tools (the CLI, opt-in server mode, live tests).
+    /// Values supplied explicitly are never overridden.
+    pub fn with_env_credentials(mut self) -> Self {
+        if self.username.is_none() {
+            self.username = std::env::var("OFW_DB_USER").ok().filter(|v| !v.is_empty());
+        }
+        if self.password.is_none() {
+            self.password = std::env::var("OFW_DB_PASSWORD").ok().filter(|v| !v.is_empty());
+        }
+        self
+    }
+
+    /// Returns `(username, password)` or a configuration error naming what is missing.
+    pub fn require_credentials(&self) -> Result<(String, String), DbError> {
+        let user = self
+            .username
+            .clone()
+            .filter(|u| !u.trim().is_empty())
+            .ok_or_else(|| {
+                DbError::ConfigError(
+                    "Database username not provided. Supply it in the request or set OFW_DB_USER (CLI)."
+                        .to_string(),
+                )
+            })?;
+        let pass = self.password.clone().filter(|p| !p.is_empty()).ok_or_else(|| {
+            DbError::ConfigError(
+                "Database password not provided. Supply it in the request or set OFW_DB_PASSWORD (CLI)."
+                    .to_string(),
+            )
+        })?;
+        Ok((user, pass))
     }
 }
 
@@ -197,4 +259,7 @@ pub enum DbError {
 
     #[error("Internal database error: {0}")]
     Internal(String),
+
+    #[error("Database configuration error: {0}")]
+    ConfigError(String),
 }

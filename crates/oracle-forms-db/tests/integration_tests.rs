@@ -92,7 +92,7 @@ async fn test_factory_creation() {
 
 #[tokio::test]
 async fn test_oracle_live_container_query() {
-    let config = DbConfig::oracle_default();
+    let config = DbConfig::oracle_default().with_env_credentials();
     let driver = match create_driver(&config) {
         Ok(d) => d,
         Err(e) => {
@@ -113,13 +113,13 @@ async fn test_oracle_live_container_query() {
         .await
         .expect("Oracle 23ai query failed");
 
-    assert!(!result.records.len() > 0);
+    assert!(!result.records.is_empty());
     println!("Fetched {} live rows from Oracle 23ai!", result.records.len());
 }
 
 #[tokio::test]
 async fn test_oracle_thin_live_container_query() {
-    let config = DbConfig::oracle_thin_default();
+    let config = DbConfig::oracle_thin_default().with_env_credentials();
     let driver = match create_driver(&config) {
         Ok(d) => d,
         Err(e) => {
@@ -149,7 +149,7 @@ async fn test_oracle_thin_live_container_query() {
 
 #[tokio::test]
 async fn test_oracle_thin_parameterized_query() {
-    let config = DbConfig::oracle_thin_default();
+    let config = DbConfig::oracle_thin_default().with_env_credentials();
     let driver = match create_driver(&config) {
         Ok(d) => d,
         Err(_) => return,
@@ -171,4 +171,84 @@ async fn test_oracle_thin_parameterized_query() {
 
     assert_eq!(result.records.len(), 1);
     assert_eq!(result.records[0].values.get("ITEM_NAME").unwrap(), "Widget A");
+}
+
+// ---------------------------------------------------------------------------
+// Credential hygiene: no defaults, no leaks, no silent backend fallback.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn default_config_has_no_credentials() {
+    for config in [DbConfig::default(), DbConfig::oracle_default(), DbConfig::oracle_thin_default()] {
+        assert_eq!(config.username, None, "username must not be defaulted");
+        assert_eq!(config.password, None, "password must not be defaulted");
+    }
+}
+
+#[test]
+fn require_credentials_rejects_missing_values() {
+    let mut config = DbConfig::oracle_thin_default();
+    assert!(matches!(config.require_credentials(), Err(oracle_forms_db::DbError::ConfigError(_))));
+
+    config.username = Some("scott".to_string());
+    assert!(matches!(config.require_credentials(), Err(oracle_forms_db::DbError::ConfigError(_))));
+
+    config.password = Some("tiger".to_string());
+    assert_eq!(config.require_credentials().unwrap(), ("scott".to_string(), "tiger".to_string()));
+}
+
+#[test]
+fn explicit_credentials_are_not_overridden_by_env() {
+    let config = DbConfig {
+        username: Some("explicit_user".to_string()),
+        password: Some("explicit_pass".to_string()),
+        ..DbConfig::oracle_thin_default()
+    }
+    .with_env_credentials();
+    assert_eq!(config.username.as_deref(), Some("explicit_user"));
+    assert_eq!(config.password.as_deref(), Some("explicit_pass"));
+}
+
+#[test]
+fn debug_output_redacts_password() {
+    let config = DbConfig {
+        username: Some("scott".to_string()),
+        password: Some("s3cret-value".to_string()),
+        ..DbConfig::oracle_thin_default()
+    };
+    let printed = format!("{:?}", config);
+    assert!(!printed.contains("s3cret-value"), "password leaked in Debug output: {printed}");
+    assert!(printed.contains("<redacted>"));
+}
+
+#[tokio::test]
+async fn oracle_drivers_fail_fast_without_credentials() {
+    for config in [DbConfig::oracle_default(), DbConfig::oracle_thin_default()] {
+        let driver = create_driver(&config).expect("driver construction does not connect");
+        let err = driver.test_connection().await.expect_err("must not connect without credentials");
+        assert!(
+            matches!(err, oracle_forms_db::DbError::ConfigError(_)),
+            "expected ConfigError, got {err:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn testbed_driver_rejects_script_injection_in_credentials() {
+    let config = DbConfig {
+        username: Some("forms_user".to_string()),
+        password: Some("pw\nHOST id".to_string()),
+        ..DbConfig::oracle_default()
+    };
+    let driver = create_driver(&config).unwrap();
+    let err = driver.test_connection().await.expect_err("newline in password must be rejected");
+    assert!(matches!(err, oracle_forms_db::DbError::ConfigError(_)), "got {err:?}");
+}
+
+#[test]
+fn unknown_backend_name_is_an_error() {
+    use oracle_forms_db::DbBackend;
+    assert_eq!(DbBackend::parse("oracle-thin").unwrap(), DbBackend::OracleThin);
+    assert_eq!(DbBackend::parse(" SQLite ").unwrap(), DbBackend::Sqlite);
+    assert!(DbBackend::parse("orcale").is_err(), "typos must not fall back to mock");
 }

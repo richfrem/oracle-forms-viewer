@@ -235,31 +235,18 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
-            let backend_type = match backend.to_ascii_lowercase().as_str() {
-                "oracle" => oracle_forms_db::DbBackend::Oracle,
-                "oracle-thin" | "oracle_thin" | "thin" => oracle_forms_db::DbBackend::OracleThin,
-                "sqlite" => oracle_forms_db::DbBackend::Sqlite,
-                _ => oracle_forms_db::DbBackend::Mock,
-            };
+            let backend_type = oracle_forms_db::DbBackend::parse(&backend)?;
 
-            let mut config = oracle_forms_db::DbConfig {
+            // The CLI is run by the user on their own machine, so it may read
+            // OFW_DB_USER / OFW_DB_PASSWORD. It never falls back to mock data.
+            let config = oracle_forms_db::DbConfig {
                 backend: backend_type,
                 ..Default::default()
-            };
+            }
+            .with_env_credentials();
 
-            // Test connection; if Oracle fails, fallback gracefully to mock with notice
-            let driver: Box<dyn oracle_forms_db::DatabaseDriver> = match oracle_forms_db::create_driver(&config) {
-                Ok(d) => match d.test_connection().await {
-                    Ok(_) => d,
-                    Err(e) if backend_type == oracle_forms_db::DbBackend::Oracle || backend_type == oracle_forms_db::DbBackend::OracleThin => {
-                        eprintln!("[Notice] Oracle listener not reachable ({}). Falling back to mock engine.", e);
-                        config.backend = oracle_forms_db::DbBackend::Mock;
-                        oracle_forms_db::create_driver(&config)?
-                    }
-                    Err(e) => return Err(e.into()),
-                },
-                Err(e) => return Err(e.into()),
-            };
+            let driver = oracle_forms_db::create_driver(&config)?;
+            driver.test_connection().await?;
 
             println!("============================================================");
             println!("  Executing Query on Block: {} (Backend: {:?})", target_block.name, driver.backend());
@@ -364,30 +351,16 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             ReportAction::Run { file, backend, output } => {
                 let report = oracle_forms_xml::ReportsXmlParser::parse_file(&file)?;
 
-                let backend_type = match backend.to_ascii_lowercase().as_str() {
-                    "oracle" => oracle_forms_db::DbBackend::Oracle,
-                    "oracle-thin" | "oracle_thin" | "thin" => oracle_forms_db::DbBackend::OracleThin,
-                    "sqlite" => oracle_forms_db::DbBackend::Sqlite,
-                    _ => oracle_forms_db::DbBackend::Mock,
-                };
+                let backend_type = oracle_forms_db::DbBackend::parse(&backend)?;
 
-                let mut config = oracle_forms_db::DbConfig {
+                let config = oracle_forms_db::DbConfig {
                     backend: backend_type,
                     ..Default::default()
-                };
+                }
+                .with_env_credentials();
 
-                let driver: Box<dyn oracle_forms_db::DatabaseDriver> = match oracle_forms_db::create_driver(&config) {
-                    Ok(d) => match d.test_connection().await {
-                        Ok(_) => d,
-                        Err(e) if backend_type == oracle_forms_db::DbBackend::Oracle || backend_type == oracle_forms_db::DbBackend::OracleThin => {
-                            eprintln!("[Notice] Oracle listener not reachable ({}). Falling back to mock engine.", e);
-                            config.backend = oracle_forms_db::DbBackend::Mock;
-                            oracle_forms_db::create_driver(&config)?
-                        }
-                        Err(e) => return Err(e.into()),
-                    },
-                    Err(e) => return Err(e.into()),
-                };
+                let driver = oracle_forms_db::create_driver(&config)?;
+                driver.test_connection().await?;
 
                 println!("============================================================");
                 println!("  Executing Oracle Report: {} (Backend: {:?})", report.name, driver.backend());
