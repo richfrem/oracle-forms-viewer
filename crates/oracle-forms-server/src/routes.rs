@@ -19,6 +19,9 @@ pub fn app_router(service: FormsService) -> Router {
         .route("/api/module/{module_name}/effective-item", get(get_effective_item))
         .route("/api/db/test", post(test_db_connection))
         .route("/api/forms/query-block", post(query_form_block))
+        .route("/api/forms/export-xml", post(export_form_xml))
+        .route("/api/forms/diff", post(diff_forms))
+        .route("/api/forms/module/{module_name}/item", post(update_form_item))
         .fallback(static_handler)
         .with_state(service)
 }
@@ -248,6 +251,131 @@ async fn query_form_block(
     }
 }
 
+#[derive(Deserialize)]
+struct ExportXmlRequest {
+    #[serde(rename = "moduleName")]
+    module_name: Option<String>,
+    module: Option<ModuleIndex>,
+}
+
+#[derive(Serialize)]
+struct ExportXmlResponse {
+    #[serde(rename = "moduleName")]
+    module_name: String,
+    xml: String,
+}
+
+async fn export_form_xml(
+    State(service): State<FormsService>,
+    Json(payload): Json<ExportXmlRequest>,
+) -> Response {
+    if let Some(module) = payload.module {
+        let xml = oracle_forms_xml::FormsXmlWriter::write_string(&module);
+        return Json(ExportXmlResponse {
+            module_name: module.key.name,
+            xml,
+        })
+        .into_response();
+    }
+
+    if let Some(name) = payload.module_name {
+        match service.export_xml(&name) {
+            Ok(xml) => Json(ExportXmlResponse {
+                module_name: name,
+                xml,
+            })
+            .into_response(),
+            Err(e) => (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+                .into_response(),
+        }
+    } else {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "Either 'moduleName' or 'module' must be provided" })),
+        )
+            .into_response()
+    }
+}
+
+#[derive(Deserialize)]
+struct DiffRequest {
+    #[serde(rename = "baseModule")]
+    base_module: Option<String>,
+    #[serde(rename = "modifiedModule")]
+    modified_module: Option<String>,
+    base: Option<ModuleIndex>,
+    modified: Option<ModuleIndex>,
+}
+
+async fn diff_forms(
+    State(service): State<FormsService>,
+    Json(payload): Json<DiffRequest>,
+) -> Response {
+    if let (Some(base), Some(modified)) = (payload.base, payload.modified) {
+        let diff = oracle_forms_core::diff::FormDiffer::diff(&base, &modified);
+        return Json(diff).into_response();
+    }
+
+    if let (Some(b_name), Some(m_name)) = (payload.base_module, payload.modified_module) {
+        match service.diff_modules(&b_name, &m_name) {
+            Ok(diff) => Json(diff).into_response(),
+            Err(e) => (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+                .into_response(),
+        }
+    } else {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "Either 'baseModule'/'modifiedModule' or 'base'/'modified' must be provided" })),
+        )
+            .into_response()
+    }
+}
+
+#[derive(Deserialize)]
+struct UpdateItemRequest {
+    #[serde(rename = "blockName")]
+    block_name: String,
+    #[serde(rename = "itemName")]
+    item_name: String,
+    x: Option<i32>,
+    y: Option<i32>,
+    width: Option<i32>,
+    height: Option<i32>,
+    prompt: Option<String>,
+    label: Option<String>,
+}
+
+async fn update_form_item(
+    AxumPath(module_name): AxumPath<String>,
+    State(service): State<FormsService>,
+    Json(payload): Json<UpdateItemRequest>,
+) -> Response {
+    match service.update_item(
+        &module_name,
+        &payload.block_name,
+        &payload.item_name,
+        payload.x,
+        payload.y,
+        payload.width,
+        payload.height,
+        payload.prompt,
+        payload.label,
+    ) {
+        Ok(updated_mod) => Json(updated_mod.to_payload()).into_response(),
+        Err(e) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
 async fn open_file(
     State(service): State<FormsService>,
     req: Request,
@@ -459,6 +587,87 @@ mod tests {
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let resp: oracle_forms_db::QueryResult = serde_json::from_slice(&body).unwrap();
         assert!(!resp.records.is_empty(), "Should return mock queried records");
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn test_export_xml_endpoint() {
+        let cache = std::env::temp_dir().join(format!("forms-export-test-{}", std::process::id()));
+        let service = FormsService::new(&cache);
+        let app = app_router(service);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/forms/export-xml")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"moduleName": "orders_fmb.xml"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let xml_str = resp.get("xml").and_then(|v| v.as_str()).unwrap();
+        assert!(xml_str.contains("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
+        assert!(xml_str.contains("<FormModule Name=\"ORDERS\""));
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn test_diff_endpoint() {
+        let cache = std::env::temp_dir().join(format!("forms-diff-test-{}", std::process::id()));
+        let service = FormsService::new(&cache);
+        let app = app_router(service);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/forms/diff")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"baseModule": "orders_fmb.xml", "modifiedModule": "orders_fmb.xml"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let resp: oracle_forms_core::diff::ModuleDiff = serde_json::from_slice(&body).unwrap();
+        assert!(!resp.has_differences());
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn test_update_item_endpoint() {
+        let cache = std::env::temp_dir().join(format!("forms-update-test-{}", std::process::id()));
+        let service = FormsService::new(&cache);
+        let _ = service.load_sample("orders_fmb.xml");
+        let app = app_router(service);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/forms/module/ORDERS/item")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"blockName": "ORDERS", "itemName": "ORDER_ID", "x": 123, "y": 456, "prompt": "New Order ID"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let resp: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            resp.get("summary").and_then(|s| s.get("moduleName")).and_then(|v| v.as_str()),
+            Some("ORDERS")
+        );
         let _ = std::fs::remove_dir_all(cache);
     }
 }

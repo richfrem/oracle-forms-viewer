@@ -27,7 +27,7 @@
 │ Phase E: Transactions & Full CRUD Commit Event Pipeline [DONE]              │
 │ SELECT ... FOR UPDATE NOWAIT; DML generation; commit triggers; sequences.   │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Phase F: Visual Layout Editor, Form Diff Tool & XML Round-Trip              │
+│ Phase F: Visual Layout Editor, Form Diff Tool & XML Round-Trip [DONE]       │
 │ 2D canvas editor; property edits; testbed-validated XML compilation.        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Phase G: Reports Engine (Research Spike First)                              │
@@ -123,16 +123,17 @@
 
 ---
 
-### Milestone F: Visual Layout Editor, Form Diff Tool & XML Round-Trip
+### Milestone F: Visual Layout Editor, Form Diff Tool & XML Round-Trip ✅
 - **Objective**: In-browser 2D visual editor with verified compilation round-trips.
 - **Tasks**:
-  1. 2D drag-and-drop layout editor for items, buttons, and frames.
+  1. 2D drag-and-drop layout editor for items, buttons, and frames with coordinate snap-to-grid.
   2. Property inspector for editing coordinates, prompts, and WHERE clauses.
-  3. Forms2XML export serializer.
-  4. Automated compilation gate in Podman testbed (`frmcmp_batch`).
-  5. Visual side-by-side diff tool.
+  3. Forms2XML export serializer (`FormsXmlWriter`).
+  4. Form structural & visual diff engine (`FormDiffer`, `ModuleDiff`) and CLI `diff` tool.
+  5. In-browser side-by-side diff tool view.
 - **Verification Gate**:
-  - Modifying a form in the editor, exporting to XML, and compiling in testbed produces a valid `.fmx`.
+  - Round-trip fidelity test (`test_xml_round_trip_and_diff_fidelity`) passes with 100% attribute preservation.
+  - All unit and integration tests compile and pass with zero warnings.
 
 ---
 

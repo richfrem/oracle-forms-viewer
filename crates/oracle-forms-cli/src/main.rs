@@ -54,6 +54,29 @@ enum Commands {
         #[arg(short, long, default_value_t = 10)]
         limit: usize,
     },
+
+    /// Compare two Oracle Forms modules and output visual and structural diffs
+    Diff {
+        /// Base module file
+        file1: PathBuf,
+
+        /// Modified module file
+        file2: PathBuf,
+
+        /// Output full diff as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Export an Oracle Forms module to Forms2XML XML format
+    ExportXml {
+        /// Path to the module file (.fmb, .xml, .pld)
+        file: PathBuf,
+
+        /// Output file path (defaults to stdout if not specified)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
 }
 
 fn parse_file(file: &Path, cache_dir: &Path) -> Result<ModuleIndex> {
@@ -224,6 +247,39 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                         println!("    {:<20} = {}", k, v);
                     }
                 }
+            }
+        }
+
+        Commands::Diff { file1, file2, json } => {
+            let cache_dir = std::env::temp_dir().join("forms_diff_cache");
+            let mod1 = parse_file(&file1, &cache_dir)?;
+            let mod2 = parse_file(&file2, &cache_dir)?;
+
+            let diff = oracle_forms_core::diff::FormDiffer::diff(&mod1, &mod2);
+            if json {
+                let serialized = serde_json::to_string_pretty(&diff)
+                    .map_err(|e| FormsError::Internal(e.to_string()))?;
+                println!("{}", serialized);
+            } else {
+                print!("{}", diff.to_text_report());
+            }
+        }
+
+        Commands::ExportXml { file, output } => {
+            let cache_dir = std::env::temp_dir().join("forms_export_cache");
+            let module = parse_file(&file, &cache_dir)?;
+            let xml = oracle_forms_xml::FormsXmlWriter::write_string(&module);
+
+            if let Some(out_path) = output {
+                if let Some(parent) = out_path.parent() {
+                    fs::create_dir_all(parent)
+                        .map_err(|e| FormsError::Internal(format!("Failed to create parent dir: {}", e)))?;
+                }
+                fs::write(&out_path, &xml)
+                    .map_err(|e| FormsError::Internal(format!("Failed to write export XML: {}", e)))?;
+                println!("Exported module '{}' to XML: {}", module.key.name, out_path.display());
+            } else {
+                println!("{}", xml);
             }
         }
     }
