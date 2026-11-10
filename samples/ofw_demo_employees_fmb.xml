@@ -1,6 +1,6 @@
 <?xml version = '1.0' encoding = 'UTF-8'?>
 <Module version="122010400" xmlns="http://xmlns.oracle.com/Forms">
-   <FormModule Name="OFW_DEMO_EMPLOYEES" Title="Employee Directory (Oracle 23ai demo)" ConsoleWindow="WINDOW_MAIN">
+   <FormModule Name="OFW_DEMO_EMPLOYEES" Title="Employee Directory (Oracle 23ai demo)" ConsoleWindow="WINDOW_MAIN" MenuModule="OFW_EMP_MENU">
       <Coordinate CharacterCellWidth="8" RealUnit="Point" DefaultFontScaling="true" CharacterCellHeight="16" CoordinateSystem="Real"/>
       <Trigger Name="WHEN-NEW-FORM-INSTANCE" TriggerText="BEGIN&#10;   -- Show every employee when the form opens.&#10;   GO_BLOCK('EMP');&#10;   EXECUTE_QUERY;&#10;END;"/>
       <Block Name="CONTROL" DatabaseBlock="false">

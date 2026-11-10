@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Module version="122010400" xmlns="http://xmlns.oracle.com/Forms">
+   <MenuModule Name="OFW_EMP_MENU" MainMenu="MAIN_MENU">
+      <ProgramUnit Name="FILTER_BY_DEPARTMENT" ProgramUnitType="Procedure" ProgramUnitText="PROCEDURE filter_by_department(p_dept IN VARCHAR2) IS&#10;BEGIN&#10;   -- Apply department filter to the EMP block and re-query&#10;   COPY(NULL, 'CONTROL.SEARCH_NAME');&#10;   IF p_dept IS NULL OR p_dept = 'ALL' THEN&#10;      SET_BLOCK_PROPERTY('EMP', DEFAULT_WHERE, '');&#10;   ELSE&#10;      SET_BLOCK_PROPERTY('EMP', DEFAULT_WHERE, 'UPPER(department) = UPPER(''' || p_dept || ''')');&#10;   END IF;&#10;   GO_BLOCK('EMP');&#10;   EXECUTE_QUERY;&#10;END;"/>
+      <ProgramUnit Name="APPLY_MERIT_RAISE" ProgramUnitType="Procedure" ProgramUnitText="PROCEDURE apply_merit_raise(p_pct IN NUMBER) IS&#10;   v_sal NUMBER;&#10;BEGIN&#10;   -- Increase the current employee salary by p_pct percent using NAME_IN / COPY&#10;   IF NAME_IN('EMP.EMP_ID') IS NOT NULL THEN&#10;      v_sal := ROUND(TO_NUMBER(NAME_IN('EMP.SALARY')) * (1 + (p_pct / 100)), 2);&#10;      COPY(TO_CHAR(v_sal), 'EMP.SALARY');&#10;      MESSAGE('Applied ' || TO_CHAR(p_pct) || '% merit increase to ' || NAME_IN('EMP.FULL_NAME') || '. Click Save to commit.');&#10;   END IF;&#10;END;"/>
+      <ProgramUnit Name="PROMOTE_EMPLOYEE" ProgramUnitType="Procedure" ProgramUnitText="PROCEDURE promote_employee IS&#10;   v_title VARCHAR2(200);&#10;BEGIN&#10;   v_title := NAME_IN('EMP.JOB_TITLE');&#10;   IF NAME_IN('EMP.EMP_ID') IS NOT NULL AND INSTR(UPPER(v_title), 'SENIOR') = 0 THEN&#10;      COPY('Senior ' || v_title, 'EMP.JOB_TITLE');&#10;      MESSAGE('Promoted ' || NAME_IN('EMP.FULL_NAME') || ' to Senior ' || v_title || '.');&#10;   END IF;&#10;END;"/>
+
+      <Menu Name="MAIN_MENU">
+         <MenuItem Name="DIRECTORY" Label="&amp;Directory" MenuItemType="Plain" CommandType="Menu" SubMenuName="DIRECTORY_MENU"/>
+         <MenuItem Name="DEPARTMENTS" Label="De&amp;partments" MenuItemType="Plain" CommandType="Menu" SubMenuName="DEPT_FILTER_MENU"/>
+         <MenuItem Name="NAVIGATE" Label="&amp;Navigate" MenuItemType="Plain" CommandType="Menu" SubMenuName="NAV_MENU"/>
+         <MenuItem Name="HR_ACTIONS" Label="&amp;HR Actions" MenuItemType="Plain" CommandType="Menu" SubMenuName="HR_MENU"/>
+         <MenuItem Name="REPORTS" Label="&amp;Reports" MenuItemType="Plain" CommandType="Menu" SubMenuName="REPORTS_MENU"/>
+      </Menu>
+
+      <Menu Name="DIRECTORY_MENU">
+         <MenuItem Name="SHOW_ALL" Label="Show All Employees" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   COPY(NULL, 'CONTROL.SEARCH_NAME');&#10;   SET_BLOCK_PROPERTY('EMP', DEFAULT_WHERE, '');&#10;   GO_BLOCK('EMP');&#10;   EXECUTE_QUERY;&#10;END;"/>
+         <MenuItem Name="EXEC_SEARCH" Label="Search by Last Name Filter" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   GO_BLOCK('EMP');&#10;   EXECUTE_QUERY;&#10;END;"/>
+         <MenuItem Name="SEPARATOR_DIR_1" MenuItemType="Separator"/>
+         <MenuItem Name="SAVE_DIR" Label="Save / Commit Changes" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   COMMIT_FORM;&#10;END;"/>
+         <MenuItem Name="CLEAR_DIR" Label="Clear Form" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   CLEAR_FORM(NO_VALIDATE);&#10;END;"/>
+         <MenuItem Name="SEPARATOR_DIR_2" MenuItemType="Separator"/>
+         <MenuItem Name="EXIT_APP" Label="Exit Directory" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   EXIT_FORM;&#10;END;"/>
+      </Menu>
+
+      <Menu Name="DEPT_FILTER_MENU">
+         <MenuItem Name="DEPT_ENG" Label="Filter: Engineering" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   filter_by_department('Engineering');&#10;END;"/>
+         <MenuItem Name="DEPT_FIN" Label="Filter: Finance" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   filter_by_department('Finance');&#10;END;"/>
+         <MenuItem Name="DEPT_OPS" Label="Filter: Operations" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   filter_by_department('Operations');&#10;END;"/>
+         <MenuItem Name="DEPT_SALES" Label="Filter: Sales" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   filter_by_department('Sales');&#10;END;"/>
+         <MenuItem Name="DEPT_HR" Label="Filter: Human Resources" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   filter_by_department('HR');&#10;END;"/>
+         <MenuItem Name="SEPARATOR_DEPT" MenuItemType="Separator"/>
+         <MenuItem Name="DEPT_ALL" Label="Show All Departments" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   filter_by_department('ALL');&#10;END;"/>
+      </Menu>
+
+      <Menu Name="NAV_MENU">
+         <MenuItem Name="FIRST_EMP" Label="First Employee" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   GO_BLOCK('EMP');&#10;   FIRST_RECORD;&#10;END;"/>
+         <MenuItem Name="PREV_EMP" Label="Previous Employee" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   GO_BLOCK('EMP');&#10;   PREVIOUS_RECORD;&#10;END;"/>
+         <MenuItem Name="NEXT_EMP" Label="Next Employee" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   GO_BLOCK('EMP');&#10;   NEXT_RECORD;&#10;END;"/>
+         <MenuItem Name="LAST_EMP" Label="Last Employee" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   GO_BLOCK('EMP');&#10;   LAST_RECORD;&#10;END;"/>
+      </Menu>
+
+      <Menu Name="HR_MENU">
+         <MenuItem Name="MERIT_RAISE_5" Label="Apply +5% Merit Raise (PL/SQL)" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   apply_merit_raise(5);&#10;END;"/>
+         <MenuItem Name="MERIT_RAISE_10" Label="Apply +10% Spot Bonus Raise (PL/SQL)" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   apply_merit_raise(10);&#10;END;"/>
+         <MenuItem Name="PROMOTE_SENIOR" Label="Promote to Senior Title (PL/SQL)" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   promote_employee;&#10;END;"/>
+      </Menu>
+
+      <Menu Name="REPORTS_MENU">
+         <MenuItem Name="RUN_EMP_DIRECTORY_RPT" Label="Run Employee Directory &amp; Bonus Report" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   -- Launch OFW_EMPLOYEE_DIRECTORY_REPORT in Reports Engine&#10;   MESSAGE('Opening Employee Directory &amp; Bonus Report...');&#10;END;"/>
+         <MenuItem Name="RUN_DEPT_SALARIES_RPT" Label="Run Department Payroll Report" MenuItemType="Plain" CommandType="PL/SQL" MenuItemCode="BEGIN&#10;   -- Launch DEPT_SALARIES in Reports Engine&#10;   MESSAGE('Opening Department Payroll &amp; Compensation Report...');&#10;END;"/>
+      </Menu>
+   </MenuModule>
+</Module>

@@ -133,3 +133,10 @@ The table below contrasts **what has been implemented today** against **the futu
 
 ### Phase 5: Self-Contained Desktop Distribution — [FUTURE]
 - [ ] Tauri v2 integration wrapping `oracle-forms-server` core for distribution as native macOS `.dmg`, Windows `.msi`, and Linux `.AppImage`.
+
+## Addendum: Menus, Browse and Entity Decoding
+
+- `oracle-forms-core::sidecars` exposes `unescape_xml_entities`; `decode_double_escaped` now decodes up to two escape layers.
+- `oracle-forms-xml` `get_attr` unescapes every attribute, so model labels and PL/SQL are clean text.
+- `oracle-forms-server` adds `GET /api/files/browse` and `POST /api/forms/module/{name}/attach-menu`.
+- UI: runtime menu bar renders attached `.mmb` menus; Reports mode gained PL/SQL split, data model diagram and property sheet.

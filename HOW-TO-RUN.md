@@ -267,3 +267,10 @@ When prompted by the native Forms **Logon** dialog:
 
 Click **Connect** to load the form and execute live PL/SQL triggers against Oracle Database 23ai.
 
+
+## Menus, Browse/Open and Reports (new)
+
+- Use **Browse / Open...** in the header to open any `.fmb`, `.xml`, `.olb`, `.mmb` or report file (samples list or upload).
+- To try custom menus: open `ofw_demo_employees_fmb.xml`, then pick `OFW_EMP_MENU` in the canvas toolbar menu selector.
+- Open `ofw_employee_directory_report.xml` in the Reports tab for the PL/SQL split view and data model diagram.
+- After editing `ui/*`, touch `crates/oracle-forms-server/src/assets.rs` (assets are embedded at compile time) and hard-refresh the browser.

@@ -156,6 +156,11 @@ impl FormsService {
                     let menu_key = ModuleKey::new(mm, ModuleType::Menu);
                     if let Ok(menu_index) = FormsXmlParser::parse(&menu_key, &menu_xml, &target_cache_dir) {
                         index.menus = menu_index.menus;
+                        for pu in menu_index.program_units {
+                            if !index.program_units.iter().any(|existing| existing.name.eq_ignore_ascii_case(&pu.name)) {
+                                index.program_units.push(pu);
+                            }
+                        }
                     }
                 }
             }
@@ -436,7 +441,7 @@ impl FormsService {
         st.modules.insert(module.key.name.clone(), module);
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, dead_code)]
     pub fn update_item(
         &self,
         module_name: &str,
@@ -448,6 +453,27 @@ impl FormsService {
         height: Option<i32>,
         prompt: Option<String>,
         label: Option<String>,
+    ) -> Result<ModuleIndex> {
+        self.update_item_ext(
+            module_name,
+            crate::routes::UpdateItemRequest {
+                block_name: block_name.to_string(),
+                item_name: item_name.to_string(),
+                x,
+                y,
+                width,
+                height,
+                prompt,
+                label,
+                ..Default::default()
+            },
+        )
+    }
+
+    pub fn update_item_ext(
+        &self,
+        module_name: &str,
+        req: crate::routes::UpdateItemRequest,
     ) -> Result<ModuleIndex> {
         let mod_upper = module_name.to_ascii_uppercase();
         if !self.state.read().unwrap().modules.contains_key(&mod_upper) {
@@ -464,45 +490,71 @@ impl FormsService {
         let block = module
             .blocks
             .iter_mut()
-            .find(|b| b.name.eq_ignore_ascii_case(block_name))
-            .ok_or_else(|| FormsError::NotFound(format!("Block '{}' not found in module '{}'", block_name, module_name)))?;
+            .find(|b| b.name.eq_ignore_ascii_case(&req.block_name))
+            .ok_or_else(|| FormsError::NotFound(format!("Block '{}' not found in module '{}'", req.block_name, module_name)))?;
 
         let item = block
             .items
             .iter_mut()
-            .find(|i| i.name.eq_ignore_ascii_case(item_name))
-            .ok_or_else(|| FormsError::NotFound(format!("Item '{}' not found in block '{}'", item_name, block_name)))?;
+            .find(|i| i.name.eq_ignore_ascii_case(&req.item_name))
+            .ok_or_else(|| FormsError::NotFound(format!("Item '{}' not found in block '{}'", req.item_name, req.block_name)))?;
 
-        if let Some(x_val) = x {
-            item.x_position = x_val;
+        if let Some(x_val) = req.x { item.x_position = x_val; }
+        if let Some(y_val) = req.y { item.y_position = y_val; }
+        if let Some(w_val) = req.width { item.width = Some(w_val); }
+        if let Some(h_val) = req.height { item.height = Some(h_val); }
+        if let Some(ref v) = req.prompt { item.prompt = Some(v.clone()); }
+        if let Some(ref v) = req.label { item.label = Some(v.clone()); }
+        if let Some(ref v) = req.item_type { item.item_type = Some(v.clone()); }
+        if let Some(ref v) = req.data_type { item.data_type = Some(v.clone()); }
+        if let Some(ref v) = req.column_name { item.column_name = Some(v.clone()); }
+        if let Some(ref v) = req.back_color {
+            item.back_color = if v.trim().is_empty() { None } else { Some(v.clone()) };
         }
-        if let Some(y_val) = y {
-            item.y_position = y_val;
+        if let Some(ref v) = req.fore_color {
+            item.fore_color = if v.trim().is_empty() { None } else { Some(v.clone()) };
         }
-        if let Some(w_val) = width {
-            item.width = Some(w_val);
+        if let Some(v) = req.enabled {
+            item.enabled = v;
+            item.dml.get_or_insert_with(Default::default).enabled = Some(v);
         }
-        if let Some(h_val) = height {
-            item.height = Some(h_val);
+        if let Some(v) = req.visible { item.visible = Some(v); }
+        if let Some(v) = req.required {
+            item.required = Some(v);
+            item.dml.get_or_insert_with(Default::default).required = Some(v);
         }
-        if let Some(prompt_val) = prompt.clone() {
-            item.prompt = Some(prompt_val);
+        if let Some(ref v) = req.prompt_attachment_edge { item.prompt_attachment_edge = v.clone(); }
+        if let Some(v) = req.prompt_attachment_offset { item.prompt_attachment_offset = v; }
+        if let Some(ref v) = req.initial_value {
+            item.dml.get_or_insert_with(Default::default).initial_value = Some(v.clone());
         }
-        if let Some(label_val) = label.clone() {
-            item.label = Some(label_val);
+        if let Some(v) = req.maximum_length {
+            item.dml.get_or_insert_with(Default::default).maximum_length = Some(v);
         }
         let updated = module.clone();
 
         // Record the edit as attribute changes for a lossless export.
         let mut attrs: Vec<(String, String)> = Vec::new();
-        if let Some(v) = x { attrs.push(("XPosition".into(), v.to_string())); }
-        if let Some(v) = y { attrs.push(("YPosition".into(), v.to_string())); }
-        if let Some(v) = width { attrs.push(("Width".into(), v.to_string())); }
-        if let Some(v) = height { attrs.push(("Height".into(), v.to_string())); }
-        if let Some(v) = prompt { attrs.push(("Prompt".into(), v)); }
-        if let Some(v) = label { attrs.push(("Label".into(), v)); }
+        if let Some(v) = req.x { attrs.push(("XPosition".into(), v.to_string())); }
+        if let Some(v) = req.y { attrs.push(("YPosition".into(), v.to_string())); }
+        if let Some(v) = req.width { attrs.push(("Width".into(), v.to_string())); }
+        if let Some(v) = req.height { attrs.push(("Height".into(), v.to_string())); }
+        if let Some(v) = req.prompt { attrs.push(("Prompt".into(), v)); }
+        if let Some(v) = req.label { attrs.push(("Label".into(), v)); }
+        if let Some(v) = req.item_type { attrs.push(("ItemType".into(), v)); }
+        if let Some(v) = req.data_type { attrs.push(("DataType".into(), v)); }
+        if let Some(v) = req.column_name { attrs.push(("ColumnName".into(), v)); }
+        if let Some(v) = req.back_color { attrs.push(("BackColor".into(), v)); }
+        if let Some(v) = req.fore_color { attrs.push(("ForegroundColor".into(), v)); }
+        if let Some(v) = req.enabled { attrs.push(("Enabled".into(), if v { "true" } else { "false" }.into())); }
+        if let Some(v) = req.visible { attrs.push(("Visible".into(), if v { "true" } else { "false" }.into())); }
+        if let Some(v) = req.required { attrs.push(("Required".into(), if v { "true" } else { "false" }.into())); }
+        if let Some(v) = req.prompt_attachment_edge { attrs.push(("PromptAttachmentEdge".into(), v)); }
+        if let Some(v) = req.prompt_attachment_offset { attrs.push(("PromptAttachmentOffset".into(), v.to_string())); }
+        if let Some(v) = req.initial_value { attrs.push(("InitializeValue".into(), v)); }
+        if let Some(v) = req.maximum_length { attrs.push(("MaximumLength".into(), v.to_string())); }
         let edits = st.item_edits.entry(mod_upper).or_default();
-        match edits.iter_mut().find(|p| p.block.eq_ignore_ascii_case(block_name) && p.item.eq_ignore_ascii_case(item_name)) {
+        match edits.iter_mut().find(|p| p.block.eq_ignore_ascii_case(&req.block_name) && p.item.eq_ignore_ascii_case(&req.item_name)) {
             Some(existing) => {
                 for (k, v) in attrs {
                     match existing.attributes.iter_mut().find(|(ek, _)| *ek == k) {
@@ -511,7 +563,7 @@ impl FormsService {
                     }
                 }
             }
-            None => edits.push(oracle_forms_xml::ItemPatch { block: block_name.to_string(), item: item_name.to_string(), attributes: attrs }),
+            None => edits.push(oracle_forms_xml::ItemPatch { block: req.block_name, item: req.item_name, attributes: attrs }),
         }
 
         Ok(updated)
@@ -681,6 +733,133 @@ frmf2xml for a complete export. -->\n";
 
         Ok((report, result, html))
     }
+
+    /// Attaches or switches a custom MenuModule (.mmb / _mmb.xml) on an open form module.
+    pub fn attach_menu(&self, module_name: &str, menu_name_or_file: &str) -> Result<ModuleIndex> {
+        let mut index = self.get_or_load_module(module_name)?;
+        let key_upper = index.key.name.to_ascii_uppercase();
+        let target_cache_dir = {
+            let st = self.state.read().unwrap();
+            st.cache_dirs
+                .get(&key_upper)
+                .cloned()
+                .unwrap_or_else(|| self.base_cache_dir.join(format!("{}_cache", key_upper)))
+        };
+        let _ = fs::create_dir_all(&target_cache_dir);
+
+        if menu_name_or_file.trim().is_empty() || menu_name_or_file.eq_ignore_ascii_case("DEFAULT") {
+            index.menu_module = None;
+            index.menus.clear();
+        } else {
+            let samples_dir = Self::samples_dir();
+            let menu_xml = Self::find_menu_xml(&samples_dir.join("dummy.fmb"), menu_name_or_file)
+                .or_else(|| safe_join(&samples_dir, menu_name_or_file).filter(|p| p.is_file()));
+
+            let Some(menu_path) = menu_xml else {
+                return Err(FormsError::NotFound(format!("Menu module '{}' not found", menu_name_or_file)));
+            };
+
+            let menu_key = ModuleKey::from_file_name(
+                menu_path.file_name().and_then(|s| s.to_str()).unwrap_or(menu_name_or_file),
+            )
+            .unwrap_or_else(|| ModuleKey::new(menu_name_or_file, ModuleType::Menu));
+
+            let menu_index = if menu_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|s| s.eq_ignore_ascii_case("xml"))
+                .unwrap_or(false)
+            {
+                FormsXmlParser::parse(&menu_key, &menu_path, &target_cache_dir)?
+            } else if let Some(sib) = Self::find_sibling_xml(&menu_path, &menu_key) {
+                FormsXmlParser::parse(&menu_key, &sib, &target_cache_dir)?
+            } else {
+                BinaryFmbParser::parse(&menu_key, &menu_path, &target_cache_dir)?
+            };
+
+            index.menu_module = Some(menu_index.key.name.clone());
+            index.menus = menu_index.menus;
+            for pu in menu_index.program_units {
+                if !index.program_units.iter().any(|existing| existing.name.eq_ignore_ascii_case(&pu.name)) {
+                    index.program_units.push(pu);
+                }
+            }
+        }
+
+        let mut st = self.state.write().unwrap();
+        st.modules.insert(key_upper, index.clone());
+        Ok(index)
+    }
+
+    /// Lists browsable Oracle Forms & Reports artifacts across `samples/` and `samples/conformance/`.
+    pub fn browse_workspace_files(&self) -> Vec<BrowsedFileItem> {
+        let mut items = Vec::new();
+        let samples_dir = Self::samples_dir();
+        let mut dirs = vec![samples_dir.clone()];
+        let conf_dir = samples_dir.join("conformance");
+        if conf_dir.is_dir() {
+            dirs.push(conf_dir);
+        }
+
+        for dir in dirs {
+            if let Ok(entries) = fs::read_dir(&dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if !path.is_file() {
+                        continue;
+                    }
+                    let Some(fname) = path.file_name().and_then(|s| s.to_str()) else {
+                        continue;
+                    };
+                    let lower = fname.to_ascii_lowercase();
+                    let category = if lower.ends_with("_report.xml")
+                        || lower.ends_with("_rdf.xml")
+                        || lower.ends_with(".rdf")
+                        || lower.ends_with(".rpt")
+                        || lower.ends_with(".rex")
+                    {
+                        "REPORT"
+                    } else if lower.ends_with(".mmb") || lower.ends_with("_mmb.xml") {
+                        "MENU"
+                    } else if lower.ends_with(".olb") || lower.ends_with("_olb.xml") {
+                        "OBJECT_LIB"
+                    } else if lower.ends_with(".pld") || lower.ends_with(".pll") {
+                        "PLSQL_LIB"
+                    } else if lower.ends_with(".fmb") || lower.ends_with("_fmb.xml") || lower.ends_with(".xml") {
+                        "FORM"
+                    } else {
+                        continue;
+                    };
+
+                    let size_bytes = fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                    let rel_path = if dir.ends_with("conformance") {
+                        format!("samples/conformance/{}", fname)
+                    } else {
+                        format!("samples/{}", fname)
+                    };
+
+                    items.push(BrowsedFileItem {
+                        file_name: fname.to_string(),
+                        relative_path: rel_path,
+                        category: category.to_string(),
+                        size_bytes,
+                    });
+                }
+            }
+        }
+
+        items.sort_by(|a, b| a.category.cmp(&b.category).then_with(|| a.file_name.cmp(&b.file_name)));
+        items
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrowsedFileItem {
+    pub file_name: String,
+    pub relative_path: String,
+    pub category: String,
+    pub size_bytes: u64,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

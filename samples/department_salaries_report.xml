@@ -3,7 +3,7 @@
 <report DTDVersion="9.0.4.0.0" name="DEPT_SALARIES" title="Department Payroll &amp; Compensation Report" unitOfMeasurement="inch">
   <data>
     <dataSource name="Q_DEPARTMENTS">
-      <select>SELECT DEPARTMENT_ID, DEPARTMENT_NAME, LOCATION_ID FROM DEPARTMENTS ORDER BY DEPARTMENT_ID</select>
+      <select>SELECT DEPARTMENT_ID, DEPARTMENT_NAME, LOCATION_ID FROM DEPARTMENTS WHERE DEPARTMENT_ID IN (SELECT DISTINCT DEPARTMENT_ID FROM EMPLOYEES) ORDER BY DEPARTMENT_ID</select>
       <group name="G_DEPT">
         <dataItem name="DEPARTMENT_ID" datatype="number" width="10" />
         <dataItem name="DEPARTMENT_NAME" datatype="character" width="30" />

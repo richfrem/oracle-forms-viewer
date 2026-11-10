@@ -114,6 +114,26 @@ impl SqliteDriver {
                 (101, 'Widget A', 50.00),
                 (102, 'Widget B', 75.00),
                 (555, 'Original', 10.00);
+
+            CREATE TABLE IF NOT EXISTS ofw_demo_employees (
+                emp_id INTEGER PRIMARY KEY,
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                job_title TEXT NOT NULL,
+                department TEXT NOT NULL,
+                salary REAL NOT NULL,
+                hire_date TEXT NOT NULL
+            );
+
+            INSERT OR IGNORE INTO ofw_demo_employees (emp_id, first_name, last_name, job_title, department, salary, hire_date) VALUES
+                (101, 'Elena',   'Rostova',   'Principal Architect',  'Engineering', 164000, '2018-04-16'),
+                (102, 'Marcus',  'Vance',     'Database Reliability', 'Engineering', 148500, '2019-09-02'),
+                (103, 'Priya',   'Natarajan', 'Product Manager',      'Product',     142000, '2020-01-20'),
+                (104, 'Samuel',  'Okafor',    'Senior PL/SQL Dev',    'Engineering', 139000, '2017-11-11'),
+                (105, 'Hannah',  'Lindqvist', 'Finance Controller',   'Finance',     131500, '2021-06-01'),
+                (106, 'Diego',   'Morales',   'Operations Lead',      'Operations',  118000, '2022-03-14'),
+                (107, 'Claire',  'Beaumont',  'HR Director',          'People',      126000, '2016-08-29'),
+                (108, 'Kenji',   'Takahashi', 'Security Engineer',    'Engineering', 152000, '2020-10-05');
             "#,
         )
         .map_err(|e| DbError::QueryError(format!("Schema seeding failed: {}", e)))?;

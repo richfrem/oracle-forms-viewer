@@ -82,20 +82,10 @@ pub struct DecodedText {
     pub encoding: TextEncoding,
 }
 
-pub fn decode_double_escaped(raw: &str) -> DecodedText {
-    if raw.is_empty() || raw.contains('\n') || raw.contains('\r') {
-        return DecodedText {
-            text: raw.to_string(),
-            encoding: TextEncoding::Original,
-        };
-    }
-
-    let num_re = regex::Regex::new(r"&#(\d+|[xX][0-9a-fA-F]+);").unwrap();
-    if !num_re.is_match(raw) {
-        return DecodedText {
-            text: raw.to_string(),
-            encoding: TextEncoding::Original,
-        };
+/// Unescapes one layer of XML character and named entities (`&#10;`, `&#x9;`, `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`).
+pub fn unescape_xml_entities(raw: &str) -> String {
+    if !raw.contains('&') {
+        return raw.to_string();
     }
 
     let xml_ref_re = regex::Regex::new(r"&(?:#(\d+|[xX][0-9a-fA-F]+)|(lt|gt|amp|quot|apos));").unwrap();
@@ -136,17 +126,33 @@ pub fn decode_double_escaped(raw: &str) -> DecodedText {
         last_idx = m.end();
     }
     decoded.push_str(&raw[last_idx..]);
+    decoded
+}
 
-    if decoded.contains('\n') {
-        DecodedText {
-            text: decoded,
-            encoding: TextEncoding::Recovered,
-        }
-    } else {
-        DecodedText {
+pub fn decode_double_escaped(raw: &str) -> DecodedText {
+    if raw.is_empty() || !raw.contains('&') {
+        return DecodedText {
             text: raw.to_string(),
             encoding: TextEncoding::Original,
-        }
+        };
+    }
+
+    let had_newline = raw.contains('\n') || raw.contains('\r');
+    let pass1 = unescape_xml_entities(raw);
+    let pass2 = if pass1.contains('&') {
+        unescape_xml_entities(&pass1)
+    } else {
+        pass1
+    };
+
+    let recovered_newlines = !had_newline && (pass2.contains('\n') || pass2.contains('\r'));
+    DecodedText {
+        text: pass2,
+        encoding: if recovered_newlines {
+            TextEncoding::Recovered
+        } else {
+            TextEncoding::Original
+        },
     }
 }
 

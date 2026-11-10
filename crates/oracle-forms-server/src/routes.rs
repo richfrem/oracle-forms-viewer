@@ -21,6 +21,7 @@ pub fn app_router(service: FormsService) -> Router {
 pub fn app_router_with_security(service: FormsService, security_cfg: SecurityConfig) -> Router {
     Router::new()
         .route("/api/samples", get(get_samples))
+        .route("/api/files/browse", get(browse_files))
         .route("/api/open-sample/{name}", post(open_sample))
         .route("/api/open-file", post(open_file).layer(DefaultBodyLimit::max(50 * 1024 * 1024)))
         .route("/api/module/{module_name}/source", get(get_source))
@@ -31,6 +32,8 @@ pub fn app_router_with_security(service: FormsService, security_cfg: SecurityCon
         .route("/api/forms/export-xml", post(export_form_xml))
         .route("/api/forms/diff", post(diff_forms))
         .route("/api/forms/module/{module_name}/item", post(update_form_item))
+        .route("/api/forms/module/{module_name}/sync", post(sync_form_module))
+        .route("/api/forms/module/{module_name}/attach-menu", post(attach_form_menu))
         .route("/api/reports", get(get_reports))
         .route("/api/reports/run", post(run_report_endpoint))
         .route("/api/reports/{name}/html", get(get_report_html))
@@ -476,18 +479,29 @@ async fn diff_forms(
     }
 }
 
-#[derive(Deserialize)]
-struct UpdateItemRequest {
-    #[serde(rename = "blockName")]
-    block_name: String,
-    #[serde(rename = "itemName")]
-    item_name: String,
-    x: Option<i32>,
-    y: Option<i32>,
-    width: Option<i32>,
-    height: Option<i32>,
-    prompt: Option<String>,
-    label: Option<String>,
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateItemRequest {
+    pub block_name: String,
+    pub item_name: String,
+    pub x: Option<i32>,
+    pub y: Option<i32>,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub prompt: Option<String>,
+    pub label: Option<String>,
+    pub item_type: Option<String>,
+    pub data_type: Option<String>,
+    pub column_name: Option<String>,
+    pub back_color: Option<String>,
+    pub fore_color: Option<String>,
+    pub enabled: Option<bool>,
+    pub visible: Option<bool>,
+    pub required: Option<bool>,
+    pub prompt_attachment_edge: Option<String>,
+    pub prompt_attachment_offset: Option<i32>,
+    pub initial_value: Option<String>,
+    pub maximum_length: Option<i32>,
 }
 
 async fn update_form_item(
@@ -495,17 +509,7 @@ async fn update_form_item(
     State(service): State<FormsService>,
     Json(payload): Json<UpdateItemRequest>,
 ) -> Response {
-    match service.update_item(
-        &module_name,
-        &payload.block_name,
-        &payload.item_name,
-        payload.x,
-        payload.y,
-        payload.width,
-        payload.height,
-        payload.prompt,
-        payload.label,
-    ) {
+    match service.update_item_ext(&module_name, payload) {
         Ok(updated_mod) => Json(updated_mod.to_payload()).into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
@@ -513,6 +517,63 @@ async fn update_form_item(
         )
             .into_response(),
     }
+}
+
+async fn browse_files(State(service): State<FormsService>) -> impl IntoResponse {
+    Json(service.browse_workspace_files())
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AttachMenuRequest {
+    menu_file: String,
+}
+
+async fn attach_form_menu(
+    AxumPath(module_name): AxumPath<String>,
+    State(service): State<FormsService>,
+    Json(req): Json<AttachMenuRequest>,
+) -> Response {
+    match service.attach_menu(&module_name, &req.menu_file) {
+        Ok(index) => Json(index.to_payload()).into_response(),
+        Err(e) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+async fn sync_form_module(
+    AxumPath(_module_name): AxumPath<String>,
+    State(service): State<FormsService>,
+    Json(module): Json<ModuleIndex>,
+) -> Response {
+    let payload = module.clone().to_payload();
+    service.save_module(module);
+    Json(payload).into_response()
+}
+
+fn try_open_as_report(file_path: &Path, file_name: &str) -> Option<Response> {
+    let lower = file_name.to_ascii_lowercase();
+    if lower.ends_with("_report.xml") || lower.ends_with("_rdf.xml") || lower.ends_with(".rdf") || lower.ends_with(".rpt") {
+        if let Ok(report) = oracle_forms_xml::ReportsXmlParser::parse_file(file_path) {
+            // Ensure report is accessible in samples_dir if uploaded to temp
+            let samples_target = FormsService::samples_dir().join(file_name);
+            if file_path != samples_target && !samples_target.exists() {
+                let _ = std::fs::copy(file_path, &samples_target);
+            }
+            return Some(
+                Json(serde_json::json!({
+                    "isReport": true,
+                    "reportName": file_name,
+                    "report": report
+                }))
+                .into_response(),
+            );
+        }
+    }
+    None
 }
 
 async fn open_file(
@@ -571,6 +632,9 @@ async fn open_file(
                 if let Err(e) = std::fs::write(&target_file, &bytes) {
                     return upload_error(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
                 }
+                if let Some(rep_resp) = try_open_as_report(&target_file, &file_name) {
+                    return rep_resp;
+                }
                 match service.load_module(&target_file) {
                     Ok(index) => return Json(index.to_payload()).into_response(),
                     Err(e) => {
@@ -607,6 +671,11 @@ async fn open_file(
                         }),
                     )
                         .into_response();
+                }
+
+                let fname = path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                if let Some(rep_resp) = try_open_as_report(&path, fname) {
+                    return rep_resp;
                 }
 
                 match service.load_module(&path) {
