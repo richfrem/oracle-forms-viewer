@@ -46,7 +46,7 @@ enum Commands {
         #[arg(short, long)]
         block: Option<String>,
 
-        /// Database backend: 'oracle', 'sqlite', or 'mock'
+        /// Database backend: 'oracle', 'oracle-thin', 'sqlite', or 'mock'
         #[arg(long, default_value = "oracle")]
         backend: String,
 
@@ -102,7 +102,7 @@ enum ReportAction {
         /// Path to report XML file
         file: PathBuf,
 
-        /// Database backend: 'oracle', 'sqlite', or 'mock'
+        /// Database backend: 'oracle', 'oracle-thin', 'sqlite', or 'mock'
         #[arg(long, default_value = "mock")]
         backend: String,
 
@@ -237,6 +237,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
             let backend_type = match backend.to_ascii_lowercase().as_str() {
                 "oracle" => oracle_forms_db::DbBackend::Oracle,
+                "oracle-thin" | "oracle_thin" | "thin" => oracle_forms_db::DbBackend::OracleThin,
                 "sqlite" => oracle_forms_db::DbBackend::Sqlite,
                 _ => oracle_forms_db::DbBackend::Mock,
             };
@@ -250,7 +251,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             let driver: Box<dyn oracle_forms_db::DatabaseDriver> = match oracle_forms_db::create_driver(&config) {
                 Ok(d) => match d.test_connection().await {
                     Ok(_) => d,
-                    Err(e) if backend_type == oracle_forms_db::DbBackend::Oracle => {
+                    Err(e) if backend_type == oracle_forms_db::DbBackend::Oracle || backend_type == oracle_forms_db::DbBackend::OracleThin => {
                         eprintln!("[Notice] Oracle listener not reachable ({}). Falling back to mock engine.", e);
                         config.backend = oracle_forms_db::DbBackend::Mock;
                         oracle_forms_db::create_driver(&config)?
@@ -365,6 +366,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
                 let backend_type = match backend.to_ascii_lowercase().as_str() {
                     "oracle" => oracle_forms_db::DbBackend::Oracle,
+                    "oracle-thin" | "oracle_thin" | "thin" => oracle_forms_db::DbBackend::OracleThin,
                     "sqlite" => oracle_forms_db::DbBackend::Sqlite,
                     _ => oracle_forms_db::DbBackend::Mock,
                 };
@@ -377,7 +379,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
                 let driver: Box<dyn oracle_forms_db::DatabaseDriver> = match oracle_forms_db::create_driver(&config) {
                     Ok(d) => match d.test_connection().await {
                         Ok(_) => d,
-                        Err(e) if backend_type == oracle_forms_db::DbBackend::Oracle => {
+                        Err(e) if backend_type == oracle_forms_db::DbBackend::Oracle || backend_type == oracle_forms_db::DbBackend::OracleThin => {
                             eprintln!("[Notice] Oracle listener not reachable ({}). Falling back to mock engine.", e);
                             config.backend = oracle_forms_db::DbBackend::Mock;
                             oracle_forms_db::create_driver(&config)?

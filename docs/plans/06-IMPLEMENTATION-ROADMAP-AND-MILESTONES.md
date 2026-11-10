@@ -33,7 +33,7 @@
 │ Phase G: Reports Engine (Research Spike & Renderer) [DONE]                  │
 │ Native Reports XML parser, data model evaluator, HTML5/PDF paged media.     │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│ Track T (Parallel): Pure-Rust Oracle Thin Driver (oracle-thin)              │
+│ Track T (Parallel): Pure-Rust Oracle Thin Driver (oracle-thin) [DONE]          │
 │ Zero-client wire protocol over TCP :1521 (independent parallel track).      │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Track K (Ongoing): Conformance Testing Kit                                  │
@@ -149,3 +149,18 @@
   - Sample report suites (`orders_summary_report.xml`, `department_salaries_report.xml`) pass all integration tests (`test_orders_summary_report_parsing_and_evaluation`, `test_department_salaries_master_detail_report`).
   - Verified live execution against Oracle Database 23ai container (`oracle23ai-lite`).
   - All unit and integration tests compile and pass with zero clippy warnings.
+
+---
+
+### Track T: Pure-Rust Oracle Thin Driver (`oracle-thin`) ✅
+- **Objective**: Implement native, zero-client Oracle Database wire protocol over TCP :1521 without JVM, C-libraries, Instant Client, or SQL*Plus container execution.
+- **Tasks & Deliverables**:
+  1. **Adopt Official `oracledb` Pure-Rust Driver**: Integrated Oracle's official `oracledb = "26.0.0-beta.5"` implementing Sans-I/O TNS/TTC wire protocol over Tokio TCP with full support for Oracle 19c/21c/23ai verifiers (O5LOGON, PBKDF2/SHA-512), parameter bindings, and streaming cursors.
+  2. **`OracleThinDriver` (`crates/oracle-forms-db/src/thin.rs`)**: Built thread-safe pooled driver implementing `DatabaseDriver` trait (`test_connection`, `query`, `backend`).
+  3. **Data Type Conversion & Extraction**: Dynamic column mapping for Oracle `NUMBER`, `CHAR`/`VARCHAR2`, `DATE`, `TIMESTAMP` (`OracleTimestamp`), and `ROWID` with automatic JSON conversion.
+  4. **Dynamic Parameter Binding**: Supports both named (`:b1`) and positional (`:1`) binds with `SqlValue` serialization into `&dyn ToDbValue`.
+  5. **CLI & Server Integration**: Added `oracle-thin` backend support to CLI (`oracle-forms-cli query --backend oracle-thin`, `report run --backend oracle-thin`), server routes, and web UI dropdowns.
+- **Verification Gate**:
+  - Live query against running `oracle23ai-lite` container executes in 8 ms.
+  - Integration tests `test_oracle_thin_live_container_query` and `test_oracle_thin_parameterized_query` pass.
+  - Zero clippy warnings and 100% test pass rate across workspace.

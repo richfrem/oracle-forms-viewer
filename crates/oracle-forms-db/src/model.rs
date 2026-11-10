@@ -81,6 +81,8 @@ pub enum DbBackend {
     Mock,
     Sqlite,
     Oracle,
+    #[serde(alias = "oracle-thin")]
+    OracleThin,
     Postgres,
 }
 
@@ -115,6 +117,18 @@ impl DbConfig {
     pub fn oracle_default() -> Self {
         Self {
             backend: DbBackend::Oracle,
+            host: Some("localhost".to_string()),
+            port: Some(1521),
+            service_name: Some("FREEPDB1".to_string()),
+            username: std::env::var("OFW_DB_USER").ok().or_else(|| Some("forms_user".to_string())),
+            password: std::env::var("OFW_DB_PASSWORD").ok(),
+            database_path: None,
+        }
+    }
+
+    pub fn oracle_thin_default() -> Self {
+        Self {
+            backend: DbBackend::OracleThin,
             host: Some("localhost".to_string()),
             port: Some(1521),
             service_name: Some("FREEPDB1".to_string()),
