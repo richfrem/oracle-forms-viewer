@@ -95,6 +95,9 @@ python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/con
 
 # Convert Oracle Reports (.rdf/.rpt to XML or text):
 python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_rpt.py samples/invoice.rdf
+
+# Verify runtime & query parity between Fusion Middleware 14c and native Rust:
+python3 plugins/oracle-forms/.apm/skills/testing-forms-parity/scripts/test_parity.py samples/ofw_demo_employees_fmb.xml --block EMP
 ```
 
 ---

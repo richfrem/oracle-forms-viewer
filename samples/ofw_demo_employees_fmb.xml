@@ -19,7 +19,7 @@
          </Item>
          <Item Name="RECORD_INFO" ItemType="Text Item" DataType="Char" XPosition="340" YPosition="252" Width="160" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" DatabaseItem="false" Enabled="false"/>
       </Block>
-      <Block Name="EMP" QueryDataSourceName="OFW_DEMO_EMPLOYEES" OrderByClause="LAST_NAME" RecordsDisplayed="1">
+      <Block Name="EMP" QueryDataSourceName="OFW_DEMO_EMPLOYEES" OrderByClause="LAST_NAME" RecordsDisplayCount="1">
          <Item Name="EMP_ID" ItemType="Text Item" DataType="Number" XPosition="110" YPosition="70" Width="70" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" ColumnName="EMP_ID" Prompt="Employee #"/>
          <Item Name="FIRST_NAME" ItemType="Text Item" DataType="Char" XPosition="110" YPosition="100" Width="150" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" ColumnName="FIRST_NAME" Prompt="First name"/>
          <Item Name="LAST_NAME" ItemType="Text Item" DataType="Char" XPosition="330" YPosition="100" Width="150" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" ColumnName="LAST_NAME" Prompt="Last name"/>
