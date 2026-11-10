@@ -6,6 +6,7 @@ use oracle_forms_binary::BinaryFmbParser;
 use oracle_forms_core::error::{FormsError, Result};
 use oracle_forms_core::model::*;
 use oracle_forms_xml::{FormsXmlParser, PldParser};
+use crate::security::{is_plain_file_name, safe_join};
 
 #[derive(Default)]
 struct ServiceState {
@@ -18,6 +19,10 @@ struct ServiceState {
 pub struct FormsService {
     base_cache_dir: PathBuf,
     state: Arc<RwLock<ServiceState>>,
+    /// When true, requests that omit DB credentials may use `OFW_DB_USER`/`OFW_DB_PASSWORD`.
+    /// Off by default: a request must never be able to borrow the operator's credentials
+    /// unless the operator opted in when starting the server.
+    allow_env_credentials: bool,
 }
 
 impl FormsService {
@@ -27,6 +32,22 @@ impl FormsService {
         Self {
             base_cache_dir: dir,
             state: Arc::new(RwLock::new(ServiceState::default())),
+            allow_env_credentials: false,
+        }
+    }
+
+    /// Opt in to filling missing request credentials from the server's environment.
+    pub fn with_env_credentials(mut self, allow: bool) -> Self {
+        self.allow_env_credentials = allow;
+        self
+    }
+
+    /// Applies the server's credential policy to a request-built config.
+    pub fn apply_credential_policy(&self, config: oracle_forms_db::DbConfig) -> oracle_forms_db::DbConfig {
+        if self.allow_env_credentials {
+            config.with_env_credentials()
+        } else {
+            config
         }
     }
 
@@ -71,19 +92,16 @@ impl FormsService {
         sorted
     }
 
+    /// Loads a module from the samples directory. Only plain file names are accepted, so a
+    /// request cannot use this to open arbitrary paths.
     pub fn load_sample(&self, sample_name: &str) -> Result<ModuleIndex> {
-        let candidate_paths = [
-            Self::samples_dir().join(sample_name),
-            PathBuf::from(sample_name),
-        ];
-
-        for path in &candidate_paths {
-            if path.is_file() {
-                return self.load_module(path);
-            }
+        if !is_plain_file_name(sample_name) {
+            return Err(FormsError::NotFound(format!("Invalid sample name '{}'", sample_name)));
         }
-
-        Err(FormsError::NotFound(format!("Sample form '{}' not found in search paths", sample_name)))
+        match safe_join(&Self::samples_dir(), sample_name) {
+            Some(path) if path.is_file() => self.load_module(&path),
+            _ => Err(FormsError::NotFound(format!("Sample form '{}' not found in samples directory", sample_name))),
+        }
     }
 
     pub fn load_module(&self, file_path: &Path) -> Result<ModuleIndex> {
@@ -267,21 +285,15 @@ impl FormsService {
                 .ok_or_else(|| FormsError::NotFound("No queryable blocks found in module".to_string()))?,
         };
 
-        let mut active_config = config.clone();
-        let driver: Box<dyn oracle_forms_db::DatabaseDriver> = match oracle_forms_db::create_driver(&active_config) {
-            Ok(d) => match d.test_connection().await {
-                Ok(_) => d,
-                Err(e) if active_config.backend == oracle_forms_db::DbBackend::Oracle
-                    || active_config.backend == oracle_forms_db::DbBackend::OracleThin => {
-                    tracing::warn!("Oracle connection failed: {}. Falling back to mock driver.", e);
-                    active_config.backend = oracle_forms_db::DbBackend::Mock;
-                    oracle_forms_db::create_driver(&active_config)
-                        .map_err(|e| FormsError::Internal(e.to_string()))?
-                }
-                Err(e) => return Err(FormsError::Internal(e.to_string())),
-            },
-            Err(e) => return Err(FormsError::Internal(e.to_string())),
-        };
+        // No fallback to the mock driver: if the requested database is unreachable the
+        // caller gets the error, never fake rows that look real.
+        let active_config = self.apply_credential_policy(config.clone());
+        let driver = oracle_forms_db::create_driver(&active_config)
+            .map_err(|e| FormsError::Database(e.to_string()))?;
+        driver
+            .test_connection()
+            .await
+            .map_err(|e| FormsError::Database(e.to_string()))?;
 
         driver
             .query_block(block, limit)
@@ -289,26 +301,33 @@ impl FormsService {
             .map_err(|e| FormsError::Internal(e.to_string()))
     }
 
+    /// Reads a sidecar source file for a loaded module. `relative_path` comes from the
+    /// request, so it is confined to the module's cache directory (or the directory of the
+    /// module file itself) via [`safe_join`].
     pub fn read_source(&self, module_name: &str, relative_path: &str) -> Option<String> {
-        let clean_path = relative_path.trim_start_matches(['/', '\\']);
+        // Absolute paths are rejected by `safe_join`, never reinterpreted as relative.
+        let clean_path = relative_path;
         let key = module_name.to_ascii_uppercase();
         let st = self.state.read().unwrap();
 
         if let Some(cache_dir) = st.cache_dirs.get(&key) {
-            let sidecar_file = cache_dir.join(clean_path);
-            if sidecar_file.is_file() {
-                if let Ok(text) = fs::read_to_string(&sidecar_file) {
-                    return Some(text);
+            if let Some(sidecar_file) = safe_join(cache_dir, clean_path) {
+                if sidecar_file.is_file() {
+                    if let Ok(text) = fs::read_to_string(&sidecar_file) {
+                        return Some(text);
+                    }
                 }
             }
         }
 
         if let Some(direct_converted) = st.converted_files.get(&key) {
             if let Some(parent) = direct_converted.parent() {
-                let converted_relative = parent.join(clean_path);
-                if converted_relative.is_file() {
-                    if let Ok(text) = fs::read_to_string(&converted_relative) {
-                        return Some(text);
+                let parent = if parent.as_os_str().is_empty() { Path::new(".") } else { parent };
+                if let Some(converted_relative) = safe_join(parent, clean_path) {
+                    if converted_relative.is_file() {
+                        if let Ok(text) = fs::read_to_string(&converted_relative) {
+                            return Some(text);
+                        }
                     }
                 }
             }
@@ -505,19 +524,24 @@ impl FormsService {
         list
     }
 
+    /// Loads a report definition from the samples directory by plain name.
     pub fn load_report(&self, name_or_file: &str) -> Result<oracle_forms_core::report::ReportDefinition> {
+        if !is_plain_file_name(name_or_file) {
+            return Err(FormsError::NotFound(format!("Invalid report name '{}'", name_or_file)));
+        }
         let samples_dir = Self::samples_dir();
         let candidates = [
-            samples_dir.join(name_or_file),
-            samples_dir.join(format!("{}.xml", name_or_file)),
-            samples_dir.join(format!("{}_report.xml", name_or_file.to_ascii_lowercase())),
-            samples_dir.join(format!("{}_report.xml", name_or_file.to_ascii_uppercase())),
-            PathBuf::from(name_or_file),
+            name_or_file.to_string(),
+            format!("{}.xml", name_or_file),
+            format!("{}_report.xml", name_or_file.to_ascii_lowercase()),
+            format!("{}_report.xml", name_or_file.to_ascii_uppercase()),
         ];
 
-        for path in &candidates {
-            if path.is_file() {
-                return oracle_forms_xml::ReportsXmlParser::parse_file(path);
+        for candidate in &candidates {
+            if let Some(path) = safe_join(&samples_dir, candidate) {
+                if path.is_file() {
+                    return oracle_forms_xml::ReportsXmlParser::parse_file(&path);
+                }
             }
         }
 
@@ -532,30 +556,21 @@ impl FormsService {
     ) -> Result<(oracle_forms_core::report::ReportDefinition, oracle_forms_runtime::ReportExecutionResult, String)> {
         let report = self.load_report(name_or_file)?;
 
-        let backend = match backend_str.to_ascii_lowercase().as_str() {
-            "oracle" => oracle_forms_db::DbBackend::Oracle,
-            "oracle-thin" | "oracle_thin" | "thin" => oracle_forms_db::DbBackend::OracleThin,
-            "sqlite" => oracle_forms_db::DbBackend::Sqlite,
-            _ => oracle_forms_db::DbBackend::Mock,
-        };
+        let backend = oracle_forms_db::DbBackend::parse(backend_str)
+            .map_err(|e| FormsError::Database(e.to_string()))?;
 
-        let mut config = oracle_forms_db::DbConfig {
+        let config = self.apply_credential_policy(oracle_forms_db::DbConfig {
             backend,
             ..Default::default()
-        };
+        });
 
-        let driver = match oracle_forms_db::create_driver(&config) {
-            Ok(d) => match d.test_connection().await {
-                Ok(_) => d,
-                Err(_) if backend == oracle_forms_db::DbBackend::Oracle || backend == oracle_forms_db::DbBackend::OracleThin => {
-                    config.backend = oracle_forms_db::DbBackend::Mock;
-                    oracle_forms_db::create_driver(&config)
-                        .map_err(|e| FormsError::Database(e.to_string()))?
-                }
-                Err(e) => return Err(FormsError::Database(e.to_string())),
-            },
-            Err(e) => return Err(FormsError::Database(e.to_string())),
-        };
+        // No silent fallback to mock data when the requested database is unreachable.
+        let driver = oracle_forms_db::create_driver(&config)
+            .map_err(|e| FormsError::Database(e.to_string()))?;
+        driver
+            .test_connection()
+            .await
+            .map_err(|e| FormsError::Database(e.to_string()))?;
 
         let result = oracle_forms_runtime::ReportDataEvaluator::evaluate(&report, &*driver, params).await?;
         let html = oracle_forms_runtime::ReportRenderer::render_html(&report, &result);

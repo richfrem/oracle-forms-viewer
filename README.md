@@ -99,7 +99,7 @@ Open **[http://127.0.0.1:7070](http://127.0.0.1:7070)** in your browser:
 
 ```bash
 # Query live database records for a block (connects to Oracle 23ai Free :1521)
-cargo run -p oracle-forms-cli -- query samples/test_db_fmb.xml --backend oracle
+OFW_DB_USER=forms_user OFW_DB_PASSWORD=... cargo run -p oracle-forms-cli -- query samples/test_db_fmb.xml --backend oracle-thin
 
 # Query offline using the mock driver
 cargo run -p oracle-forms-cli -- query samples/orders_fmb.xml --backend mock

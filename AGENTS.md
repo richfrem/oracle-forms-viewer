@@ -67,7 +67,7 @@ cargo run -p oracle-forms-cli -- inspect samples/orders_fmb.xml
 cargo run -p oracle-forms-cli -- inspect samples/simple_module.fmb
 
 # Execute live database query (Phase A Query Engine)
-cargo run -p oracle-forms-cli -- query samples/test_db_fmb.xml --backend oracle
+OFW_DB_USER=forms_user OFW_DB_PASSWORD=... cargo run -p oracle-forms-cli -- query samples/test_db_fmb.xml --backend oracle-thin
 cargo run -p oracle-forms-cli -- query samples/orders_fmb.xml --backend mock
 
 # Dump extracted PL/SQL

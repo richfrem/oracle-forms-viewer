@@ -49,6 +49,29 @@ Pass the `PORT` environment variable:
 PORT=8080 cargo run -p oracle-forms-server
 ```
 
+### Network Access & Database Credentials
+
+The server is a local tool: it can read files and connect to databases, so by default it
+listens on `127.0.0.1` only, answers only to `localhost` / `127.0.0.1` / `[::1]` Host names,
+and refuses API calls from other websites (cross-origin requests).
+
+| Variable | Default | Effect |
+| :--- | :--- | :--- |
+| `PORT` | `7070` | Listening port |
+| `OFW_HOST` | `127.0.0.1` | Listening address. A non-loopback value (e.g. `0.0.0.0`) exposes the server to your network and prints a warning |
+| `OFW_ALLOWED_HOSTS` | *(none)* | Extra comma-separated Host names to accept (needed with a non-loopback `OFW_HOST`) |
+| `OFW_SERVER_ENV_CREDENTIALS` | off | When `1`, database requests from the UI that carry no credentials use `OFW_DB_USER` / `OFW_DB_PASSWORD` |
+
+There are no built-in database credentials. To query Oracle from the web UI, start the server with:
+
+```bash
+OFW_DB_USER=forms_user OFW_DB_PASSWORD='<password>' OFW_SERVER_ENV_CREDENTIALS=1 \
+  cargo run -p oracle-forms-server
+```
+
+If the database is unreachable or the credentials are missing, you get an error. The server and
+CLI never fall back to mock data.
+
 ---
 
 ## 3. Using the Web Workbench
@@ -88,7 +111,9 @@ You can inspect modules, extract PL/SQL, or query database records directly from
 
 ```bash
 # 1. Execute live query against Oracle Database 23ai Free (:1521)
-cargo run -p oracle-forms-cli -- query samples/test_db_fmb.xml --backend oracle
+#    (credentials come from OFW_DB_USER / OFW_DB_PASSWORD; there are no defaults)
+OFW_DB_USER=forms_user OFW_DB_PASSWORD='<password>' \
+  cargo run -p oracle-forms-cli -- query samples/test_db_fmb.xml --backend oracle-thin
 
 # 2. Execute query offline using mock driver
 cargo run -p oracle-forms-cli -- query samples/orders_fmb.xml --backend mock

@@ -22,21 +22,10 @@ impl OracleThinDriver {
         }
     }
 
-    /// Resolves connection parameters from `DbConfig` and environment variables.
-    fn resolve_parameters(&self) -> (String, String, String, u16, String) {
-        let user = self
-            .config
-            .username
-            .clone()
-            .or_else(|| std::env::var("OFW_DB_USER").ok())
-            .unwrap_or_else(|| "forms_user".to_string());
-
-        let pass = self
-            .config
-            .password
-            .clone()
-            .or_else(|| std::env::var("OFW_DB_PASSWORD").ok())
-            .unwrap_or_else(|| "Welcome123#".to_string());
+    /// Resolves connection parameters from `DbConfig`. Credentials must be supplied
+    /// explicitly (see [`DbConfig::with_env_credentials`]); there are no defaults.
+    fn resolve_parameters(&self) -> Result<(String, String, String, u16, String), DbError> {
+        let (user, pass) = self.config.require_credentials()?;
 
         let host = self
             .config
@@ -52,7 +41,7 @@ impl OracleThinDriver {
             .clone()
             .unwrap_or_else(|| "FREEPDB1".to_string());
 
-        (user, pass, host, port, service)
+        Ok((user, pass, host, port, service))
     }
 }
 
@@ -101,7 +90,7 @@ fn acquire_pooled_conn(
 impl DatabaseDriver for OracleThinDriver {
     async fn test_connection(&self) -> Result<(), DbError> {
         let pool = Arc::clone(&self.pool);
-        let params = self.resolve_parameters();
+        let params = self.resolve_parameters()?;
 
         tokio::task::spawn_blocking(move || {
             let conn = acquire_pooled_conn(&pool, &params)?;
@@ -127,7 +116,7 @@ impl DatabaseDriver for OracleThinDriver {
 
     async fn query(&self, stmt: &BoundSql) -> Result<QueryResult, DbError> {
         let pool = Arc::clone(&self.pool);
-        let params = self.resolve_parameters();
+        let params = self.resolve_parameters()?;
         let stmt_clone = stmt.clone();
 
         tokio::task::spawn_blocking(move || {

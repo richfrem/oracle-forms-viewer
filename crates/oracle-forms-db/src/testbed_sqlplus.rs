@@ -23,28 +23,37 @@ impl TestbedSqlplusDriver {
     }
 
     fn resolve_credentials(&self) -> Result<(String, String, String), DbError> {
-        let user = self
-            .config
-            .username
-            .clone()
-            .or_else(|| std::env::var("OFW_DB_USER").ok())
-            .unwrap_or_else(|| "forms_user".to_string());
-
-        let pass = match self.config.password.as_deref() {
-            Some(p) => p.to_string(),
-            None => std::env::var("OFW_DB_PASSWORD").map_err(|_| {
-                DbError::ConnectionError(
-                    "Database password not provided. Set OFW_DB_PASSWORD or supply password in DbConfig."
-                        .to_string(),
-                )
-            })?,
-        };
+        let (user, pass) = self.config.require_credentials()?;
 
         let service = self
             .config
             .service_name
             .clone()
             .unwrap_or_else(|| "FREEPDB1".to_string());
+
+        // These values are written into a sqlplus script. A newline would let a caller
+        // inject extra sqlplus commands (e.g. HOST), so reject control characters outright.
+        for (label, value) in [("username", &user), ("password", &pass), ("service name", &service)] {
+            if value.chars().any(|c| c.is_control()) {
+                return Err(DbError::ConfigError(format!(
+                    "Database {} must not contain control characters",
+                    label
+                )));
+            }
+        }
+        if !user.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '$' | '#')) {
+            return Err(DbError::ConfigError(
+                "Database username may only contain letters, digits, '_', '$' or '#'".to_string(),
+            ));
+        }
+        if pass.contains('"') {
+            return Err(DbError::ConfigError(
+                "Passwords containing '\"' are not supported by the testbed sqlplus driver".to_string(),
+            ));
+        }
+        if !service.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-' | ':' | '/')) {
+            return Err(DbError::ConfigError("Invalid database service name".to_string()));
+        }
 
         Ok((user, pass, service))
     }
@@ -53,6 +62,9 @@ impl TestbedSqlplusDriver {
 #[async_trait::async_trait]
 impl DatabaseDriver for TestbedSqlplusDriver {
     async fn test_connection(&self) -> Result<(), DbError> {
+        // 0. Validate configuration before touching the network.
+        let (user, pass, service) = self.resolve_credentials()?;
+
         let host = self.config.host.as_deref().unwrap_or("localhost");
         let port = self.config.port.unwrap_or(1521);
         let addr = format!("{}:{}", host, port);
@@ -63,10 +75,9 @@ impl DatabaseDriver for TestbedSqlplusDriver {
         })?;
 
         // 2. Verify actual login credentials via SELECT 1 FROM DUAL using /nolog
-        let (user, pass, service) = self.resolve_credentials()?;
         let container = Self::container_name();
 
-        let connect_line = format!("CONNECT {}/{}@{}", user, pass, service);
+        let connect_line = format!("CONNECT {}/\"{}\"@{}", user, pass, service);
         let test_script = format!(
             "{}\nSET PAGESIZE 0 FEEDBACK OFF VERIFY OFF HEADING OFF ECHO OFF;\nSELECT 1 FROM DUAL;\nEXIT;\n",
             connect_line
@@ -173,7 +184,7 @@ impl DatabaseDriver for TestbedSqlplusDriver {
             }
         }
 
-        let connect_line = format!("CONNECT {}/{}@{}", user, pass, service);
+        let connect_line = format!("CONNECT {}/\"{}\"@{}", user, pass, service);
         let script = format!(
             "{}\n\
              SET PAGESIZE 0 FEEDBACK OFF VERIFY OFF HEADING OFF ECHO OFF TRIMSPOOL ON LINESIZE 32767 LONG 2000000;\n\
