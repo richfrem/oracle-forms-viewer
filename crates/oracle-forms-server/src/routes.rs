@@ -451,7 +451,7 @@ struct ExportXmlResponse {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SaveFormRequest { module_name: String, username: Option<String>, password: Option<String> }
+struct SaveFormRequest { module_name: String, username: Option<String>, password: Option<String>, #[serde(default)] offline: bool }
 
 async fn save_form_file(State(service): State<FormsService>, Json(req): Json<SaveFormRequest>) -> Response {
     match service.save_form_file(&req.module_name) {
@@ -463,8 +463,14 @@ async fn save_form_file(State(service): State<FormsService>, Json(req): Json<Sav
 }
 
 async fn start_oracle_preview(State(service): State<FormsService>, Json(req): Json<SaveFormRequest>) -> Response {
+    let credentials = if req.offline { None } else {
+        match req.username.zip(req.password).filter(|(u, p)| !u.trim().is_empty() && !p.is_empty()) {
+            Some(credentials) => Some(credentials),
+            None => return session_error(400, "Database-connected compilation needs a username and password. Enter compile credentials in Preview, or explicitly select offline compilation.".into()),
+        }
+    };
     match service.save_form_file(&req.module_name) {
-        Ok((filename, mode)) => match crate::oracle_preview::start(&filename, req.username.zip(req.password).filter(|(u, p)| !u.trim().is_empty() && !p.is_empty())) {
+        Ok((filename, mode)) => match crate::oracle_preview::start(&filename, credentials) {
             Ok(id) => Json(serde_json::json!({ "jobId": id, "fileName": filename, "mode": mode })).into_response(),
             Err(error) => session_error(400, format!("Saved samples/{}. Oracle preview failed: {}", filename, error)),
         },
@@ -1044,6 +1050,17 @@ mod tests {
                       r#"Name="TEXT_ITEM4" Justification="Start" DistanceBetweenRecords="4" Width="240" ItemType="Text Item" BackColor="white" XPosition="33" FontName="Segoe UI" YPosition="77""#, 1);
         assert_ne!(expected, original, "test fixture changed");
         assert_eq!(exported, expected);
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn preview_requires_compile_credentials_without_explicit_offline_mode() {
+        let (service, cache) = security_test_service("preview-credentials");
+        let (status, body, _) = send(service, Request::builder().method("POST")
+            .uri("/api/forms/oracle-preview").header("content-type", "application/json")
+            .body(Body::from(r#"{"moduleName":"DO_NOT_SAVE_WITHOUT_CREDENTIALS"}"#)).unwrap()).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(body.contains("Database-connected compilation needs"), "{body}");
         let _ = std::fs::remove_dir_all(cache);
     }
 

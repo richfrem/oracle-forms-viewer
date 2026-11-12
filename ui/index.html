@@ -653,11 +653,11 @@
       <div class="oracle-logon-fields">
         <div class="ora-field-row">
           <label for="dbUserInput"><u>U</u>sername:</label>
-          <input id="dbUserInput" type="text" placeholder="Oracle database username" autocomplete="username">
+          <input id="dbUserInput" type="text" placeholder="Oracle database username" autocomplete="username" aria-describedby="dbLogonStatus">
         </div>
         <div class="ora-field-row">
           <label for="dbPassInput"><u>P</u>assword:</label>
-          <input id="dbPassInput" type="password" placeholder="••••••••" autocomplete="current-password">
+          <input id="dbPassInput" type="password" placeholder="Enter database password" autocomplete="current-password" aria-describedby="dbLogonStatus">
         </div>
         <div class="ora-field-row">
           <label for="dbBackendSelect"><u>D</u>atabase:</label>
@@ -813,15 +813,33 @@
     </div>
   </dialog>
 
-  <dialog id="oracleReferenceDialog" class="workbench-modal">
-    <div class="modal-header"><h3 id="oraclePreviewTitle">Preview current form in Oracle Forms 14c</h3><button class="btn" onclick="this.closest('dialog').close()">Close</button></div>
-    <div class="modal-body">
+  <dialog id="oracleReferenceDialog" class="workbench-modal" aria-labelledby="oraclePreviewTitle">
+    <div class="modal-header oracle-preview-header"><div><span class="preview-eyebrow">ORACLE REFERENCE</span><h3 id="oraclePreviewTitle">Preview form in Oracle</h3><p>Compare your saved form with the Oracle Forms 14c desktop client.</p></div><button class="btn btn-secondary" onclick="this.closest('dialog').close()" aria-label="Close Oracle preview">Close</button></div>
+    <div class="modal-body oracle-preview-body">
+      <section class="oracle-launch-card" aria-label="Current form preview">
+        <ol class="oracle-preview-steps"><li><span>1</span>Save XML</li><li><span>2</span>Compile form</li><li><span>3</span>Open Oracle</li></ol>
+        <p>Launch the form named above with your latest designer edits. Existing files are kept as separate versions.</p>
+        <fieldset class="oracle-compile-options">
+          <legend>Compile connection</legend>
+          <label for="oracleCompileMode">Compilation mode</label>
+          <select id="oracleCompileMode"><option value="connected">Database-connected — for forms with SQL</option><option value="offline">Offline — no database object validation</option></select>
+          <div id="oracleCompileCredentials" class="oracle-compile-fields">
+            <label for="oracleCompileUser">Database username<input id="oracleCompileUser" autocomplete="username" aria-describedby="oraclePreviewSummary"></label>
+            <label for="oracleCompilePassword">Database password<input id="oracleCompilePassword" type="password" autocomplete="current-password" placeholder="Enter compile password" aria-describedby="oraclePreviewSummary"></label>
+          </div>
+          <p class="preview-help">Uses the local testbed's FREEPDB1 alias. Run clears its password after connecting; enter it here again for compilation. Runtime logon in Oracle is separate.</p>
+        </fieldset>
+        <button id="launchOraclePreviewBtn" class="btn btn-primary" disabled>Save &amp; launch in Oracle</button>
+        <p id="oraclePreviewSummary" class="oracle-preview-summary" role="status" aria-live="polite">No preview launched for this form.</p>
+        <p class="preview-help">Forms with SQL need database-connected compilation so Oracle can resolve tables and views. Offline compilation must be selected explicitly and may fail for these forms.</p>
+        <p class="preview-help">Model-summary XML can omit unparsed Oracle properties. Any conversion or compilation error appears in diagnostics below.</p>
+      </section>
       <section class="oracle-setup" aria-labelledby="oracleSetupHeading">
-        <h4 id="oracleSetupHeading">Before you launch</h4>
-        <p>Oracle preview is optional and requires a separate Oracle reference installation. The native Rust designer, XML inspection, and Mock/SQLite runtime work without it. Preview opens a desktop Java window on the computer running the Rust server.</p>
+        <h4 id="oracleSetupHeading">Environment</h4>
+        <p>The Oracle desktop client opens on the computer running this workbench. First launch? Check the setup instructions below.</p>
         <button id="checkOracleReadinessBtn" class="btn btn-secondary">Check setup again</button>
         <p id="oracleReadinessStatus" role="status" aria-live="polite">Checking dependencies…</p>
-        <ul id="oracleReadinessChecks"></ul>
+        <details id="oracleCheckDetails" class="oracle-check-details"><summary>Dependency checklist</summary><ul id="oracleReadinessChecks"></ul><p id="oracleReadinessNote" class="preview-help"></p></details>
         <details><summary>Setup and server startup instructions</summary>
           <ol>
             <li>Install Python 3, Podman, and a Java runtime compatible with your Forms 14c installation. This project's reference launcher expects Java 17 or newer. Check with <code>python3 --version</code>, <code>podman --version</code>, and <code>java -version</code>.</li>
@@ -837,19 +855,18 @@ podman start forms-server-14c</pre>
 curl -I http://localhost:7001/forms/frmservlet
 python3 plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/scripts/health_check.py</pre>
           <p>Run commands from the repository root. The expected FSAL client is <code>oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar</code>. Missing files require completing the reference installation; do not download an arbitrary JAR.</p>
-          <p>For the native viewer itself, run <code>cargo run -p oracle-forms-server</code>, then open <code>http://127.0.0.1:7070</code>. Its Logon dialog supplies compile credentials; the Oracle desktop window prompts separately. Testbed usernames/passwords and tables must already exist.</p>
+          <p>For the native viewer itself, run <code>cargo run -p oracle-forms-server</code>, then open <code>http://127.0.0.1:7070</code>. The preview compile-connection fields supply compiler credentials; the Oracle desktop window prompts separately. Testbed usernames/passwords and tables must already exist.</p>
         </details>
       </section>
-      <button id="launchOraclePreviewBtn" class="btn btn-primary" disabled>Save &amp; launch current form in Oracle</button>
-      <p>This saves a new XML version in samples/, converts it to FMB, compiles FMX in the local Forms 14c container, and launches the desktop FSAL logon dialog. Database-dependent triggers need the username and password entered in Logon for compilation (FREEPDB1); FSAL prompts again for runtime logon. Without credentials compilation is offline. Model-summary XML may omit Oracle properties or fail compilation; the log below reports the result.</p>
-      <pre id="oraclePreviewLog" role="status" aria-live="polite"></pre>
-      <p>Run the deployed compiled form in the local Oracle reference environment. Unsaved browser edits are not deployed by this action.</p>
-      <label for="oracleReferenceForm">Compiled form name (.fmx)</label><input id="oracleReferenceForm" type="text">
-      <p><a id="oracleReferenceLink" target="_blank" rel="noopener">Open local Fusion Middleware</a></p>
-      <p>The native desktop client uses FSAL. Run this command from the repository root, then log in using the Oracle Forms dialog:</p>
-      <pre id="oracleReferenceCommand"></pre>
-      <button id="copyOracleReferenceBtn" class="btn btn-secondary">Copy FSAL command</button>
-      <p>To compare edits, export and review the XML, then convert and compile it using the reference toolchain. Summary exports omit unmodelled Oracle properties.</p>
+
+      <details id="oraclePreviewDiagnostics" class="oracle-preview-disclosure"><summary>Launch diagnostics</summary><pre id="oraclePreviewLog" tabindex="0" aria-label="Oracle compilation and launch output">No launch output yet.</pre></details>
+      <details class="oracle-preview-disclosure"><summary>Advanced: open an already compiled form</summary><div class="oracle-manual-launch">
+        <p>Use an existing deployed FMX instead of compiling the current edits. This option does not deploy designer changes.</p>
+        <label for="oracleReferenceForm">Deployed form filename</label><input id="oracleReferenceForm" type="text" placeholder="form_name.fmx">
+        <p><a id="oracleReferenceLink" target="_blank" rel="noopener">Open middleware servlet</a></p>
+        <p>For the native desktop client, run this from the repository root:</p><pre id="oracleReferenceCommand"></pre>
+        <button id="copyOracleReferenceBtn" class="btn btn-secondary">Copy FSAL command</button>
+      </div></details>
     </div>
   </dialog>
   <dialog id="runtimeAlertDialog" class="preview-dialog workbench-modal">

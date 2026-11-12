@@ -702,8 +702,8 @@ impl FormsXmlParser {
             "ModuleParameter" => {
                 parameters.push(ParameterInfo {
                     name: name.clone().unwrap_or_default(),
-                    data_type: get_attr(e, "DataType"),
-                    default_value: get_attr(e, "DefaultValue"),
+                    data_type: get_attr(e, "ParameterDataType").or_else(|| get_attr(e, "DataType")),
+                    default_value: get_attr(e, "ParameterInitializeValue").or_else(|| get_attr(e, "DefaultValue")),
                 });
             }
             "VisualAttribute" => {

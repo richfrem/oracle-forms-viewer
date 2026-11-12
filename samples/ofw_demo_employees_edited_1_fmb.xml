@@ -1,0 +1,37 @@
+<?xml version = '1.0' encoding = 'UTF-8'?>
+<Module version="122010400" xmlns="http://xmlns.oracle.com/Forms">
+   <FormModule Name="OFW_DEMO_EMPLOYEES" Title="Employee Directory (Oracle 23ai demo)" ConsoleWindow="WINDOW_MAIN" MenuModule="OFW_EMP_MENU">
+      <Coordinate CharacterCellWidth="8" RealUnit="Point" DefaultFontScaling="true" CharacterCellHeight="16" CoordinateSystem="Real"/>
+      <Trigger Name="WHEN-NEW-FORM-INSTANCE" TriggerText="BEGIN&#10;   -- Show every employee when the form opens.&#10;   GO_BLOCK('EMP');&#10;   EXECUTE_QUERY;&#10;END;"/>
+      <Block Name="CONTROL" DatabaseBlock="false">
+         <Item Name="SEARCH_NAME" ItemType="Text Item" DataType="Char" XPosition="110" YPosition="20" Width="180" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" DatabaseItem="false" Prompt="Last name starts with"/>
+         <Item Name="BTN_SEARCH" ItemType="Push Button" Label="Search" XPosition="300" YPosition="18" Width="80" Height="24" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900">
+            <Trigger Name="WHEN-BUTTON-PRESSED" TriggerText="BEGIN&#10;   IF :CONTROL.SEARCH_NAME IS NULL THEN&#10;      SET_BLOCK_PROPERTY('EMP', DEFAULT_WHERE, '');&#10;   ELSE&#10;      -- The search text is passed as a bind variable, never pasted into the SQL.&#10;      SET_BLOCK_PROPERTY('EMP', DEFAULT_WHERE,&#10;         'UPPER(last_name) LIKE UPPER(:CONTROL.SEARCH_NAME) || ''%''');&#10;   END IF;&#10;   GO_BLOCK('EMP');&#10;   EXECUTE_QUERY;&#10;   IF :EMP.EMP_ID IS NULL THEN&#10;      MESSAGE('No employees match &quot;' || :CONTROL.SEARCH_NAME || '&quot;.');&#10;   END IF;&#10;END;"/>
+         </Item>
+         <Item Name="BTN_SHOW_ALL" ItemType="Push Button" Label="Show all" XPosition="390" YPosition="18" Width="80" Height="24" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900">
+            <Trigger Name="WHEN-BUTTON-PRESSED" TriggerText="BEGIN&#10;   :CONTROL.SEARCH_NAME := NULL;&#10;   SET_BLOCK_PROPERTY('EMP', DEFAULT_WHERE, '');&#10;   GO_BLOCK('EMP');&#10;   EXECUTE_QUERY;&#10;END;"/>
+         </Item>
+         <Item Name="BTN_PREV" ItemType="Push Button" Label="&lt; Previous" XPosition="110" YPosition="250" Width="100" Height="24" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900">
+            <Trigger Name="WHEN-BUTTON-PRESSED" TriggerText="BEGIN&#10;   GO_BLOCK('EMP');&#10;   IF :SYSTEM.CURSOR_RECORD = '1' THEN&#10;      MESSAGE('Already at the first employee.');&#10;   ELSE&#10;      PREVIOUS_RECORD;&#10;   END IF;&#10;END;"/>
+         </Item>
+         <Item Name="BTN_NEXT" ItemType="Push Button" Label="Next &gt;" XPosition="220" YPosition="250" Width="100" Height="24" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900">
+            <Trigger Name="WHEN-BUTTON-PRESSED" TriggerText="BEGIN&#10;   GO_BLOCK('EMP');&#10;   NEXT_RECORD;&#10;END;"/>
+         </Item>
+         <Item Name="RECORD_INFO" ItemType="Text Item" DataType="Char" XPosition="340" YPosition="252" Width="160" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" DatabaseItem="false" Enabled="false"/>
+      </Block>
+      <Block Name="EMP" QueryDataSourceName="OFW_DEMO_EMPLOYEES" OrderByClause="LAST_NAME" RecordsDisplayCount="1">
+         <Item Name="EMP_ID" ItemType="Text Item" DataType="Number" XPosition="110" YPosition="70" Width="70" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" ColumnName="EMP_ID" Prompt="Employee #"/>
+         <Item Name="FIRST_NAME" ItemType="Text Item" DataType="Char" XPosition="110" YPosition="100" Width="150" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" ColumnName="FIRST_NAME" Prompt="First name"/>
+         <Item Name="LAST_NAME" ItemType="Text Item" DataType="Char" XPosition="330" YPosition="100" Width="150" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" ColumnName="LAST_NAME" Prompt="Last name"/>
+         <Item Name="FULL_NAME" ItemType="Text Item" DataType="Char" XPosition="110" YPosition="130" Width="370" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" DatabaseItem="false" Prompt="Full name" Enabled="false"/>
+         <Item Name="JOB_TITLE" ItemType="Text Item" DataType="Char" XPosition="110" YPosition="160" Width="200" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" ColumnName="JOB_TITLE" Prompt="Job title"/>
+         <Item Name="DEPARTMENT" ItemType="Text Item" DataType="Char" XPosition="380" YPosition="160" Width="100" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" ColumnName="DEPARTMENT" Prompt="Department"/>
+         <Item Name="SALARY" ItemType="Text Item" DataType="Number" XPosition="110" YPosition="190" Width="100" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" ColumnName="SALARY" Prompt="Salary"/>
+         <Item Name="HIRE_DATE" ItemType="Text Item" DataType="Date" XPosition="330" YPosition="190" Width="150" Height="20" CanvasName="CANVAS_MAIN" FontName="Segoe UI" FontSize="900" ColumnName="HIRE_DATE" Prompt="Hire date"/>
+         <Trigger Name="POST-QUERY" TriggerText="BEGIN&#10;   -- Non-database item calculated for each fetched row.&#10;   :EMP.FULL_NAME := :EMP.FIRST_NAME || ' ' || :EMP.LAST_NAME;&#10;END;"/>
+         <Trigger Name="WHEN-NEW-RECORD-INSTANCE" TriggerText="BEGIN&#10;   :CONTROL.RECORD_INFO := 'Employee record ' || :SYSTEM.CURSOR_RECORD;&#10;END;"/>
+      </Block>
+      <Canvas Name="CANVAS_MAIN" Width="540" Height="300" WindowName="WINDOW_MAIN" ViewportWidth="540" ViewportHeight="300"/>
+      <Window Name="WINDOW_MAIN" Title="Employee Directory" Width="540" Height="300"/>
+   </FormModule>
+</Module>

@@ -9,7 +9,7 @@ function setup(fetch) {
     if (!elements.has(id)) elements.set(id, { disabled: false, textContent: '', children: [], replaceChildren() { this.children = []; }, append(item) { this.children.push(item); } });
     return elements.get(id);
   };
-  const context = vm.createContext({ fetch, document: { getElementById: get, createElement: () => ({ textContent: '' }) } });
+  const context = vm.createContext({ fetch, oraclePreviewGeneration: 0, oraclePreviewBusy: false, oraclePreviewReady: false, document: { getElementById: get, createElement: () => ({ textContent: '' }) } });
   vm.runInContext(source.slice(source.indexOf('    async function checkOracleReadiness()'), source.indexOf("    document.getElementById('checkOracleReadinessBtn').addEventListener")), context);
   return { context, get };
 }

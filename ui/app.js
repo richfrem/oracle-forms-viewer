@@ -486,6 +486,13 @@
       startRuntimeSession();
     });
 
+    [dbUserInput, dbPassInput].forEach(input => input?.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        document.getElementById('logonConnectRunBtn').click();
+      }
+    }));
+
     // Delegated handler for all in-window Oracle Forms Menu & Toolbar commands
     oracleWindowShell?.addEventListener('click', (e) => {
       const cmdEl = e.target.closest('[data-ora-cmd]');
@@ -911,6 +918,7 @@
       if (!currentPayload) return showBanner('Open or create a form first.');
       event.target.disabled = true;
       try {
+        await persistDesignerAutoLayout();
         await syncModuleToServer();
         const response = await checkedSave('/api/forms/save', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -921,6 +929,27 @@
       } catch (error) { showBanner(`Save Form failed: ${error.message}`); }
       finally { event.target.disabled = false; }
     });
+    let oraclePreviewGeneration = 0;
+    let oraclePreviewModule = null;
+    let oraclePreviewBusy = false;
+    let oraclePreviewReady = false;
+
+    function resetOraclePreview(moduleName) {
+      if (oraclePreviewModule !== moduleName) {
+        oraclePreviewGeneration++;
+        oraclePreviewModule = moduleName;
+        oraclePreviewBusy = false;
+        oraclePreviewReady = false;
+        document.getElementById('oracleCompileMode').value = 'connected';
+        document.getElementById('oracleCompileCredentials').hidden = false;
+        document.getElementById('oracleCompilePassword').value = '';
+        document.getElementById('oraclePreviewLog').textContent = 'No launch output yet.';
+        document.getElementById('oraclePreviewSummary').textContent = `No preview launched for ${moduleName}.`;
+        document.getElementById('oraclePreviewDiagnostics').open = false;
+      }
+      document.getElementById('oraclePreviewTitle').textContent = `Preview ${moduleName} in Oracle`;
+    }
+
     async function checkOracleReadiness() {
       const button = document.getElementById('checkOracleReadinessBtn');
       const launch = document.getElementById('launchOraclePreviewBtn');
@@ -928,52 +957,112 @@
       const list = document.getElementById('oracleReadinessChecks');
       button.disabled = true;
       launch.disabled = true;
+      oraclePreviewReady = false;
+      const generation = oraclePreviewGeneration;
       status.textContent = 'Checking the server computer and local Oracle testbed…';
       list.replaceChildren();
       try {
         const response = await fetch('/api/forms/oracle-preview/readiness');
         if (!response.ok) throw new Error('Setup checks unavailable. Restart the Rust server with the current build.');
         const result = await response.json();
+        if (generation !== oraclePreviewGeneration) return;
         for (const check of result.checks) {
           const item = document.createElement('li');
           item.textContent = `${check.ready ? '✓' : check.required ? 'Missing / unavailable:' : 'Optional / unavailable:'} ${check.label}`;
           list.append(item);
         }
-        status.textContent = `${result.ready ? 'Ready to attempt Oracle preview.' : 'Complete the missing setup steps below, then check again.'} ${result.note}`;
-        launch.disabled = !result.ready;
-      } catch (error) { status.textContent = error.message; }
+        status.textContent = result.ready ? 'Required dependencies are available.' : 'Complete the missing setup steps below, then check again.';
+        document.getElementById('oracleReadinessNote').textContent = result.note;
+        document.getElementById('oracleCheckDetails').open = !result.ready;
+        oraclePreviewReady = result.ready;
+        launch.disabled = !result.ready || oraclePreviewBusy;
+      } catch (error) { if (generation === oraclePreviewGeneration) status.textContent = error.message; }
       finally { button.disabled = false; }
     }
     document.getElementById('checkOracleReadinessBtn').addEventListener('click', checkOracleReadiness);
 
+    document.getElementById('oracleCompileMode').addEventListener('change', event => {
+      const offline = event.target.value === 'offline';
+      document.getElementById('oracleCompileCredentials').hidden = offline;
+      document.getElementById('oracleCompilePassword').value = '';
+    });
+    document.getElementById('oracleReferenceDialog').addEventListener('close', () => {
+      document.getElementById('oracleCompilePassword').value = '';
+    });
+
     document.getElementById('launchOraclePreviewBtn').addEventListener('click', async event => {
-      if (!currentPayload) return;
+      if (!currentPayload || oraclePreviewBusy) return;
+      const sourceModule = currentPayload.moduleIndex.key.name;
+      const compile = {
+        offline: document.getElementById('oracleCompileMode').value === 'offline',
+        username: (document.getElementById('oracleCompileUser').value || '').trim(),
+        password: document.getElementById('oracleCompilePassword').value || '',
+      };
+      if (!compile.offline && (!compile.username || !compile.password)) {
+        const missing = !compile.username ? 'username' : 'password';
+        document.getElementById('oraclePreviewSummary').textContent = `Enter the database ${missing} for connected compilation. No preview was started.`;
+        document.getElementById(missing === 'username' ? 'oracleCompileUser' : 'oracleCompilePassword').focus();
+        return;
+      }
+      const generation = oraclePreviewGeneration;
+      const isCurrent = () => generation === oraclePreviewGeneration && currentPayload?.moduleIndex.key.name === sourceModule;
       const button = event.target;
       const log = document.getElementById('oraclePreviewLog');
+      const summary = document.getElementById('oraclePreviewSummary');
+      oraclePreviewBusy = true;
       button.disabled = true;
       try {
+        summary.textContent = `Saving ${sourceModule}…`;
         log.textContent = 'Saving XML and starting the Oracle reference toolchain…';
+        const positioned = await persistDesignerAutoLayout();
+        if (!isCurrent()) return;
+        if (positioned) log.textContent += `\nPersisted designer geometry and captions for ${positioned} items.`;
         await syncModuleToServer();
+        if (!isCurrent()) return;
         const response = await checkedSave('/api/forms/oracle-preview', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ moduleName: currentPayload.moduleIndex.key.name, username: dbUserInput?.value.trim() || null, password: dbPassInput?.value || null })
+          body: JSON.stringify({ moduleName: sourceModule, offline: compile.offline, username: compile.offline ? null : compile.username, password: compile.offline ? null : compile.password })
         });
+        compile.password = '';
+        if (isCurrent()) document.getElementById('oracleCompilePassword').value = '';
         const result = await response.json();
-        const heading = `Source form: ${currentPayload.moduleIndex.key.name}\nSaved samples/${result.fileName} (${result.mode}).\n`;
+        if (!isCurrent()) return;
+        const heading = `Source form: ${sourceModule}\nSaved samples/${result.fileName} (${result.mode}).\n`;
+        summary.textContent = `Preparing ${sourceModule} for Oracle…`;
         for (let poll = 0; poll < 300; poll++) {
           await new Promise(resolve => setTimeout(resolve, 2000));
+          if (!isCurrent()) return;
           const response = await fetch(`/api/forms/oracle-preview/${encodeURIComponent(result.jobId)}`);
           const status = await response.json();
+          if (!isCurrent()) return;
           if (!response.ok) throw new Error(status.error || 'Preview status unavailable');
           log.textContent = heading + status.log;
           if (!status.running) {
-            log.textContent += status.success ? '\nOracle preview closed successfully.' : '\nOracle preview failed. Review the toolchain output above.';
+            summary.textContent = status.success ? `Oracle preview for ${sourceModule} has closed.`
+              : status.log.includes('logon=no') && status.log.includes('must be declared')
+                ? `Offline compilation cannot resolve database objects in ${sourceModule}. Select database-connected compilation and enter credentials.`
+                : `Could not launch ${sourceModule}. Open diagnostics for details.`;
+            document.getElementById('oraclePreviewDiagnostics').open = !status.success;
             return;
           }
+          summary.textContent = status.log.includes('Forms Session ID') ? `${sourceModule} opened in Oracle. Continue in the desktop window.`
+            : status.log.includes('[3/3]') ? `Opening ${sourceModule} in the Oracle desktop client…`
+            : status.log.includes('[2/3]') ? `Compiling ${sourceModule}…` : `Converting ${sourceModule} to FMB…`;
+          if (status.log.includes('[compatibility]')) summary.textContent += ' A compatibility copy is used; see diagnostics for changes.';
         }
-        log.textContent += '\nStatus monitoring ended. Close the Oracle window when finished.';
-      } catch (error) { log.textContent = `Oracle preview failed: ${error.message}`; }
-      finally { button.disabled = false; }
+        summary.textContent = `Monitoring ended for ${sourceModule}. The Oracle window can continue running.`;
+      } catch (error) {
+        if (isCurrent()) {
+          summary.textContent = `Could not launch ${sourceModule}.`;
+          log.textContent += `\n${error.message}`;
+          document.getElementById('oraclePreviewDiagnostics').open = true;
+        }
+      } finally {
+        if (isCurrent()) {
+          oraclePreviewBusy = false;
+          button.disabled = !oraclePreviewReady;
+        }
+      }
     });
 
     document.addEventListener('click', event => {
@@ -1002,10 +1091,12 @@
     }
     document.getElementById('oracleReferenceBtn')?.addEventListener('click', () => {
       if (!currentPayload) return showBanner('Open a form first.');
-      document.getElementById('oraclePreviewTitle').textContent = `Preview ${currentPayload.moduleIndex.key.name} in Oracle Forms 14c`;
+      resetOraclePreview(currentPayload.moduleIndex.key.name);
+      document.getElementById('oracleCompileUser').value = dbUserInput?.value.trim() || '';
       referenceForm.value = `${currentPayload.moduleIndex.key.name.toLowerCase()}.fmx`;
       updateOracleReference();
       document.getElementById('oracleReferenceDialog').showModal();
+      document.querySelector('#oracleReferenceDialog .modal-body').scrollTop = 0;
       checkOracleReadiness();
     });
     referenceForm?.addEventListener('input', updateOracleReference);
@@ -2120,23 +2211,33 @@
 
   async function startRuntimeSession() {
     if (!currentPayload) return showBanner('Open a form before running it.');
-    if (runtime.active) return;
+    if (runtime.active) {
+      const message = 'This form is already running. Close Logon to continue, or stop the form before starting a new connection.';
+      document.getElementById('dbLogonStatus').textContent = message;
+      showBanner(message);
+      return;
+    }
     const backend = dbBackendSelect ? dbBackendSelect.value : '';
     const logonDialog = document.getElementById('dbConfigModal');
     const logonStatus = document.getElementById('dbLogonStatus');
     const connectButton = document.getElementById('logonConnectRunBtn');
-    if (FormsRuntime.requiresCredentials({
+    dbUserInput.removeAttribute('aria-invalid');
+    dbPassInput.removeAttribute('aria-invalid');
+    const credentialError = FormsRuntime.credentialError({
       backend, username: dbUserInput?.value, password: dbPassInput?.value,
       useServerCredentials: document.getElementById('useServerDbCredentials')?.checked
-    })) {
-      logonStatus.textContent = 'Enter your Oracle username and password, then choose Connect & Run. No session has started.';
+    });
+    if (credentialError) {
+      logonStatus.textContent = credentialError.message;
       if (!logonDialog.open) logonDialog.showModal();
-      if (!dbUserInput.value.trim()) dbUserInput.focus();
-      else dbPassInput.focus();
+      const input = credentialError.field === 'username' ? dbUserInput : dbPassInput;
+      input.setAttribute('aria-invalid', 'true');
+      input.focus();
       return;
     }
     logonStatus.textContent = 'Connecting and starting the form…';
     connectButton.disabled = true;
+    connectButton.textContent = 'Connecting…';
     runFormBtn.disabled = true;
     runFormBtn.textContent = '⏳ Starting...';
     try {
@@ -2168,6 +2269,7 @@
       showBanner(`Could not start the form: ${err.message}`);
     } finally {
       connectButton.disabled = false;
+      connectButton.textContent = 'Connect & Run';
       runFormBtn.disabled = false;
       runFormBtn.textContent = '▶ Run';
       if (!runtime.active) setRuntimeUi(null);
@@ -2236,50 +2338,19 @@
     }
   }
 
-  // Visual Canvas 2D SVG Rendering
-  /**
-   * Renders one canvas as SVG markup. `opts.overlay` is set for stacked / tab canvases
-   * drawn on top of the window's content canvas (their own origin is 0,0).
-   */
-  function buildCanvasLayer(canvas, activeTabPage, opts = {}) {
-    const mod = currentPayload.moduleIndex;
-    const coord = mod.coordinate || {};
-
-    // Coordinate scaling: translate from Oracle Forms units to standard CSS pixels
-    // Oracle Forms "Real" coordinate system with "Centimeter" or "Inch" uses milli-units (1/1000)
-    let coordScale = 1.0;
-    const unit = (coord.realUnit || '').toLowerCase();
-    const coordSys = (coord.coordinateSystem || '').toLowerCase();
-
-    if (coordSys === 'real' || (canvas.width > 2000 || canvas.height > 2000)) {
-      if (unit.includes('centimeter') || unit === 'cm') {
-        coordScale = 37.79527559 / 1000.0; // 1cm = ~37.8px at 96 DPI
-      } else if (unit.includes('inch') || unit === 'in') {
-        coordScale = 96.0 / 1000.0;         // 1in = 96px at 96 DPI
-      } else if (canvas.width > 3000 || canvas.height > 3000) {
-        coordScale = 800.0 / Math.max(canvas.width, 1000);
-      }
+  function canvasCoordinateScale(coordinate, canvas, override) {
+    if (override) return override;
+    const unit = (coordinate.realUnit || '').toLowerCase();
+    const system = (coordinate.coordinateSystem || '').toLowerCase();
+    if (system === 'real' || canvas.width > 2000 || canvas.height > 2000) {
+      if (unit.includes('centimeter') || unit === 'cm') return 37.79527559 / 1000;
+      if (unit.includes('inch') || unit === 'in') return 96 / 1000;
+      if (canvas.width > 3000 || canvas.height > 3000) return 800 / Math.max(canvas.width, 1000);
     }
+    return 1;
+  }
 
-    if (opts.coordScale) coordScale = opts.coordScale;
-    const scale = (val) => Math.round((val || 0) * coordScale);
-
-    // Collect visual items on this canvas
-    const visualItems = [];
-    for (const block of mod.blocks) {
-      for (const item of block.items) {
-        const onThisCanvas = item.canvasName === canvas.name;
-        const matchesTab = !canvas.tabPages.length || !item.tabPageName || item.tabPageName === activeTabPage;
-
-        if (onThisCanvas && matchesTab) {
-          visualItems.push({ block, item, isFallbackLayout: false });
-        } else if (showNullCanvas && !item.canvasName) {
-          visualItems.push({ block, item, isFallbackLayout: true });
-        }
-      }
-    }
-
-    // Auto-layout fallback for unpositioned items (x == 0 && y == 0)
+  function resolveAutoLayout(visualItems) {
     const zeroCoords = visualItems.filter(v => (v.item.xPosition || 0) === 0 && (v.item.yPosition || 0) === 0);
     const needsAutoFlow = zeroCoords.length > 1;
 
@@ -2312,6 +2383,83 @@
         }
       }
     }
+
+    return resolvedPositions;
+  }
+
+  async function persistDesignerAutoLayout() {
+    if (!currentPayload?.moduleIndex) return 0;
+    const module = currentPayload.moduleIndex;
+    const targets = new Map();
+    for (const canvas of module.canvases || []) {
+      const pages = canvas.tabPages?.length ? canvas.tabPages.map(page => page.name) : [null];
+      for (const page of pages) {
+        const visualItems = module.blocks.flatMap(block => block.items
+          .filter(item => item.canvasName === canvas.name && (!canvas.tabPages?.length || !item.tabPageName || item.tabPageName === page))
+          .map(item => ({ block, item })));
+        const resolved = resolveAutoLayout(visualItems);
+        for (const entry of visualItems) {
+          const key = `${entry.block.name}.${entry.item.name}`;
+          const captionMissing = (entry.item.itemType || '').toLowerCase().includes('button') && !entry.item.label;
+          if ((resolved.has(key) || captionMissing) && !targets.has(key)) {
+            targets.set(key, { ...entry, position: resolved.get(key), unitScale: canvasCoordinateScale(module.coordinate || {}, canvas) });
+          }
+        }
+      }
+    }
+    for (const { block, item, position, unitScale } of targets.values()) {
+      const button = (item.itemType || '').toLowerCase().includes('button');
+      const height = position ? Math.max(1, Math.round((button && position.h < 26 ? 33 : position.h) / unitScale)) : (item.height || 33);
+      const x = position ? Math.round(position.x / unitScale) : (item.xPosition || 0);
+      const y = position ? Math.round(position.y / unitScale) : (item.yPosition || 0);
+      const width = position ? Math.max(1, Math.round(position.w / unitScale)) : (item.width || 140);
+      const inferredCaption = button && !item.label;
+      await checkedSave(`/api/forms/module/${encodeURIComponent(module.key.name)}/item`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blockName: block.name, itemName: item.name,
+          x, y, width, height,
+          label: button ? (item.label || item.prompt || item.name) : undefined,
+          prompt: inferredCaption ? '' : undefined,
+          promptAttachmentEdge: item.promptAttachmentEdge || 'Start',
+          promptAttachmentOffset: item.promptAttachmentOffset ?? 5 })
+      });
+      Object.assign(item, { xPosition: x, yPosition: y, width, height });
+      if (inferredCaption) {
+        item.label = item.prompt || item.name;
+        item.prompt = '';
+      }
+    }
+    if (targets.size && currentPayload.moduleIndex === module) renderCanvasSvg();
+    return targets.size;
+  }
+
+  // Visual Canvas 2D SVG Rendering
+  /**
+   * Renders one canvas as SVG markup. `opts.overlay` is set for stacked / tab canvases
+   * drawn on top of the window's content canvas (their own origin is 0,0).
+   */
+  function buildCanvasLayer(canvas, activeTabPage, opts = {}) {
+    const mod = currentPayload.moduleIndex;
+    const coordScale = canvasCoordinateScale(mod.coordinate || {}, canvas, opts.coordScale);
+    const scale = (val) => Math.round((val || 0) * coordScale);
+
+    // Collect visual items on this canvas
+    const visualItems = [];
+    for (const block of mod.blocks) {
+      for (const item of block.items) {
+        const onThisCanvas = item.canvasName === canvas.name;
+        const matchesTab = !canvas.tabPages.length || !item.tabPageName || item.tabPageName === activeTabPage;
+
+        if (onThisCanvas && matchesTab) {
+          visualItems.push({ block, item, isFallbackLayout: false });
+        } else if (showNullCanvas && !item.canvasName) {
+          visualItems.push({ block, item, isFallbackLayout: true });
+        }
+      }
+    }
+
+    const resolvedPositions = resolveAutoLayout(visualItems);
+    const needsAutoFlow = resolvedPositions.size > 0;
 
     // Scaled canvas dimensions & dynamic bounding box expansion
     const baseWidth = Math.max(200, scale(canvas.width) || 800);
@@ -2434,8 +2582,8 @@
       }
     }
 
-    // Layer 2: Synthesized Frames for Auto-Flow Blocks
-    if (needsAutoFlow) {
+    // Inferred block outlines are designer guides, not graphics in the Oracle source.
+    if (needsAutoFlow && layoutEditMode) {
       const drawnBlocks = new Set();
       visualItems.forEach(({ block, item }) => {
         const pos = resolvedPositions.get(`${block.name}.${item.name}`);

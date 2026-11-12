@@ -1,0 +1,321 @@
+<?xml version = '1.0' encoding = 'UTF-8'?>
+<Module version="122010400" xmlns="http://xmlns.oracle.com/Forms">
+   <FormModule Name="TEST_DB" DirtyInfo="true" Title="Live Oracle 23ai Database Test" ConsoleWindow="WINDOW1" MenuModule="DEFAULT&amp;SMARTBAR">
+      <Coordinate CharacterCellWidth="8" RealUnit="Point" DefaultFontScaling="true" CharacterCellHeight="16" CoordinateSystem="Real"/>
+      <Alert Name="ALERT2" DirtyInfo="true" Title="title" Button3Label="Derp" AlertMessage="message!" Comment="test_alert"/>
+      <Block Name="BLOCK5" DirtyInfo="true" ScrollbarWidth="17" ScrollbarLength="158">
+         <Item Name="TEXT_ITEM4" Justification="Start" DistanceBetweenRecords="4" Width="240" ItemType="Text Item" BackColor="white" XPosition="20" FontName="Segoe UI" YPosition="50" FontSize="1000" FontStyle="Plain" DirtyInfo="true" FontWeight="Bold" FontSpacing="Normal" ForegroundColor="black" CanvasName="CANVAS4" ItemsDisplay="0" Height="28"/>
+         <Item Name="TEXT_ITEM284" Justification="Start" Width="120" ItemType="Text Item" BackColor="white" XPosition="270" FontName="Segoe UI" YPosition="50" FontSize="1000" FontStyle="Plain" DirtyInfo="true" FontWeight="Bold" FontSpacing="Normal" ForegroundColor="black" CanvasName="CANVAS4" ItemsDisplay="0" Height="28"/>
+         <Item Name="PUSH_BUTTON285" Width="160" ItemType="Push Button" BackColor="#123456" XPosition="20" FontName="Segoe UI" YPosition="95" FontSize="900" FontStyle="Plain" DirtyInfo="true" FontWeight="Bold" Label="Query Next Item (DB)" FontSpacing="Normal" ForegroundColor="black" CanvasName="CANVAS4" Height="32">
+            <Trigger Name="WHEN-BUTTON-PRESSED" DirtyInfo="true" TriggerText="DECLARE&#10;   v_curr_name varchar2(100);&#10;   v_next_id number := 1;&#10;BEGIN&#10;   v_curr_name := :BLOCK5.TEXT_ITEM4;&#10;   IF v_curr_name = 'Widget A' THEN&#10;      v_next_id := 2;&#10;   ELSIF v_curr_name = 'Gadget B' THEN&#10;      v_next_id := 3;&#10;   ELSE&#10;      v_next_id := 1;&#10;   END IF;&#10;   SELECT item_name, TO_CHAR(amount)&#10;     INTO :BLOCK5.TEXT_ITEM4, :BLOCK5.TEXT_ITEM284&#10;     FROM test_items&#10;    WHERE item_id = v_next_id;&#10;EXCEPTION&#10;   WHEN OTHERS THEN&#10;      :BLOCK5.TEXT_ITEM4 := SQLERRM;&#10;END;"/>
+         </Item>
+         <Item Name="CHECK_BOX286" Width="114" ItemType="Check Box" BackColor="white" XPosition="412" FontName="Segoe UI" YPosition="257" FontSize="900" FontStyle="Plain" DirtyInfo="true" FontWeight="Demilight" Label="CHECK_BOX286" FontSpacing="Normal" ForegroundColor="black" CanvasName="CANVAS4" Height="77" CheckedValue="Y" UncheckedValue="N"/>
+         <Item Name="RADIO_GROUP288" BackColor="white" XPosition="236" YPosition="322" DirtyInfo="true" ForegroundColor="black" Width="83" CanvasName="CANVAS4" ItemType="Radio Group" Height="16">
+            <RadioButton Name="RADIO_BUTTON289" Width="93" BackColor="white" XPosition="21" FontName="Segoe UI" YPosition="259" FontSize="900" FontStyle="Plain" DirtyInfo="true" FontWeight="Demilight" Label="RADIO_BUTTON289" FontSpacing="Normal" ForegroundColor="black" Height="97"/>
+            <RadioButton Name="RADIO_BUTTON290" XPosition="21" YPosition="330" DirtyInfo="true" Label="RADIO_BUTTON290" Width="83" Height="16"/>
+            <RadioButton Name="RADIO_BUTTON291" XPosition="22" YPosition="267" DirtyInfo="true" Label="RADIO_BUTTON291" Width="83" Height="16"/>
+         </Item>
+         <Trigger Name="KEY-COMMIT" DirtyInfo="true" Comment="null;--datablock level trigger" TriggerText="null;--datablock level trigger"/>
+      </Block>
+      <Canvas Name="CANVAS4" DirtyInfo="true" Width="660" WindowName="WINDOW1" Height="378" ViewportHeight="378" ViewportWidth="660">
+         <Graphics Name="RECT7" InternalLineWidth="113" InternalRotationAngle="1024" Width="142" EdgeBackColor="white" EdgePattern="solid" XPosition="32" YPosition="124" Bevel="None" DirtyInfo="true" GraphicsType="Rectangle" HorizontalMargin="8" ScrollbarWidth="17" VerticalMargin="16" HorizontalObjectOffset="17" Height="102" StartPromptOffset="8"/>
+         <Graphics Name="LINE8" InternalLineWidth="113" Width="83" EdgeBackColor="white" EdgePattern="solid" XPosition="149" YPosition="56" Bevel="None" DirtyInfo="true" GraphicsType="Line" HorizontalMargin="8" ScrollbarWidth="17" VerticalMargin="16" HorizontalObjectOffset="17" Height="19" StartPromptOffset="8"/>
+         <Graphics Name="ARC9" InternalLineWidth="113" Width="144" EdgeBackColor="white" EdgePattern="solid" XPosition="317" YPosition="107" Bevel="None" DirtyInfo="true" GraphicsType="Arc" HorizontalMargin="8" ScrollbarWidth="17" VerticalMargin="16" HorizontalObjectOffset="17" Height="68" StartPromptOffset="8"/>
+         <Graphics Name="ARC10" InternalLineWidth="113" Width="303" EdgeBackColor="white" EdgePattern="solid" XPosition="462" YPosition="-53" Bevel="None" DirtyInfo="true" GraphicsType="Arc" HorizontalMargin="8" ScrollbarWidth="17" VerticalMargin="16" HorizontalObjectOffset="17" Height="182" InternalStartAngle="5760" StartPromptOffset="8" InternalEndAngle="11520"/>
+         <Graphics Name="POLYGON11" Bevel="None" DirtyInfo="true" InternalLineWidth="113" EdgeBackColor="white" GraphicsType="Polygon" EdgePattern="solid" HorizontalMargin="8" ScrollbarWidth="17" VerticalMargin="16" HorizontalObjectOffset="17" StartPromptOffset="8">
+            <Point Name="POINT12" XPosition="268" YPosition="195"/>
+            <Point Name="POINT13" XPosition="201" YPosition="242"/>
+            <Point Name="POINT14" XPosition="434" YPosition="239"/>
+            <Point Name="POINT15" XPosition="366" YPosition="204"/>
+            <Point Name="POINT16" XPosition="268" YPosition="196"/>
+         </Graphics>
+         <Graphics Name="POLYGON17" InternalLineWidth="113" EdgeBackColor="white" EdgePattern="solid" Bevel="None" DirtyInfo="true" GraphicsType="Polygon" HorizontalMargin="8" ScrollbarWidth="17" Closed="true" VerticalMargin="16" HorizontalObjectOffset="17" StartPromptOffset="8">
+            <Point Name="POINT18" XPosition="569" YPosition="184"/>
+            <Point Name="POINT19" XPosition="569" YPosition="185"/>
+            <Point Name="POINT20" XPosition="569" YPosition="185"/>
+            <Point Name="POINT21" XPosition="569" YPosition="185"/>
+            <Point Name="POINT22" XPosition="568" YPosition="185"/>
+            <Point Name="POINT23" XPosition="567" YPosition="185"/>
+            <Point Name="POINT24" XPosition="567" YPosition="186"/>
+            <Point Name="POINT25" XPosition="566" YPosition="186"/>
+            <Point Name="POINT26" XPosition="566" YPosition="187"/>
+            <Point Name="POINT27" XPosition="566" YPosition="187"/>
+            <Point Name="POINT28" XPosition="565" YPosition="187"/>
+            <Point Name="POINT29" XPosition="565" YPosition="187"/>
+            <Point Name="POINT30" XPosition="557" YPosition="192"/>
+            <Point Name="POINT31" XPosition="557" YPosition="193"/>
+            <Point Name="POINT32" XPosition="555" YPosition="194"/>
+            <Point Name="POINT33" XPosition="554" YPosition="194"/>
+            <Point Name="POINT34" XPosition="554" YPosition="194"/>
+            <Point Name="POINT35" XPosition="552" YPosition="195"/>
+            <Point Name="POINT36" XPosition="551" YPosition="196"/>
+            <Point Name="POINT37" XPosition="551" YPosition="196"/>
+            <Point Name="POINT38" XPosition="550" YPosition="197"/>
+            <Point Name="POINT39" XPosition="548" YPosition="198"/>
+            <Point Name="POINT40" XPosition="530" YPosition="209"/>
+            <Point Name="POINT41" XPosition="530" YPosition="209"/>
+            <Point Name="POINT42" XPosition="527" YPosition="211"/>
+            <Point Name="POINT43" XPosition="527" YPosition="212"/>
+            <Point Name="POINT44" XPosition="526" YPosition="212"/>
+            <Point Name="POINT45" XPosition="525" YPosition="212"/>
+            <Point Name="POINT46" XPosition="524" YPosition="212"/>
+            <Point Name="POINT47" XPosition="524" YPosition="213"/>
+            <Point Name="POINT48" XPosition="523" YPosition="214"/>
+            <Point Name="POINT49" XPosition="520" YPosition="215"/>
+            <Point Name="POINT50" XPosition="519" YPosition="215"/>
+            <Point Name="POINT51" XPosition="518" YPosition="216"/>
+            <Point Name="POINT52" XPosition="518" YPosition="217"/>
+            <Point Name="POINT53" XPosition="510" YPosition="223"/>
+            <Point Name="POINT54" XPosition="509" YPosition="223"/>
+            <Point Name="POINT55" XPosition="509" YPosition="223"/>
+            <Point Name="POINT56" XPosition="509" YPosition="223"/>
+            <Point Name="POINT57" XPosition="509" YPosition="224"/>
+            <Point Name="POINT58" XPosition="508" YPosition="224"/>
+            <Point Name="POINT59" XPosition="508" YPosition="225"/>
+            <Point Name="POINT60" XPosition="507" YPosition="225"/>
+            <Point Name="POINT61" XPosition="507" YPosition="226"/>
+            <Point Name="POINT62" XPosition="507" YPosition="227"/>
+            <Point Name="POINT63" XPosition="506" YPosition="227"/>
+            <Point Name="POINT64" XPosition="506" YPosition="227"/>
+            <Point Name="POINT65" XPosition="506" YPosition="228"/>
+            <Point Name="POINT66" XPosition="506" YPosition="228"/>
+            <Point Name="POINT67" XPosition="506" YPosition="229"/>
+            <Point Name="POINT68" XPosition="506" YPosition="230"/>
+            <Point Name="POINT69" XPosition="506" YPosition="230"/>
+            <Point Name="POINT70" XPosition="506" YPosition="230"/>
+            <Point Name="POINT71" XPosition="507" YPosition="230"/>
+            <Point Name="POINT72" XPosition="507" YPosition="231"/>
+            <Point Name="POINT73" XPosition="508" YPosition="231"/>
+            <Point Name="POINT74" XPosition="508" YPosition="232"/>
+            <Point Name="POINT75" XPosition="509" YPosition="232"/>
+            <Point Name="POINT76" XPosition="509" YPosition="232"/>
+            <Point Name="POINT77" XPosition="510" YPosition="232"/>
+            <Point Name="POINT78" XPosition="510" YPosition="233"/>
+            <Point Name="POINT79" XPosition="511" YPosition="233"/>
+            <Point Name="POINT80" XPosition="511" YPosition="234"/>
+            <Point Name="POINT81" XPosition="511" YPosition="235"/>
+            <Point Name="POINT82" XPosition="512" YPosition="235"/>
+            <Point Name="POINT83" XPosition="512" YPosition="236"/>
+            <Point Name="POINT84" XPosition="512" YPosition="236"/>
+            <Point Name="POINT85" XPosition="512" YPosition="236"/>
+            <Point Name="POINT86" XPosition="513" YPosition="236"/>
+            <Point Name="POINT87" XPosition="513" YPosition="237"/>
+            <Point Name="POINT88" XPosition="513" YPosition="238"/>
+            <Point Name="POINT89" XPosition="514" YPosition="238"/>
+            <Point Name="POINT90" XPosition="514" YPosition="239"/>
+            <Point Name="POINT91" XPosition="515" YPosition="239"/>
+            <Point Name="POINT92" XPosition="515" YPosition="239"/>
+            <Point Name="POINT93" XPosition="515" YPosition="240"/>
+            <Point Name="POINT94" XPosition="515" YPosition="240"/>
+            <Point Name="POINT95" XPosition="516" YPosition="240"/>
+            <Point Name="POINT96" XPosition="516" YPosition="241"/>
+            <Point Name="POINT97" XPosition="517" YPosition="241"/>
+            <Point Name="POINT98" XPosition="517" YPosition="241"/>
+            <Point Name="POINT99" XPosition="517" YPosition="242"/>
+            <Point Name="POINT100" XPosition="517" YPosition="243"/>
+            <Point Name="POINT101" XPosition="518" YPosition="243"/>
+            <Point Name="POINT102" XPosition="518" YPosition="244"/>
+            <Point Name="POINT103" XPosition="518" YPosition="244"/>
+            <Point Name="POINT104" XPosition="519" YPosition="244"/>
+            <Point Name="POINT105" XPosition="519" YPosition="245"/>
+            <Point Name="POINT106" XPosition="520" YPosition="245"/>
+            <Point Name="POINT107" XPosition="521" YPosition="245"/>
+            <Point Name="POINT108" XPosition="521" YPosition="245"/>
+            <Point Name="POINT109" XPosition="521" YPosition="245"/>
+            <Point Name="POINT110" XPosition="522" YPosition="245"/>
+            <Point Name="POINT111" XPosition="522" YPosition="246"/>
+            <Point Name="POINT112" XPosition="523" YPosition="246"/>
+            <Point Name="POINT113" XPosition="524" YPosition="246"/>
+            <Point Name="POINT114" XPosition="524" YPosition="246"/>
+            <Point Name="POINT115" XPosition="525" YPosition="246"/>
+            <Point Name="POINT116" XPosition="526" YPosition="246"/>
+            <Point Name="POINT117" XPosition="527" YPosition="246"/>
+            <Point Name="POINT118" XPosition="527" YPosition="247"/>
+            <Point Name="POINT119" XPosition="527" YPosition="248"/>
+            <Point Name="POINT120" XPosition="528" YPosition="248"/>
+            <Point Name="POINT121" XPosition="529" YPosition="248"/>
+            <Point Name="POINT122" XPosition="530" YPosition="248"/>
+            <Point Name="POINT123" XPosition="530" YPosition="248"/>
+            <Point Name="POINT124" XPosition="531" YPosition="248"/>
+            <Point Name="POINT125" XPosition="532" YPosition="248"/>
+            <Point Name="POINT126" XPosition="533" YPosition="248"/>
+            <Point Name="POINT127" XPosition="533" YPosition="248"/>
+            <Point Name="POINT128" XPosition="534" YPosition="248"/>
+            <Point Name="POINT129" XPosition="535" YPosition="248"/>
+            <Point Name="POINT130" XPosition="536" YPosition="248"/>
+            <Point Name="POINT131" XPosition="536" YPosition="248"/>
+            <Point Name="POINT132" XPosition="537" YPosition="248"/>
+            <Point Name="POINT133" XPosition="538" YPosition="248"/>
+            <Point Name="POINT134" XPosition="539" YPosition="248"/>
+            <Point Name="POINT135" XPosition="539" YPosition="248"/>
+            <Point Name="POINT136" XPosition="540" YPosition="248"/>
+            <Point Name="POINT137" XPosition="541" YPosition="248"/>
+            <Point Name="POINT138" XPosition="542" YPosition="247"/>
+            <Point Name="POINT139" XPosition="542" YPosition="246"/>
+            <Point Name="POINT140" XPosition="543" YPosition="246"/>
+            <Point Name="POINT141" XPosition="544" YPosition="245"/>
+            <Point Name="POINT142" XPosition="545" YPosition="245"/>
+            <Point Name="POINT143" XPosition="545" YPosition="244"/>
+            <Point Name="POINT144" XPosition="546" YPosition="243"/>
+            <Point Name="POINT145" XPosition="547" YPosition="242"/>
+            <Point Name="POINT146" XPosition="548" YPosition="241"/>
+            <Point Name="POINT147" XPosition="548" YPosition="241"/>
+            <Point Name="POINT148" XPosition="549" YPosition="240"/>
+            <Point Name="POINT149" XPosition="549" YPosition="239"/>
+            <Point Name="POINT150" XPosition="550" YPosition="239"/>
+            <Point Name="POINT151" XPosition="551" YPosition="237"/>
+            <Point Name="POINT152" XPosition="552" YPosition="237"/>
+            <Point Name="POINT153" XPosition="552" YPosition="236"/>
+            <Point Name="POINT154" XPosition="553" YPosition="236"/>
+            <Point Name="POINT155" XPosition="554" YPosition="235"/>
+            <Point Name="POINT156" XPosition="554" YPosition="234"/>
+            <Point Name="POINT157" XPosition="555" YPosition="233"/>
+            <Point Name="POINT158" XPosition="556" YPosition="233"/>
+            <Point Name="POINT159" XPosition="556" YPosition="232"/>
+            <Point Name="POINT160" XPosition="557" YPosition="232"/>
+            <Point Name="POINT161" XPosition="557" YPosition="231"/>
+            <Point Name="POINT162" XPosition="558" YPosition="230"/>
+            <Point Name="POINT163" XPosition="559" YPosition="230"/>
+            <Point Name="POINT164" XPosition="559" YPosition="229"/>
+            <Point Name="POINT165" XPosition="560" YPosition="229"/>
+            <Point Name="POINT166" XPosition="560" YPosition="227"/>
+            <Point Name="POINT167" XPosition="561" YPosition="227"/>
+            <Point Name="POINT168" XPosition="561" YPosition="226"/>
+            <Point Name="POINT169" XPosition="562" YPosition="226"/>
+            <Point Name="POINT170" XPosition="562" YPosition="225"/>
+            <Point Name="POINT171" XPosition="563" YPosition="224"/>
+            <Point Name="POINT172" XPosition="563" YPosition="223"/>
+            <Point Name="POINT173" XPosition="563" YPosition="223"/>
+            <Point Name="POINT174" XPosition="563" YPosition="222"/>
+            <Point Name="POINT175" XPosition="563" YPosition="222"/>
+            <Point Name="POINT176" XPosition="563" YPosition="221"/>
+            <Point Name="POINT177" XPosition="563" YPosition="222"/>
+            <Point Name="POINT178" XPosition="563" YPosition="223"/>
+            <Point Name="POINT179" XPosition="563" YPosition="223"/>
+            <Point Name="POINT180" XPosition="563" YPosition="224"/>
+            <Point Name="POINT181" XPosition="563" YPosition="225"/>
+            <Point Name="POINT182" XPosition="563" YPosition="226"/>
+            <Point Name="POINT183" XPosition="562" YPosition="226"/>
+            <Point Name="POINT184" XPosition="562" YPosition="227"/>
+            <Point Name="POINT185" XPosition="561" YPosition="227"/>
+            <Point Name="POINT186" XPosition="561" YPosition="228"/>
+            <Point Name="POINT187" XPosition="560" YPosition="229"/>
+            <Point Name="POINT188" XPosition="557" YPosition="236"/>
+            <Point Name="POINT189" XPosition="557" YPosition="237"/>
+            <Point Name="POINT190" XPosition="557" YPosition="238"/>
+            <Point Name="POINT191" XPosition="557" YPosition="239"/>
+            <Point Name="POINT192" XPosition="556" YPosition="240"/>
+            <Point Name="POINT193" XPosition="556" YPosition="241"/>
+            <Point Name="POINT194" XPosition="556" YPosition="241"/>
+            <Point Name="POINT195" XPosition="555" YPosition="243"/>
+            <Point Name="POINT196" XPosition="554" YPosition="243"/>
+            <Point Name="POINT197" XPosition="554" YPosition="244"/>
+            <Point Name="POINT198" XPosition="554" YPosition="245"/>
+            <Point Name="POINT199" XPosition="554" YPosition="246"/>
+            <Point Name="POINT200" XPosition="554" YPosition="247"/>
+            <Point Name="POINT201" XPosition="554" YPosition="248"/>
+            <Point Name="POINT202" XPosition="553" YPosition="248"/>
+            <Point Name="POINT203" XPosition="553" YPosition="249"/>
+            <Point Name="POINT204" XPosition="549" YPosition="259"/>
+            <Point Name="POINT205" XPosition="549" YPosition="259"/>
+            <Point Name="POINT206" XPosition="549" YPosition="261"/>
+            <Point Name="POINT207" XPosition="549" YPosition="262"/>
+            <Point Name="POINT208" XPosition="549" YPosition="263"/>
+            <Point Name="POINT209" XPosition="549" YPosition="263"/>
+            <Point Name="POINT210" XPosition="549" YPosition="264"/>
+            <Point Name="POINT211" XPosition="548" YPosition="266"/>
+            <Point Name="POINT212" XPosition="548" YPosition="267"/>
+            <Point Name="POINT213" XPosition="548" YPosition="268"/>
+            <Point Name="POINT214" XPosition="548" YPosition="268"/>
+            <Point Name="POINT215" XPosition="548" YPosition="275"/>
+            <Point Name="POINT216" XPosition="548" YPosition="275"/>
+            <Point Name="POINT217" XPosition="549" YPosition="275"/>
+            <Point Name="POINT218" XPosition="549" YPosition="276"/>
+            <Point Name="POINT219" XPosition="549" YPosition="277"/>
+            <Point Name="POINT220" XPosition="550" YPosition="277"/>
+            <Point Name="POINT221" XPosition="551" YPosition="277"/>
+            <Point Name="POINT222" XPosition="551" YPosition="277"/>
+            <Point Name="POINT223" XPosition="551" YPosition="277"/>
+            <Point Name="POINT224" XPosition="552" YPosition="277"/>
+            <Point Name="POINT225" XPosition="552" YPosition="278"/>
+            <Point Name="POINT226" XPosition="553" YPosition="278"/>
+            <Point Name="POINT227" XPosition="554" YPosition="278"/>
+            <Point Name="POINT228" XPosition="554" YPosition="278"/>
+            <Point Name="POINT229" XPosition="554" YPosition="279"/>
+            <Point Name="POINT230" XPosition="555" YPosition="279"/>
+            <Point Name="POINT231" XPosition="556" YPosition="279"/>
+            <Point Name="POINT232" XPosition="557" YPosition="279"/>
+            <Point Name="POINT233" XPosition="557" YPosition="279"/>
+            <Point Name="POINT234" XPosition="558" YPosition="279"/>
+            <Point Name="POINT235" XPosition="559" YPosition="279"/>
+            <Point Name="POINT236" XPosition="560" YPosition="279"/>
+            <Point Name="POINT237" XPosition="560" YPosition="279"/>
+            <Point Name="POINT238" XPosition="561" YPosition="279"/>
+            <Point Name="POINT239" XPosition="562" YPosition="279"/>
+            <Point Name="POINT240" XPosition="563" YPosition="279"/>
+            <Point Name="POINT241" XPosition="563" YPosition="279"/>
+            <Point Name="POINT242" XPosition="564" YPosition="279"/>
+            <Point Name="POINT243" XPosition="565" YPosition="279"/>
+            <Point Name="POINT244" XPosition="566" YPosition="279"/>
+            <Point Name="POINT245" XPosition="566" YPosition="279"/>
+            <Point Name="POINT246" XPosition="567" YPosition="279"/>
+            <Point Name="POINT247" XPosition="568" YPosition="279"/>
+            <Point Name="POINT248" XPosition="569" YPosition="279"/>
+            <Point Name="POINT249" XPosition="569" YPosition="279"/>
+            <Point Name="POINT250" XPosition="570" YPosition="279"/>
+            <Point Name="POINT251" XPosition="571" YPosition="279"/>
+            <Point Name="POINT252" XPosition="572" YPosition="279"/>
+            <Point Name="POINT253" XPosition="572" YPosition="279"/>
+            <Point Name="POINT254" XPosition="573" YPosition="279"/>
+            <Point Name="POINT255" XPosition="573" YPosition="280"/>
+            <Point Name="POINT256" XPosition="574" YPosition="280"/>
+            <Point Name="POINT257" XPosition="575" YPosition="280"/>
+            <Point Name="POINT258" XPosition="575" YPosition="280"/>
+            <Point Name="POINT259" XPosition="576" YPosition="280"/>
+            <Point Name="POINT260" XPosition="577" YPosition="280"/>
+            <Point Name="POINT261" XPosition="577" YPosition="281"/>
+            <Point Name="POINT262" XPosition="578" YPosition="281"/>
+            <Point Name="POINT263" XPosition="578" YPosition="281"/>
+            <Point Name="POINT264" XPosition="579" YPosition="281"/>
+            <Point Name="POINT265" XPosition="580" YPosition="281"/>
+            <Point Name="POINT266" XPosition="581" YPosition="281"/>
+            <Point Name="POINT267" XPosition="581" YPosition="281"/>
+            <Point Name="POINT268" XPosition="582" YPosition="281"/>
+            <Point Name="POINT269" XPosition="583" YPosition="281"/>
+            <Point Name="POINT270" XPosition="584" YPosition="281"/>
+            <Point Name="POINT271" XPosition="584" YPosition="281"/>
+            <Point Name="POINT272" XPosition="585" YPosition="281"/>
+            <Point Name="POINT273" XPosition="586" YPosition="281"/>
+            <Point Name="POINT274" XPosition="587" YPosition="281"/>
+            <Point Name="POINT275" XPosition="587" YPosition="281"/>
+            <Point Name="POINT276" XPosition="588" YPosition="281"/>
+         </Graphics>
+         <Graphics Name="TEXT277" Width="14" EdgeBackColor="white" FillPattern="none" EdgePattern="none" XPosition="129" YPosition="249" Bevel="None" HorizontalJustification="Start" GraphicsFontWeight="Demilight" GraphicsFontSpacing="Normal" GraphicsType="Text" ScrollbarWidth="17" Height="23" GraphicsFontName="Segoe UI" GraphicsFontSize="900" GraphicsFontStyle="0" GraphicsText="text" DirtyInfo="true" GraphicsFontColor="black" GraphicsFontColorCode="0" HorizontalMargin="8" VerticalMargin="16" HorizontalObjectOffset="17" StartPromptOffset="8">
+            <CompoundText Name="CMPTXT278">
+               <TextSegment Name="TEXTSTR279" FontName="Segoe UI" FontSize="900" FontStyle="Plain" DirtyInfo="true" FontWeight="Demilight" FontSpacing="Normal" ForegroundColor="black" Text="text&amp;#10;"/>
+            </CompoundText>
+         </Graphics>
+         <Graphics Name="FRAME280" UpdateLayout="Manually" Width="200" EdgeBackColor="white" FillPattern="none" EdgePattern="solid" FrameTitleForegroundColor="black" FrameTitleFontName="Segoe UI" FrameTitleFontSize="900" FrameTitleFontStyle="Plain" FrameTitleFontWeight="Demilight" FrameTitleFontSpacing="Normal" XPosition="124" YPosition="26" Bevel="None" GraphicsType="Frame" ScrollbarWidth="17" Height="82" FrameTitleAlign="Start" FrameTitleOffset="6" FrameTitleSpacing="3" FrameTitle="label" DirtyInfo="true" LayoutDataBlockName="BLOCK5" HorizontalMargin="8" VerticalMargin="16" HorizontalObjectOffset="17" StartPromptOffset="8"/>
+         <Graphics Name="TEXT281" Width="67" EdgeBackColor="white" FillPattern="none" EdgePattern="none" XPosition="314" YPosition="298" Bevel="None" HorizontalJustification="Start" GraphicsFontWeight="Demilight" GraphicsFontSpacing="Normal" GraphicsType="Text" ScrollbarWidth="17" Height="23" GraphicsFontName="Segoe UI" GraphicsFontSize="900" GraphicsFontStyle="0" GraphicsText="texty mc textface" DirtyInfo="true" GraphicsFontColor="black" GraphicsFontColorCode="0" HorizontalMargin="8" VerticalMargin="16" HorizontalObjectOffset="17" StartPromptOffset="8">
+            <CompoundText Name="CMPTXT282">
+               <TextSegment Name="TEXTSTR283" FontName="Segoe UI" FontSize="900" FontStyle="Plain" DirtyInfo="true" FontWeight="Demilight" FontSpacing="Normal" ForegroundColor="black" Text="texty mc textface&amp;#10;"/>
+            </CompoundText>
+         </Graphics>
+      </Canvas>
+      <Editor Name="EDITOR292" DirtyInfo="true" Width="330" Height="158"/>
+      <ModuleParameter Name="PARAMETER293" DirtyInfo="true" ParameterInitializeValue="uid"/>
+      <ModuleParameter Name="PARAMETER294" DirtyInfo="true" ParameterDataType="Number" ParameterInitializeValue="34567"/>
+      <ModuleParameter Name="PARAMETER295" DirtyInfo="true" ParameterDataType="Date" ParameterInitializeValue="11-NOV-1111"/>
+      <ProgramUnit Name="UIDH" ProgramUnitText="PACKAGE BODY uidh IS&amp;#10;  &amp;#10;END;" ProgramUnitType="Package Body"/>
+      <ProgramUnit Name="UIDH" ProgramUnitText="PACKAGE uidh IS&amp;#10;  &amp;#10;END;" ProgramUnitType="Package Spec"/>
+      <ProgramUnit Name="UIDHHH" ProgramUnitText="PROCEDURE uidhhh IS&amp;#10;BEGIN&amp;#10;  null;&amp;#10;END;" ProgramUnitType="Procedure"/>
+      <ProgramUnit Name="HHHH" ProgramUnitText="FUNCTION hhhh RETURN integer IS&amp;#10;BEGIN&amp;#10;  return 1;&amp;#10;END;" ProgramUnitType="Function"/>
+      <PropertyClass Name="PROPERTY_CLASS297" DirtyInfo="true" AllowStartAttachmentPrompts="true" AlertStyle="Caution"/>
+      <RecordGroup Name="RG" RecordGroupFetchSize="0">
+         <RecordGroupColumn Name="RGC" ColumnValuesCount="1"/>
+      </RecordGroup>
+      <Trigger Name="WHEN-NEW-FORM-INSTANCE" DirtyInfo="true" Comment="module level trigger" TriggerText="BEGIN&#10;   SELECT item_name, TO_CHAR(amount)&#10;     INTO :BLOCK5.TEXT_ITEM4, :BLOCK5.TEXT_ITEM284&#10;     FROM test_items&#10;    WHERE item_id = 1;&#10;EXCEPTION&#10;   WHEN OTHERS THEN&#10;      :BLOCK5.TEXT_ITEM4 := 'DB Connect Error: ' || SQLERRM;&#10;END;"/>
+      <VisualAttribute Name="VISUAL_ATTRIBUTE298" FontName="Angsana New" FontSize="6600" FontStyle="Plain" DirtyInfo="true" FontWeight="Ultralight" FontSpacing="Ultradense"/>
+      <Window Name="WINDOW1" Width="660" Height="378"/>
+   </FormModule>
+</Module>
