@@ -2495,7 +2495,7 @@
     }
 
     const width = Math.max(baseWidth, maxContentX + 30);
-    const height = Math.max(baseHeight, maxContentY + 30, needsAutoFlow ? currentItemY + 60 : 0);
+    const height = Math.max(baseHeight, maxContentY + 30);
 
 
     let svgHtml = '';
