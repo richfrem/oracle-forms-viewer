@@ -116,37 +116,73 @@ cargo run -p oracle-forms-cli -- report run samples/ofw_employee_directory_repor
 
 ## Screenshots
 
-These show representative workbench and reference-runtime views; toolbar details may differ from the current UI.
+Current captures of the native workbench and the Oracle reference workflow. Rust and Oracle use different themes, zoom, and date formatting; these screenshots demonstrate the workflow rather than exact visual parity.
 
-### Form Designer with Custom Menu (.mmb)
+### Sales orders and line items
 
-Object navigator, canvas with in-form navigation, attached `OFW_EMP_MENU.mmb`, and property palette.
+Native Sales runtime showing database records, tab pages, and master-detail blocks.
 
-![Form Designer with custom menu](docs/screenshots/workbench/form-designer-custom-menu.jpg)
+![Sales orders and line items](docs/screenshots/workbench/sales-orders-runtime.png)
 
-### Live Run against Oracle 23ai
+### PL/SQL Studio
 
-Run the form with supported triggers and PL/SQL over a live database session.
+Trigger and program-unit navigation with source and the property palette.
 
-![Live run](docs/screenshots/workbench/live-run-oracle-23ai.jpg)
-
-### PL/SQL Studio and Split Drawer
-
-![PL/SQL Studio](docs/screenshots/workbench/plsql-studio.jpg)
-
-![PL/SQL split drawer](docs/screenshots/workbench/plsql-split-drawer.jpg)
+![PL/SQL Studio](docs/screenshots/workbench/plsql-studio.png)
 
 ### Reports Engine
 
-HTML5 report preview with data model diagram and report property sheet.
+Employee Directory report preview, grouped totals, data model, and print/PDF controls.
 
-![Reports Engine](docs/screenshots/workbench/reports-engine.jpg)
+![Reports Engine](docs/screenshots/workbench/reports-engine.png)
 
-### Live Forms 14c Desktop Execution (FSAL + Oracle 23ai Database)
+### Designer with PL/SQL drawer
 
-Run compiled forms (`.fmx`) natively on macOS and Windows via Forms Standalone Launcher (FSAL) backed by Oracle WebLogic 14c and Oracle Database 23ai Free.
+Employee Directory design alongside the selected program unit.
 
-![Live Oracle Forms 14c desktop application executing dynamic database query](docs/screenshots/forms-14c-live-db-query-gadget-b.jpg)
+![Designer with PL/SQL drawer](docs/screenshots/workbench/plsql-split-drawer.png)
+
+### Native Employee Directory runtime
+
+Live Oracle Thin session with record navigation and calculated display fields.
+
+![Native Employee Directory runtime](docs/screenshots/workbench/live-run-oracle-23ai.png)
+
+### XML source inspection
+
+Selected block XML alongside its data-source and layout properties.
+
+![XML source inspection](docs/screenshots/workbench/xml-source.png)
+
+### Structural and visual Form Diff
+
+Baseline and comparison selection with block and item changes.
+
+![Structural and visual Form Diff](docs/screenshots/workbench/form-diff.png)
+
+### Save and launch in Oracle
+
+Versioned XML save, compilation mode, connection fields, and environment checks. Compilation and runtime logon are separate.
+
+![Save and launch in Oracle](docs/screenshots/workbench/oracle-preview-launcher.png)
+
+### Oracle FSAL logon
+
+Updated XML converted to FMB, compiled to FMX, and launched into the Oracle desktop logon dialog.
+
+![Oracle FSAL logon](docs/screenshots/workbench/oracle-fsal-logon.png)
+
+### Oracle launch diagnostics
+
+FSAL session diagnostics and the separate advanced option for an existing compiled form.
+
+![Oracle launch diagnostics](docs/screenshots/workbench/oracle-preview-diagnostics.png)
+
+### Employee Directory in Oracle Fusion Middleware
+
+The compiled form running in the Oracle Forms desktop client with queried employee data and its custom menu.
+
+![Employee Directory in Oracle Fusion Middleware](docs/screenshots/workbench/oracle-fsal-employee-directory.png)
 
 ---
 
