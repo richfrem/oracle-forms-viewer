@@ -132,7 +132,7 @@ impl FormsXmlWriter {
             }
             let _ = writeln!(out, "    <RecordGroup {}>", rg_attrs.join(" "));
             for col in &rg.columns {
-                let _ = writeln!(out, "      <RecordGroupColumn Name=\"{}\" DataType=\"Char\"/>", escape_attr(col));
+                let _ = writeln!(out, "      <RecordGroupColumn Name=\"{}\" ColumnDataType=\"Character\"/>", escape_attr(col));
             }
             out.push_str("    </RecordGroup>\n");
         }
@@ -153,10 +153,10 @@ impl FormsXmlWriter {
         for param in &module.parameters {
             let mut p_attrs = vec![format!("Name=\"{}\"", escape_attr(&param.name))];
             if let Some(dt) = &param.data_type {
-                p_attrs.push(format!("DataType=\"{}\"", escape_attr(dt)));
+                p_attrs.push(format!("ParameterDataType=\"{}\"", escape_attr(dt)));
             }
             if let Some(dv) = &param.default_value {
-                p_attrs.push(format!("DefaultValue=\"{}\"", escape_attr(dv)));
+                p_attrs.push(format!("ParameterInitializeValue=\"{}\"", escape_attr(dv)));
             }
             let _ = writeln!(out, "    <ModuleParameter {}/>", p_attrs.join(" "));
         }

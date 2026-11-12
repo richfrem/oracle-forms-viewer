@@ -62,6 +62,8 @@ import os
 import argparse
 import subprocess
 import shlex
+import re
+import xml.etree.ElementTree as ET
 import urllib.parse
 from pathlib import Path
 from typing import List, Optional
@@ -75,6 +77,71 @@ def resolve_workspace_root() -> Path:
         Path pointing to the repository root.
     """
     return Path(__file__).resolve().parents[6]
+
+
+def prepare_oracle_preview_xml(source: Path) -> Path:
+    """Adapt known fixture aliases in a separate copy; preserve the saved source XML."""
+    parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True))
+    tree = ET.parse(source, parser=parser)
+    root = tree.getroot()
+    changes = []
+    version = root.get("version", "")
+    if re.fullmatch(r"\d+(?:\.\d+)+", version):
+        root.set("version", "141020000")
+        changes.append(f"Module version {version} -> 141020000 (14c importer)")
+
+    def local(element):
+        return element.tag.rsplit("}", 1)[-1] if isinstance(element.tag, str) else ""
+
+    for element in root.iter():
+        tag = local(element)
+        aliases = {"ModuleParameter": {"DataType": "ParameterDataType", "DefaultValue": "ParameterInitializeValue"},
+                   "RecordGroupColumn": {"DataType": "ColumnDataType"}}.get(tag, {})
+        for old, new in aliases.items():
+            if old not in element.attrib:
+                continue
+            value = element.attrib[old]
+            if tag == "RecordGroupColumn" and value == "Char":
+                value = "Character"
+            if new in element.attrib and element.attrib[new] != value:
+                raise RuntimeError(f"Conflicting {old}/{new} on {tag}; fix the source before Oracle preview")
+            element.set(new, value)
+            del element.attrib[old]
+            changes.append(f"{tag}.{old} -> {new}")
+        # This exact marker is deliberately present in parser-conformance fixtures.
+        # All other unknown elements are retained and left to Oracle validation.
+        for child in list(element):
+            if local(child) == "FutureUnknownElement":
+                element.remove(child)
+                changes.append("Omitted parser-test marker FutureUnknownElement from preview copy")
+    if not changes:
+        return source
+    # Hand-authored fixtures rely on the native viewer's Point/800x600 defaults.
+    # Oracle's implicit character-unit defaults otherwise put these same items off-canvas.
+    forms = [element for element in root.iter() if local(element) == "FormModule"]
+    for form in forms:
+        if not any(local(child) == "Coordinate" for child in form):
+            namespace_prefix = form.tag.rsplit("}", 1)[0] + "}" if "}" in form.tag else ""
+            form.insert(0, ET.Element(namespace_prefix + "Coordinate", {
+                "CoordinateSystem": "Real", "RealUnit": "Point", "CharacterCellWidth": "7",
+                "CharacterCellHeight": "14", "DefaultFontScaling": "true"}))
+            changes.append("Made native viewer Point coordinate defaults explicit")
+        for element in form:
+            if local(element) in ("Canvas", "Window"):
+                for attribute, value in (("Width", "800"), ("Height", "600")):
+                    if attribute not in element.attrib:
+                        element.set(attribute, value)
+                        changes.append(f"{local(element)} {element.get('Name', '')}.{attribute} -> {value} (native viewer default)")
+    namespace = root.tag[1:].split("}", 1)[0] if root.tag.startswith("{") else None
+    if namespace:
+        ET.register_namespace("", namespace)
+    target = source.parent / "oracle_compatible" / source.name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tree.write(target, encoding="UTF-8", xml_declaration=True)
+    print("[compatibility] Oracle preview copy created; original XML unchanged:")
+    for change in changes:
+        print(f"  - {change}")
+    return target
 
 
 # Converts a Forms XML definition file into a binary .fmb via XML2Forms inside the container.
@@ -91,6 +158,7 @@ def convert_xml_to_fmb(xml_path: Path, repo_root: Path) -> Path:
     Raises:
         RuntimeError: If XML2Forms conversion fails.
     """
+    xml_path = prepare_oracle_preview_xml(xml_path)
     rel_path = xml_path.resolve().relative_to(repo_root)
     container_xml = f"/work/{rel_path}"
     # XML2Forms strips the Forms2XML _fmb suffix when naming its binary output.
@@ -165,7 +233,10 @@ def compile_fmb_to_fmx(fmb_path: Path, repo_root: Path, userid: str, offline: bo
     if not offline:
         res.stdout = res.stdout.replace(userid, "<redacted>")
     if "Created form file" not in res.stdout and res.returncode != 0:
-        raise RuntimeError(f"Compilation failed:\n{res.stdout}")
+        hint = ("Offline compilation cannot resolve database tables used by PL/SQL. Select database-connected compilation and enter compile credentials."
+                if offline and "must be declared" in res.stdout else
+                "Verify the connected schema has the referenced objects and privileges." if not offline and "must be declared" in res.stdout else "")
+        raise RuntimeError(f"Compilation failed: {hint}\n{res.stdout}")
 
     # Ensure the compiled form is mirrored into container forms deployment directory
     copy_cmd = f"cp {container_fmb.rsplit('.', 1)[0]}.fmx /oracle_home_14c/forms/{fmx_path.name}"

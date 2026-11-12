@@ -4,9 +4,15 @@ window.FormsRuntime = class FormsRuntime {
     this.sessionId = null;
   }
 
-  static requiresCredentials({ backend, username, password, useServerCredentials = false }) {
-    return ['oracle', 'oracle-thin'].includes(backend) && !useServerCredentials &&
-      (!username?.trim() || !password);
+  static credentialError({ backend, username, password, useServerCredentials = false }) {
+    if (!['oracle', 'oracle-thin'].includes(backend) || useServerCredentials) return null;
+    if (!username?.trim()) return { field: 'username', message: 'Enter your Oracle database username. No connection was attempted.' };
+    if (!password) return { field: 'password', message: 'Enter your Oracle database password. No connection was attempted.' };
+    return null;
+  }
+
+  static requiresCredentials(options) {
+    return this.credentialError(options) !== null;
   }
 
   get active() {

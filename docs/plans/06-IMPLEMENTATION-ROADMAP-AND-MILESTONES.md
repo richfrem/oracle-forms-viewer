@@ -236,3 +236,69 @@ Java 17+, Podman, Forms container/servlet and reference files. Missing prerequis
 launch; users can recheck after completing setup. Installation and container startup remain
 explicit operator actions. Readiness does not validate schema credentials or compilation.
 Validation includes three frontend setup-state regressions (13 frontend tests total).
+
+
+### Logon feedback follow-up
+
+Connect & Run now names the missing credential, avoids a misleading dotted password
+placeholder, shows progress, accepts Enter, and reports already-running sessions. The
+classic logon dialog is centered with responsive fields. Browser verification with an actual
+password started Employee Directory via Oracle Thin (writes enabled by the user; no commit
+performed). See the session prompt document for post-PR publication status and remaining work.
+
+
+### Oracle preview dialog usability follow-up
+
+Launch status, setup checks, diagnostics and manual FMX tools now have distinct sections.
+Logs wrap inside a bounded diagnostics panel. Changing forms clears unrelated launch output,
+including late asynchronous responses. Desktop dialog checked in Chrome; 17 frontend checks
+pass, including stale-preview and stylesheet-integrity regressions. These follow-up changes
+are local until separately committed; current status is in the session prompt document.
+
+
+### Hand-authored Orders XML compatibility
+
+Oracle preview prepares an isolated compatibility copy for known fixture aliases, version
+format and missing native-default layout metadata; originals are preserved and changes logged.
+Rust parameter/group-column serialization now uses Oracle schema names. Orders XML2Forms
+conversion and database-connected FMX compilation were verified on Forms 14c. Unknown business
+nodes are retained for Oracle validation; this is not a general schema migration or parity claim.
+The app launch established FSAL session AdminServer.formsapp.18 for orders_edited_3.fmx;
+user logon and visual/runtime parity remain unverified. See the session prompt for follow-up status.
+
+
+### Persist resolved designer layout for Oracle preview
+
+Fallback item layout is shared by the SVG renderer and Save Form / Preview persistence.
+The saved XML now includes inferred positions/sizes and button labels; source fixture files,
+explicit positions and hidden flags are preserved. Coordinate units are accounted for. Orders
+compiled/launched with the persisted layout; final native visual confirmation remains a user
+check. Validation includes 20 frontend tests and 119 Rust tests. Compilation alone is not parity.
+
+
+### Orders visual comparison follow-up
+
+Saved preview XML now carries the designer's inferred button caption even after positions are
+already explicit; a caption-only change preserves geometry. Inferred block outlines are shown
+only in Layout mode. Caption persistence was verified on saved Orders XML; 21 frontend tests
+pass. Native typography/theme/DPI, actual source trigger behavior and pixel parity remain open.
+
+
+### Explicit compiler connection mode
+
+Preview defaults to database-connected compilation and requests dedicated compile credentials;
+offline compilation is an explicit option. This fixes OFW_SALES failing under logon=no after
+Run cleared the Logon password. The same FMB compiled successfully with logon=yes. The API has
+matching validation; an existing server needs restart for the new backend guard. Current tests:
+120 Rust, 23 frontend and 7 reference-runner tests. Runtime logon remains separate.
+
+
+### Review milestone: XML form design across native and Oracle runtimes
+
+The follow-up PR captures the complete implemented workflow: design/modify a form, persist a
+versioned XML artifact, load/execute its model in the native Rust runtime, and use the optional
+Oracle toolchain to convert/compile and launch it in Forms 14c FSAL. Saved XML versions from
+this work are included for review. Live Orders, Employee Directory and Sales evidence is
+recorded in the session prompt document. Full runtime semantics, visual parity, dependency
+handling and lossless arbitrary structural changes remain bounded by the limitations there.
+Publication is without rerunning verification at the user's request; PR review/merge is manual.

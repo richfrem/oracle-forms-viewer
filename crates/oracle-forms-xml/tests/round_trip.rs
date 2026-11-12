@@ -92,6 +92,9 @@ fn test_xml_round_trip_and_diff_fidelity() {
     // 4. Serialize to Forms2XML XML string
     let xml_output = FormsXmlWriter::write_string(&modified);
     assert!(xml_output.contains("Purchase Order Number"));
+    assert!(xml_output.contains("ParameterDataType=\"Number\""));
+    assert!(xml_output.contains("ParameterInitializeValue=\"0\""));
+    assert!(xml_output.contains("ColumnDataType=\"Character\""));
     assert!(xml_output.contains("XPosition=\"45\""));
     assert!(xml_output.contains("YPosition=\"75\""));
     assert!(xml_output.contains("WhereClause=\"STATUS = 'PENDING'\""));
@@ -102,6 +105,8 @@ fn test_xml_round_trip_and_diff_fidelity() {
 
     let reparsed = FormsXmlParser::parse(&key, &temp_xml_file, &cache_dir)
         .expect("Failed to re-parse generated XML");
+
+    assert_eq!(reparsed.parameters, modified.parameters);
 
     // 6. Verify mutations survived round-trip
     let rep_orders = reparsed

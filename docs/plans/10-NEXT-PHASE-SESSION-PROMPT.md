@@ -9,6 +9,143 @@
 This section supersedes the historical completion claims below. Continue from the repository
 state reported by `git status` and `git log`. No exploration interview is needed.
 
+### Publication milestone: XML design to both runtimes
+
+This follow-up is being published as a review PR after #20. The user will review and merge it;
+do not merge automatically. The publication includes source changes, regression tests, these
+status documents, and the saved XML form versions created during design/preview work in samples.
+Ignored temp/context files and generated staging binaries are excluded.
+
+The supported end-to-end path is XML form editing and versioned saves in the Rust workbench,
+loading/executing the form model in the native runtime, and converting/compiling saved XML
+through the Oracle reference toolchain for FSAL execution. Orders, Employee Directory and Sales
+provided live testbed evidence described below. This is a workflow milestone, not a certification
+of exhaustive Oracle compatibility or pixel-identical rendering. The native runtime interprets
+form models; Oracle reference tooling produces FMB/FMX executables.
+
+No additional verification is being run for commit/push/PR creation, at the user's request.
+Previously completed validation: 120 Rust tests, 23 frontend tests, and 7 Python runner tests.
+The detailed outstanding items below remain the continuation backlog after the PR is merged.
+
+### Sales compilation connection fix (local)
+
+The user reported OFW_SALES package SALES_UI failing to resolve OFW_ORDERS under logon=no.
+The same ofw_sales_edited_2.fmb compiled successfully with database-connected compilation;
+the testbed account has access to the referenced table. The UI had silently selected offline
+mode after Run cleared its password field.
+
+- Preview now has dedicated compile username/password fields and an explicit mode selector.
+  Database-connected is the default for each newly selected form; offline requires a choice.
+- Missing compile credentials stop the launch before saving/starting a job. Fields are separate
+  from the runtime Logon state; passwords clear after request acceptance or dialog close.
+- The preview API now requires credentials unless offline=true is explicitly supplied. This
+  server-side enforcement is implemented/tested but needs the newly built server after restart;
+  the already-running server is retained to avoid dropping user runtime sessions. Frontend
+  validation and the updated reference runner take effect on loading the new assets.
+- Offline unresolved-object errors now recommend connected compilation instead of implying
+  missing testbed tables. If a connected compile fails, schema/privilege problems remain possible.
+- Verification: ofw_sales_edited_2.fmx compiled with logon=yes. The app preview for OFW_SALES
+  (job 85948-11) saved version 3, compiled ofw_sales_edited_3.fmx with logon=yes, launched FSAL
+  and established AdminServer.formsapp.23. User logon/visual verification remain separate.
+- 120 Rust tests, 23 frontend tests and 7 Python runner tests cover the current work, including
+  credential gating, request payload/clearing and an offline-error hint. These follow-ups remain
+  uncommitted. Do not retain or commit user passwords in source, artifacts or browser storage.
+
+### Orders visual comparison follow-up (local)
+
+The user's paired screenshots confirm item order/relative placement now broadly matches, but
+not visual parity: Rust was at 50% zoom and included inferred block outlines; Oracle showed an
+empty Save button with a separate prompt. The older compiled XML had Prompt=Save, no Label.
+
+Save/Preview now materializes inferred button captions even for already-positioned items,
+without moving/resizing those items. A prompt used solely as an inferred button caption is
+moved to Label and cleared as a separate Prompt, matching the Rust renderer. Explicitly authored
+labels/prompts remain intact. Saved XML was checked to contain Label=Save and an empty Prompt.
+Synthetic block outlines are now restricted to Layout edit mode; real source graphics remain.
+The caption change does not add Oracle trigger behavior absent from the source. Native fonts,
+OS theme, zoom/DPI, title-bar presentation and exact pixel parity still need comparison work.
+21 frontend regressions pass alongside the existing Rust checks. These changes are uncommitted.
+No additional Oracle window was launched for this caption-only save verification.
+
+### Orders native layout follow-up (local)
+
+The user confirmed Oracle launched but controls were overlapping at the top-left. The native
+SVG renderer had been generating fallback coordinates without exporting them. Compilation
+success was not visual parity.
+
+- Extracted the fallback positioning into resolveAutoLayout, shared by rendering and saving.
+- Save Form / Preview now persist the resolved positions and missing sizes through item patch
+  endpoints before syncing/saving XML. This retains the original document and unknown metadata.
+  Explicit nonzero positions and visibility are preserved. Button fallback labels are made
+  explicit. Coordinates convert from the renderer's fallback pixels back to Oracle units.
+- Integration check used the same JS helper against the running service: ORDER_ID (140,60),
+  CUSTOMER_NAME (140,91), hidden detail ORDER_ID (140,182), PRODUCT (140,218), Save (140,304).
+  orders_edited_5_fmb.xml compiled to orders_edited_5.fmx and established an FSAL session.
+- 20 frontend tests cover persistence, failure handling, geometry units and the previous fixes.
+  119 Rust tests remain passing. The original fixture files were not modified.
+
+Remaining: user logon and visual confirmation of the newly compiled window, exact font/frame
+parity, tab-page/overlay edge cases and behavior parity. Existing Oracle windows display their
+previously compiled layout; re-preview is required after saving new geometry. Orders has no
+startup EXECUTE_QUERY trigger: blank data until query execution is distinct from missing layout.
+The testbed helper could not attach to the Java client via native app ID, so no new Oracle
+window screenshot was verified automatically. Do not claim pixel-for-pixel parity.
+
+### Orders / hand-authored XML preview compatibility fix (local)
+
+Orders is a parser fixture, with a dotted Module version, legacy parameter/column attribute
+aliases, deliberately unknown test nodes and omitted geometry metadata. Oracle rejected the
+saved source during XML2Forms, then reported off-canvas geometry after the schema issue was fixed.
+
+The reference runner now prepares a separate oracle_compatible/ preview copy only when known
+compatibility changes are needed. It normalizes the version for 14c, maps parameter/column names
+against docs/forms-14c.xsd, omits only the exact FutureUnknownElement parser-test marker, and
+makes the native viewer's Point / 800x600 defaults explicit where metadata is missing. Explicit
+coordinates/dimensions, attached libraries, code, and other unknown elements are preserved.
+Conflicting alias values stop conversion. Original/saved XML is unchanged; each adjustment is
+logged with [compatibility] and the UI identifies a compatibility-copy preview.
+
+Rust XML parameter writing now uses ParameterDataType/ParameterInitializeValue and group columns
+use ColumnDataType=Character; the reader accepts both Oracle names and legacy aliases. Round-trip
+checks verify parameter values survive. Six Python runner tests cover naming, original-source
+preservation, explicit geometry, unknown-node preservation and conflicting aliases; 17 frontend
+and 119 Rust tests pass. Live Oracle conversion and DB-connected compilation of Orders succeeded.
+The app endpoint preview (job 85948-6 on 7075) saved orders_edited_3_fmb.xml, compiled
+orders_edited_3.fmx, launched FSAL and established AdminServer.formsapp.18. User runtime
+logon and visual/runtime parity are still unverified.
+
+### Oracle preview dialog UI follow-up (local, not yet published)
+
+- Replaced the unstructured log/manual-command view with a launch card, Save XML / Compile /
+  Open Oracle steps, concise live status, environment check, expandable diagnostics, and a
+  distinct Advanced section for already compiled FMX files.
+- Logs and commands wrap at long URLs/paths; diagnostics has its own height limit, with no
+  horizontal dialog scrolling. Header stays visible and opening returns to the top.
+- Fixed stale launch output: changing from Employee Directory to CLAIMS clears old logs;
+  previous asynchronous job responses cannot replace the currently selected form's state.
+  Same-form reopen retains its current job details. Native Oracle windows remain independent.
+- Corrected an accidental stylesheet overwrite in the prior uncommitted logon work by restoring
+  tracked CSS and reapplying the intended dialog rules. Added a CSS/HTML integrity regression.
+- Browser screenshot verified the redesigned dialog on port 7075. Seventeen frontend checks
+  cover credential handling, readiness, stale results, stylesheet integrity and other workflows.
+  Full Rust verification remains required after edits, per repository instructions.
+
+### Logon usability fix after PR #20
+
+User reported Connect & Run appeared inert. Native Chrome reproduction showed the password
+was empty: the previous dotted placeholder looked like an entered password. Supplying the
+local testbed password started OFW_DEMO_EMPLOYEES through Oracle Thin, with writes enabled
+as selected by the user. No record commit was performed during verification.
+
+Follow-up changes replace the placeholder with Enter database password, identify the exact
+missing field, focus and mark it invalid, support Enter from credential fields, show Connecting
+while starting, and explain an already-running session instead of silently returning. The
+logon dialog is centered and responsive, with constrained input/select widths to avoid the
+horizontal overflow shown in the user's screenshot. Frontend credential regression count is
+now 14 total frontend tests. These follow-up changes are separate from the merged PR #20;
+inspect git status for publication state. Existing pages need a refresh after saving their
+work to load the new assets; the successful user runtime session was left running.
+
 ### Launcher setup guidance follow-up
 
 Preview in Oracle now opens with a dependency checklist and expandable first-time setup and

@@ -20,3 +20,12 @@ test('offline backends do not require credentials', () => {
 test('explicit server credential choice defers authorization to the server', () => {
   assert.equal(Runtime.requiresCredentials({ backend: 'oracle-thin', useServerCredentials: true }), false);
 });
+
+test('logon explains which credential is missing instead of repeating a generic prompt', () => {
+  const missingPassword = Runtime.credentialError({ backend: 'oracle-thin', username: 'forms_user', password: '' });
+  assert.equal(missingPassword.field, 'password');
+  assert.match(missingPassword.message, /password.*No connection was attempted/);
+  const missingUser = Runtime.credentialError({ backend: 'oracle-thin', username: ' ', password: 'test' });
+  assert.equal(missingUser.field, 'username');
+  assert.equal(Runtime.credentialError({ backend: 'sqlite' }), null);
+});
