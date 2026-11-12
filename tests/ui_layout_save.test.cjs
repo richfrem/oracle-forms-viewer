@@ -65,3 +65,38 @@ test('already positioned buttons acquire their visible caption without moving or
   assert.equal(request.label, 'Save record');
   assert.equal(request.prompt, '');
 });
+
+function renderLayer(items, options = {}) {
+  const canvas = { name: 'MAIN', width: 300, height: 150, tabPages: [] };
+  const context = vm.createContext({
+    currentPayload: { moduleIndex: { blocks: [{ name: 'ORDERS', items }], graphics: [] } },
+    showNullCanvas: false, layoutEditMode: false, previewEnabled: false, selectedObject: null,
+    queryRecordsByBlock: new Map(), activeRecordIndexByBlock: new Map(),
+    escapeHtml: value => String(value), normalizeOracleColor: value => value,
+    canvas,
+  });
+  vm.runInContext(source.slice(source.indexOf('  function canvasCoordinateScale('), source.indexOf('  // Visual Canvas 2D SVG Rendering')), context);
+  vm.runInContext(source.slice(source.indexOf('  function buildCanvasLayer('), source.indexOf('  /** Index of the first record shown')), context);
+  context.options = options;
+  return vm.runInContext('buildCanvasLayer(canvas, null, options)', context);
+}
+
+test('opening a form with unpositioned items renders auto-layout within the canvas bounds', () => {
+  const items = Array.from({ length: 20 }, (_, i) => ({
+    name: `FIELD_${i}`, canvasName: 'MAIN', itemType: 'Text Item', width: 130, height: 22,
+  }));
+  const layer = renderLayer(items);
+  assert.equal((layer.svgHtml.match(/class="svg-interactive-item/g) || []).length, items.length);
+  const lastItemBottom = 60 + (items.length - 1) * 36 + 22;
+  assert.ok(layer.height >= lastItemBottom + 30, 'canvas contains the final auto-positioned field');
+  assert.doesNotMatch(layer.svgHtml, /NaN|undefined/);
+});
+
+test('positioned and empty canvas layers still render, including overlay layers', () => {
+  const positioned = renderLayer([{ name: 'ORDER_ID', canvasName: 'MAIN', xPosition: 140, yPosition: 400, width: 60, height: 22 }]);
+  assert.equal(positioned.height, 452);
+  assert.match(positioned.svgHtml, /data-item="ORDER_ID"/);
+  const empty = renderLayer([], { overlay: true });
+  assert.equal(empty.height, 180);
+  assert.equal(empty.svgHtml, '');
+});
