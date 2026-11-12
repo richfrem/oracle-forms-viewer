@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<report name="PARAMETERIZED_ITEMS" title="Items by minimum amount" unitOfMeasurement="inch">
+  <data>
+    <userParameter name="P_MIN_AMOUNT" datatype="number" initialValue="25" />
+    <dataSource name="Q_ITEMS">
+      <select>SELECT ITEM_ID, ITEM_NAME, AMOUNT FROM TEST_ITEMS WHERE AMOUNT &gt;= :P_MIN_AMOUNT ORDER BY ITEM_ID</select>
+      <group name="G_ITEMS">
+        <dataItem name="ITEM_ID" datatype="number" width="10" />
+        <dataItem name="ITEM_NAME" datatype="character" width="40" />
+        <dataItem name="AMOUNT" datatype="number" width="12" />
+      </group>
+    </dataSource>
+  </data>
+  <layout><section name="MAIN"><body>
+    <repeatingFrame name="R_ITEMS" source="G_ITEMS" printDirection="down">
+      <field name="F_NAME" source="ITEM_NAME"><geometryInfo x="0" y="0" width="4" height="0.3" /></field>
+      <field name="F_AMOUNT" source="AMOUNT" formatMask="$#,##0.00"><geometryInfo x="4" y="0" width="2" height="0.3" /></field>
+    </repeatingFrame>
+  </body></section></layout>
+</report>

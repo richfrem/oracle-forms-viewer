@@ -61,6 +61,7 @@ import sys
 import os
 import argparse
 import subprocess
+import shlex
 import urllib.parse
 from pathlib import Path
 from typing import List, Optional
@@ -92,7 +93,9 @@ def convert_xml_to_fmb(xml_path: Path, repo_root: Path) -> Path:
     """
     rel_path = xml_path.resolve().relative_to(repo_root)
     container_xml = f"/work/{rel_path}"
-    output_fmb = xml_path.resolve().with_suffix(".fmb")
+    # XML2Forms strips the Forms2XML _fmb suffix when naming its binary output.
+    stem = xml_path.stem[:-4] if xml_path.stem.lower().endswith("_fmb") else xml_path.stem
+    output_fmb = xml_path.resolve().with_name(stem + ".fmb")
     rel_fmb = output_fmb.relative_to(repo_root)
     container_fmb = f"/work/{rel_fmb}"
 
@@ -115,6 +118,8 @@ def convert_xml_to_fmb(xml_path: Path, repo_root: Path) -> Path:
     if "Module saved as" not in res.stdout and res.returncode != 0:
         raise RuntimeError(f"XML2Forms failed:\n{res.stdout}")
 
+    if not output_fmb.is_file():
+        raise RuntimeError(f"XML2Forms did not create {output_fmb.name}:\n{res.stdout}")
     print(f"  - Generated: {output_fmb.name}")
     return output_fmb
 
@@ -138,7 +143,7 @@ def compile_fmb_to_fmx(fmb_path: Path, repo_root: Path, userid: str, offline: bo
     rel_path = fmb_path.resolve().relative_to(repo_root)
     container_fmb = f"/work/{rel_path}"
     fmx_path = fmb_path.resolve().with_suffix(".fmx")
-    logon_param = "logon=no" if offline else f"userid='{userid}'"
+    logon_param = "logon=no" if offline else "userid=" + shlex.quote(userid)
 
     print(f"[2/3] Compiling {fmb_path.name} to executable FMX (logon={'no' if offline else 'yes'})...")
     cmd = (
@@ -155,8 +160,10 @@ def compile_fmb_to_fmx(fmb_path: Path, repo_root: Path, userid: str, offline: bo
         f"compile_all=yes"
     )
 
-    res = subprocess.run(["podman", "exec", "-u", "oracle", "forms-server-14c", "/bin/sh", "-c", cmd],
-                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    res = subprocess.run(["podman", "exec", "-i", "-u", "oracle", "forms-server-14c", "/bin/sh", "-s"],
+                         input=cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if not offline:
+        res.stdout = res.stdout.replace(userid, "<redacted>")
     if "Created form file" not in res.stdout and res.returncode != 0:
         raise RuntimeError(f"Compilation failed:\n{res.stdout}")
 
@@ -226,6 +233,7 @@ def parse_cli_args(argv: List[str]) -> argparse.Namespace:
     parser.add_argument("-p", "--port", type=int, default=7001, help="WebLogic AdminServer port (default: 7001)")
     parser.add_argument("-u", "--userid", default="forms_user/Welcome123#@FREEPDB1", help="Database connect string")
     parser.add_argument("--interactive", action="store_true", help="Prompt for credentials via native GUI Logon dialog")
+    parser.add_argument("--compile-from-env", action="store_true", help="Read compile logon from OFW_PREVIEW_DB_LOGON (FSAL remains interactive)")
     parser.add_argument("--offline", action="store_true", help="Compile without database connection (logon=no)")
     return parser.parse_args(argv)
 
@@ -238,6 +246,11 @@ def main() -> int:
         0 on success, non-zero on failure.
     """
     args = parse_cli_args(sys.argv[1:])
+    if args.compile_from_env:
+        args.userid = os.environ.pop("OFW_PREVIEW_DB_LOGON", "")
+        if not args.userid:
+            print("Compile credentials were not supplied", file=sys.stderr)
+            return 1
     repo_root = resolve_workspace_root()
     input_file = Path(args.form_path).resolve()
 

@@ -15,6 +15,7 @@ struct ServiceState {
     cache_dirs: HashMap<String, PathBuf>,
     /// Edits made in the layout editor, applied to the original XML on export.
     item_edits: HashMap<String, Vec<oracle_forms_xml::ItemPatch>>,
+    model_edited: HashSet<String>,
 }
 
 /// How an export was produced.
@@ -435,10 +436,22 @@ impl FormsService {
         }
     }
 
+    pub fn create_module(&self, module: ModuleIndex) -> bool {
+        let mut state = self.state.write().unwrap();
+        let key = module.key.name.to_ascii_uppercase();
+        if state.modules.contains_key(&key) { return false; }
+        state.modules.insert(key, module);
+        true
+    }
+
     #[allow(dead_code)]
     pub fn save_module(&self, module: ModuleIndex) {
         let mut st = self.state.write().unwrap();
-        st.modules.insert(module.key.name.clone(), module);
+        let key = module.key.name.to_ascii_uppercase();
+        if st.modules.get(&key).is_some_and(|previous| previous != &module) {
+            st.model_edited.insert(key.clone());
+        }
+        st.modules.insert(key, module);
     }
 
     #[allow(clippy::too_many_arguments, dead_code)]
@@ -620,6 +633,9 @@ impl FormsService {
     pub fn export_xml(&self, module_name: &str) -> Result<(String, ExportMode)> {
         let module = self.get_or_load_module(module_name)?;
         let key = module.key.name.to_ascii_uppercase();
+        if self.state.read().unwrap().model_edited.contains(&key) {
+            return Ok((Self::summary_xml(&module), ExportMode::Summary));
+        }
         let (source, edits) = {
             let st = self.state.read().unwrap();
             (
@@ -637,11 +653,48 @@ impl FormsService {
         Ok((Self::summary_xml(&module), ExportMode::Summary))
     }
 
+    /// Writes a new XML version; existing source artifacts are never overwritten.
+    pub fn save_form_file(&self, module_name: &str) -> Result<(String, ExportMode)> {
+        let module = self.get_or_load_module(module_name)?;
+        if module.key.module_type != ModuleType::Form {
+            return Err(FormsError::InvalidFormat("Save Form requires a form module".into()));
+        }
+        let stem = module.key.name.to_ascii_lowercase();
+        if stem.is_empty() || !stem.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_') {
+            return Err(FormsError::InvalidFormat("Form names must contain letters, digits or underscores".into()));
+        }
+        let (xml, mode) = self.export_xml(module_name)?;
+        Self::write_form_version(&Self::samples_dir(), &stem, &xml)?
+            .map(|name| (name, mode))
+            .ok_or_else(|| FormsError::Internal("No available version filename".into()))
+    }
+
+    fn write_form_version(directory: &Path, stem: &str, xml: &str) -> Result<Option<String>> {
+        use std::io::Write;
+        fs::create_dir_all(directory)?;
+        for version in 1..=10000 {
+            let name = format!("{}_edited_{}_fmb.xml", stem, version);
+            let path = directory.join(&name);
+            match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(mut file) => {
+                    if let Err(error) = file.write_all(xml.as_bytes()).and_then(|_| file.sync_all()) {
+                        let _ = fs::remove_file(&path);
+                        return Err(error.into());
+                    }
+                    return Ok(Some(name));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Ok(None)
+    }
+
     /// Regenerated (lossy) XML, clearly labelled as such.
     pub fn summary_xml(module: &ModuleIndex) -> String {
         let xml = oracle_forms_xml::FormsXmlWriter::write_string(module);
         let note = "<!-- SUMMARY EXPORT: regenerated from the Workbench's parsed model. Properties the \
-Workbench does not model (fonts, colours, LOV and record-group details, most item \
+Workbench does not model (fonts, LOV and record-group details, most item \
 properties) are omitted. Do not compile this over the original form; convert the .fmb with \
 frmf2xml for a complete export. -->\n";
         match xml.find("?>") {
@@ -650,6 +703,7 @@ frmf2xml for a complete export. -->\n";
         }
     }
 
+    #[allow(dead_code)]
     pub fn diff_modules(&self, base_name: &str, modified_name: &str) -> Result<oracle_forms_core::diff::ModuleDiff> {
         let base = self.get_or_load_module(base_name)?;
         let modified = self.get_or_load_module(modified_name)?;
@@ -917,5 +971,22 @@ fn resolve_class_chain(
         dml: own_dml.over(&parent_chain.dml),
         geometry: own_size.over(&parent_chain.geometry),
         through: all_through,
+    }
+}
+
+#[cfg(test)]
+mod disk_save_tests {
+    use super::*;
+
+    #[test]
+    fn form_versions_persist_without_overwriting_existing_files() {
+        let directory = std::env::temp_dir().join(format!("ofw-save-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let first = FormsService::write_form_version(&directory, "test", "<Module original=\"yes\"/>").unwrap().unwrap();
+        let second = FormsService::write_form_version(&directory, "test", "<Module edited=\"yes\"/>").unwrap().unwrap();
+        assert_ne!(first, second);
+        assert_eq!(fs::read_to_string(directory.join(first)).unwrap(), "<Module original=\"yes\"/>");
+        assert_eq!(fs::read_to_string(directory.join(second)).unwrap(), "<Module edited=\"yes\"/>");
+        fs::remove_dir_all(directory).unwrap();
     }
 }

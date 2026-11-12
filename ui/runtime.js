@@ -4,6 +4,11 @@ window.FormsRuntime = class FormsRuntime {
     this.sessionId = null;
   }
 
+  static requiresCredentials({ backend, username, password, useServerCredentials = false }) {
+    return ['oracle', 'oracle-thin'].includes(backend) && !useServerCredentials &&
+      (!username?.trim() || !password);
+  }
+
   get active() {
     return !!this.sessionId;
   }

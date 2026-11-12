@@ -164,3 +164,75 @@
   - Live query against running `oracle23ai-lite` container executes in 8 ms.
   - Integration tests `test_oracle_thin_live_container_query` and `test_oracle_thin_parameterized_query` pass.
   - Zero clippy warnings and 100% test pass rate across workspace.
+
+
+### UI follow-up: report inspection, parameters, and save feedback
+
+Implemented against the Phase F/G workbench intentions:
+
+- `GET /api/reports/{name}/definition` exposes the parsed report without database execution.
+- The Reports UI provides declared parameters and defaults before execution. The evaluator
+  resolves case-insensitive overrides through `BoundSql`, validates numeric parameters, and
+  treats empty values as NULL. An unresolved undeclared SQL bind produces an error.
+- Reports start with explicitly labelled sample data selected. Changing parameters or the
+  backend clears the previous output; late responses cannot replace the current selection.
+- Source inspection displays extracted formulas and SQL, without invented lifecycle triggers
+  or formula bodies. Data links are labelled as declarative metadata.
+- Form property and drag saves check HTTP failures and show unsuccessful persistence.
+- Report data-model export includes parameters and explicitly excludes paper layout and
+  unparsed metadata; it is not a lossless Oracle Reports round trip.
+
+Try `samples/parameterized_items_report.xml` with SQLite or Mock. Its minimum amount defaults
+to 25; setting it to 100 returns only the seeded item with amount 150.
+
+Validation: repository-root `cargo check` and `cargo test`; optional frontend regressions
+with `node --test tests/ui_reports.test.cjs` (Node is a test tool only, not a workbench dependency).
+Visual browser verification and live Oracle parameter parity remain unverified for this follow-up.
+
+
+### Native form workflow continuation — 2026-11-12
+
+- Oracle Run prompts for credentials; live native Oracle startup/button execution verified.
+- New/add/replace wizard actions implemented; misplaced fresh-form code corrected; creation
+  and preview verified in Chrome. Run synchronizes edits before session startup.
+- Live table/view schema discovery added for Oracle and SQLite, with bound parameters;
+  a form built from discovered TEST_ITEMS columns queried Oracle successfully in read-only mode.
+- Diff supports a baseline against multiple targets, uploaded snapshots, item geometry overviews,
+  and parsed-model section changes (including program units and added/removed layout objects).
+- Toolbar color/font handlers now match the actual HTML controls. Failed saves can be retried.
+- Current detailed evidence, limitations and unfinished work are maintained in
+  [10-NEXT-PHASE-SESSION-PROMPT.md](10-NEXT-PHASE-SESSION-PROMPT.md).
+
+These improvements do not complete Track K, automatic middleware compilation/deployment,
+full runtime visual parity, or lossless XML rewriting after arbitrary structural edits.
+
+
+### Disk save, Oracle preview and responsive chrome — 2026-11-12
+
+Implemented:
+
+- Separate **Save Form** (new XML version under samples) and **Save Record** (database commit).
+- **Preview in Oracle** saves the current module, converts XML to FMB, compiles/deploys FMX
+  through optional Track 1 tooling and launches interactive FSAL, with job status/log feedback.
+  Binary generation is staged under ignored temp directories; originals are retained.
+- Correct XML2Forms `_fmb` filename handling and credential-aware compilation.
+- Wrapping header/view navigation, View & panels menu, More form tools menu, and visible
+  Save Form / Preview in Oracle actions. Desktop layout checked in Chrome.
+
+Verified: durable edited XML, non-overwriting save versions, TEST_DB conversion/compilation,
+FSAL session establishment, 119 Rust tests, 10 frontend tests, and two reference-runner tests.
+Employee Directory also converted/compiled and established a separate FSAL session; runtime logon and visual equivalence are not yet certified.
+
+Outstanding: lossless arbitrary structural XML changes, UI-only property persistence (including
+fonts), full dependency compilation/configuration/cancellation for reference previews, small
+viewport/accessibility coverage, full Oracle runtime parity and Track K. See the authoritative
+current evidence and next steps in [10-NEXT-PHASE-SESSION-PROMPT.md](10-NEXT-PHASE-SESSION-PROMPT.md).
+
+
+### Oracle preview onboarding
+
+The launcher includes setup/startup instructions and read-only dependency checks for Python,
+Java 17+, Podman, Forms container/servlet and reference files. Missing prerequisites disable
+launch; users can recheck after completing setup. Installation and container startup remain
+explicit operator actions. Readiness does not validate schema credentials or compilation.
+Validation includes three frontend setup-state regressions (13 frontend tests total).
