@@ -126,3 +126,41 @@ async fn test_department_salaries_master_detail_report() {
     assert!(html.contains("$58,000.00"));
     assert!(html.contains("$103,000.00"));
 }
+
+// SQLite executes the binds, so these assertions detect ignored parameters and interpolation.
+#[tokio::test]
+async fn report_parameters_bind_defaults_overrides_nulls_and_literal_text() {
+    use oracle_forms_core::report::ReportParameter;
+    use oracle_forms_db::sqlite::SqliteDriver;
+    let mut report = ReportsXmlParser::parse_file(&samples_dir().join("orders_summary_report.xml")).unwrap();
+    report.data.data_sources[0].select_sql =
+        "SELECT :P_TEXT AS LABEL, :P_NUM + 1 AS TOTAL, ':NOT_A_BIND' AS LITERAL, :P_TEXT AS AGAIN /* :IGNORED */".into();
+    report.data.data_sources[0].groups[0].formulas.clear();
+    report.data.data_sources[0].groups[0].summaries.clear();
+    report.data.parameters = vec![
+        ReportParameter { name: "P_TEXT".into(), datatype: Some("character".into()), initial_value: Some("default".into()) },
+        ReportParameter { name: "P_NUM".into(), datatype: Some("number".into()), initial_value: Some("41".into()) },
+    ];
+    let driver = SqliteDriver::in_memory().unwrap();
+    let result = ReportDataEvaluator::evaluate(&report, &driver, &HashMap::new()).await.unwrap();
+    let row = &result.group_records["G_ORDERS"][0].values;
+    assert_eq!(row["LABEL"], "default");
+    assert_eq!(row["TOTAL"], "42");
+    assert_eq!(row["LITERAL"], ":NOT_A_BIND");
+
+    let hostile = "O'Reilly'); DROP TABLE orders; --";
+    let params = HashMap::from([("p_text".into(), hostile.into()), ("p_num".into(), "5".into())]);
+    let result = ReportDataEvaluator::evaluate(&report, &driver, &params).await.unwrap();
+    let row = &result.group_records["G_ORDERS"][0].values;
+    assert_eq!(row["LABEL"], hostile);
+    assert_eq!(row["AGAIN"], hostile);
+    assert_eq!(row["TOTAL"], "6");
+
+    let params = HashMap::from([("P_TEXT".into(), String::new())]);
+    let result = ReportDataEvaluator::evaluate(&report, &driver, &params).await.unwrap();
+    assert_eq!(result.group_records["G_ORDERS"][0].values["LABEL"], "");
+    let params = HashMap::from([("P_NUM".into(), "not a number".into())]);
+    assert!(ReportDataEvaluator::evaluate(&report, &driver, &params).await.unwrap_err().to_string().contains("must be numeric"));
+    report.data.data_sources[0].select_sql = "SELECT :MISSING AS VALUE".into();
+    assert!(ReportDataEvaluator::evaluate(&report, &driver, &HashMap::new()).await.unwrap_err().to_string().contains("Missing report parameter :MISSING"));
+}

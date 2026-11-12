@@ -49,7 +49,7 @@
           <span class="tab-icon">📄</span>
           <span>XML Source</span>
         </button>
-        <button class="tab-btn" data-tab="diffTab" title="Compare Two Form Modules">
+        <button class="tab-btn" data-tab="diffTab" title="Compare a baseline with one or more forms">
           <span class="tab-icon">⚖️</span>
           <span>Form Diff</span>
         </button>
@@ -61,6 +61,7 @@
 
       <!-- Right: Windows & Panels Visibility Bar -->
       <div class="header-right">
+        <details class="workspace-menu"><summary>View &amp; panels ▾</summary>
         <div class="panel-toggles" role="group" aria-label="Show or Hide IDE Windows & Panels">
           <button id="toggleLeftPaneBtn" class="btn btn-sm btn-toggle active" title="Show/Hide Object Navigator Tree (F3 or [)">
             🗂️ Navigator
@@ -82,6 +83,7 @@
             ⛶ Runner View
           </button>
         </div>
+        </details>
       </div>
     </header>
 
@@ -91,6 +93,7 @@
         <span class="banner-icon">⚠️</span>
         <div class="banner-text" id="bannerMessage"></div>
         <div class="banner-actions">
+          <button id="retrySaveBtn" class="btn btn-sm btn-primary hidden">Retry save</button>
           <button id="bannerDismissBtn" class="btn btn-sm btn-secondary">Dismiss</button>
           <button id="bannerSampleBtn" class="btn btn-sm btn-primary">Open Sample (ORDERS.fmb)</button>
         </div>
@@ -171,6 +174,9 @@
               </div>
 
               <div class="canvas-bar-right">
+                <button id="saveFormBtn" class="btn btn-sm btn-primary" title="Write a new version of the edited XML into samples/">💾 Save Form</button>
+                <button id="oracleReferenceBtn" class="btn btn-sm btn-secondary" title="Save, compile and preview with Oracle Forms 14c">Preview in Oracle</button>
+                <details class="canvas-options"><summary>More form tools ▾</summary><div class="form-tools-menu">
                 <select id="menuModuleSelect" class="compact-select" aria-label="Attached Custom Menu Module (.mmb)" title="Switch or attach a custom .mmb Menu Module onto this Form">
                   <option value="OFW_EMP_MENU">🍔 Menu: OFW_EMP_MENU.mmb</option>
                   <option value="MAINMENU">🍔 Menu: MAINMENU.mmb</option>
@@ -181,7 +187,9 @@
                   <option value="">🔔 Alert...</option>
                 </select>
                 <button id="previewResetBtn" class="btn btn-sm btn-secondary" title="Reset preview field values" disabled>↺</button>
+
                 <button id="exportXmlBtn" class="btn btn-sm btn-outline" title="Export module to lossless Forms2XML">💾 XML</button>
+                </div></details>
               </div>
             </div>
 
@@ -349,8 +357,8 @@
                   <button id="runFormBtn" class="ora-run-pill" title="Start Interactive Form Session (Triggers & PL/SQL)">▶ Run</button>
                   <button id="stopFormBtn" class="ora-stop-pill hidden" title="Stop Running Form Session">■ Stop</button>
                   <button id="dbConfigBtn" class="tool-btn" title="Database Logon & Connection Settings (Action -> Connect)">🔑</button>
-                  <button id="runtimeCommitBtn" class="tool-btn hidden" title="Save / Commit Changes (Ctrl+S)">💾</button>
-                  <button class="tool-btn" data-ora-cmd="commit" title="Save (Ctrl+S)">💾</button>
+                  <button id="runtimeCommitBtn" class="tool-btn hidden" title="Save Record: commit database changes (Ctrl+S)">💾 Record</button>
+                  <button class="tool-btn" data-ora-cmd="commit" title="Save Record: commit database changes (Ctrl+S)">💾 Record</button>
                   <button class="tool-btn" data-ora-cmd="print" title="Print (Ctrl+P)">🖨️</button>
                   <button class="tool-btn" data-ora-cmd="exit" title="Exit Form (Ctrl+Q)">🚪</button>
 
@@ -502,12 +510,15 @@
           <!-- ==================== 4. FORM DIFF TOOL TAB ==================== -->
           <div id="diffTab" class="tab-view">
             <div class="diff-toolbar">
-              <label for="diffCompareSelect">Compare current module with:</label>
-              <select id="diffCompareSelect" class="diff-select"></select>
+              <label for="diffBaseSelect">Baseline:</label>
+              <select id="diffBaseSelect" class="diff-select"><option value="">Current form (including edits)</option></select>
+              <label for="diffCompareSelect">Compare with (select one or more):</label>
+              <select id="diffCompareSelect" class="diff-select" multiple size="5"></select>
+              <label class="btn btn-sm btn-secondary">Add comparison files<input id="diffFilesInput" type="file" accept=".xml,.fmb,.mmb,.olb" multiple hidden></label>
               <button id="runDiffBtn" class="btn btn-sm btn-primary">⚖️ Run Structural & Visual Diff</button>
             </div>
             <div class="diff-container" id="diffContainer">
-              <div class="empty-state">Select another form module above to compare blocks, items, triggers, and coordinates.</div>
+              <div class="empty-state">Choose a baseline and one or more comparison forms. Each selected form is compared against the baseline. Use Ctrl/Cmd to select several entries.</div>
             </div>
           </div>
 
@@ -522,9 +533,9 @@
               <label for="reportBackendSelect" style="margin-left: 6px;">Backend:</label>
               <select id="reportBackendSelect" class="diff-select" style="width: 155px;">
                 <option value="oracle-thin">Oracle Thin (:1521)</option>
-                <option value="oracle">Oracle 23ai</option>
+                <option value="oracle">Oracle (testbed sqlplus)</option>
                 <option value="sqlite">SQLite</option>
-                <option value="mock">Mock Engine</option>
+                <option value="mock" selected>Mock (sample data)</option>
               </select>
               <label for="reportTemplateSelect" style="margin-left: 6px;">Template:</label>
               <select id="reportTemplateSelect" class="diff-select" style="width: 125px;" title="Oracle Reports Paper Layout Template Theme">
@@ -547,15 +558,22 @@
                 <button id="repModePlsqlBtn" class="btn btn-sm btn-toggle" data-rep-mode="plsql" title="Full Report PL/SQL Formula Columns, Report Triggers &amp; Data Model SQL Studio">
                   📜 PL/SQL &amp; SQL
                 </button>
-                <button id="exportReportXmlBtn" class="btn btn-sm btn-secondary" style="margin-left: 4px;" title="Export Report XML definition (_report.xml) with any property/SQL/formula edits">
-                  💾 Export XML
+                <button id="exportReportXmlBtn" class="btn btn-sm btn-secondary" style="margin-left: 4px;" title="Export parsed data model XML; excludes paper layout and unparsed Oracle metadata">
+                  💾 Export Data Model
                 </button>
-                <button id="printReportBtn" class="btn btn-sm btn-secondary">🖨️ PDF</button>
+                <button id="printReportBtn" class="btn btn-sm btn-secondary" disabled>🖨️ PDF</button>
               </div>
+            </div>
+            <div class="report-parameters">
+              <details open>
+                <summary>Report parameters</summary>
+                <div id="reportParameterFields">Select a report to inspect its parameters.</div>
+              </details>
+              <p id="reportStatus" role="status" aria-live="polite">Select a report to inspect its definition without connecting to a database.</p>
             </div>
             <div id="reportsMainLayout" class="reports-main-layout mode-preview">
               <div id="reportsPreviewPane" class="reports-preview-pane">
-                <iframe id="reportPreviewFrame" class="report-iframe" src="about:blank"></iframe>
+                <iframe id="reportPreviewFrame" title="Report output preview" class="report-iframe" src="about:blank"></iframe>
               </div>
 
               <!-- Report PL/SQL Formula Columns, Report Triggers & SQL Queries Studio Pane -->
@@ -635,7 +653,7 @@
       <div class="oracle-logon-fields">
         <div class="ora-field-row">
           <label for="dbUserInput"><u>U</u>sername:</label>
-          <input id="dbUserInput" type="text" placeholder="forms_user (blank = server env)" autocomplete="username">
+          <input id="dbUserInput" type="text" placeholder="Oracle database username" autocomplete="username">
         </div>
         <div class="ora-field-row">
           <label for="dbPassInput"><u>P</u>assword:</label>
@@ -658,6 +676,11 @@
           </label>
         </div>
       </div>
+      <p id="dbLogonStatus" role="alert" aria-live="polite" style="padding: 0 16px;"></p>
+      <label class="ora-checkbox-label" style="padding: 0 16px 12px; display: flex;">
+        <input type="checkbox" id="useServerDbCredentials">
+        <span>Use server credentials (requires OFW_SERVER_ENV_CREDENTIALS=1 on the server)</span>
+      </label>
       <div class="oracle-logon-buttons">
         <button id="logonConnectRunBtn" class="ora-btn ora-btn-default">Connect &amp; Run</button>
         <button class="ora-btn" data-close-modal="dbConfigModal">Apply Only</button>
@@ -790,6 +813,45 @@
     </div>
   </dialog>
 
+  <dialog id="oracleReferenceDialog" class="workbench-modal">
+    <div class="modal-header"><h3 id="oraclePreviewTitle">Preview current form in Oracle Forms 14c</h3><button class="btn" onclick="this.closest('dialog').close()">Close</button></div>
+    <div class="modal-body">
+      <section class="oracle-setup" aria-labelledby="oracleSetupHeading">
+        <h4 id="oracleSetupHeading">Before you launch</h4>
+        <p>Oracle preview is optional and requires a separate Oracle reference installation. The native Rust designer, XML inspection, and Mock/SQLite runtime work without it. Preview opens a desktop Java window on the computer running the Rust server.</p>
+        <button id="checkOracleReadinessBtn" class="btn btn-secondary">Check setup again</button>
+        <p id="oracleReadinessStatus" role="status" aria-live="polite">Checking dependencies…</p>
+        <ul id="oracleReadinessChecks"></ul>
+        <details><summary>Setup and server startup instructions</summary>
+          <ol>
+            <li>Install Python 3, Podman, and a Java runtime compatible with your Forms 14c installation. This project's reference launcher expects Java 17 or newer. Check with <code>python3 --version</code>, <code>podman --version</code>, and <code>java -version</code>.</li>
+            <li>First-time setup: provision the Oracle Database Free and Forms 14c testbed using <code>oracle-reference-stack/README.md</code> and <code>docs/FORMS-AND-REPORTS-14C-TESTING-GUIDE.md</code>. Forms installers must be obtained from Oracle under the applicable licence; the Rust app does not include them. The configured domain must deploy formsapp to AdminServer and provide the FREEPDB1 alias.</li>
+            <li>For an existing installation, start the Podman machine if your platform uses one, then start both containers from a terminal on the server computer:</li>
+          </ol>
+          <pre>podman machine start
+podman start oracle23ai-lite
+podman start forms-server-14c</pre>
+          <p>Skip <code>podman machine start</code> on native Linux or when the machine is already running. “Container not found” means first-time testbed setup is still required. Starting containers alone does not install or configure Oracle.</p>
+          <p>The configured Forms container starts WebLogic automatically. Allow it time to boot, then check:</p>
+          <pre>podman logs --tail 80 forms-server-14c
+curl -I http://localhost:7001/forms/frmservlet
+python3 plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/scripts/health_check.py</pre>
+          <p>Run commands from the repository root. The expected FSAL client is <code>oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar</code>. Missing files require completing the reference installation; do not download an arbitrary JAR.</p>
+          <p>For the native viewer itself, run <code>cargo run -p oracle-forms-server</code>, then open <code>http://127.0.0.1:7070</code>. Its Logon dialog supplies compile credentials; the Oracle desktop window prompts separately. Testbed usernames/passwords and tables must already exist.</p>
+        </details>
+      </section>
+      <button id="launchOraclePreviewBtn" class="btn btn-primary" disabled>Save &amp; launch current form in Oracle</button>
+      <p>This saves a new XML version in samples/, converts it to FMB, compiles FMX in the local Forms 14c container, and launches the desktop FSAL logon dialog. Database-dependent triggers need the username and password entered in Logon for compilation (FREEPDB1); FSAL prompts again for runtime logon. Without credentials compilation is offline. Model-summary XML may omit Oracle properties or fail compilation; the log below reports the result.</p>
+      <pre id="oraclePreviewLog" role="status" aria-live="polite"></pre>
+      <p>Run the deployed compiled form in the local Oracle reference environment. Unsaved browser edits are not deployed by this action.</p>
+      <label for="oracleReferenceForm">Compiled form name (.fmx)</label><input id="oracleReferenceForm" type="text">
+      <p><a id="oracleReferenceLink" target="_blank" rel="noopener">Open local Fusion Middleware</a></p>
+      <p>The native desktop client uses FSAL. Run this command from the repository root, then log in using the Oracle Forms dialog:</p>
+      <pre id="oracleReferenceCommand"></pre>
+      <button id="copyOracleReferenceBtn" class="btn btn-secondary">Copy FSAL command</button>
+      <p>To compare edits, export and review the XML, then convert and compile it using the reference toolchain. Summary exports omit unmodelled Oracle properties.</p>
+    </div>
+  </dialog>
   <dialog id="runtimeAlertDialog" class="preview-dialog workbench-modal">
     <div class="modal-header">
       <h3 id="runtimeAlertTitle"></h3>
@@ -838,6 +900,9 @@
             </div>
           </div>
 
+          <label for="wizLiveTableInput">Discover columns from the selected database (uses Logon credentials)</label>
+          <div class="input-with-button"><input id="wizLiveTableInput" placeholder="e.g. TEST_ITEMS"><button id="wizDescribeBtn" class="btn btn-secondary">Read schema</button></div>
+          <p id="wizSchemaStatus" role="status" aria-live="polite"></p>
           <div class="form-row-inline">
             <div class="form-row" style="flex:1;">
               <label for="wizBlockNameInput">Data Block Name</label>
@@ -853,6 +918,8 @@
             </div>
           </div>
 
+          <label for="wizFormNameInput">New form name (for Create Fresh Form Module)</label>
+          <input id="wizFormNameInput" value="MY_NEW_FORM" pattern="[A-Za-z][A-Za-z0-9_]*">
           <label class="wiz-sub-label">Available Columns &rarr; Database Items (check columns to include &amp; customize prompts):</label>
           <div id="wizColumnsContainer" class="wiz-columns-list"></div>
         </div>

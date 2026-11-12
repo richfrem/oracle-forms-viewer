@@ -218,13 +218,13 @@
   }
 
   // Initialize
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
     setupTabSwitching();
     setupControls();
     setupWorkspaceEnhancements();
     setupBuilderStudio();
     loadSampleList();
-    loadReportsList();
+    await loadReportsList();
     // Pre-load default or URL-requested sample & mode
     const urlParams = new URLSearchParams(window.location.search);
     const initialSample = urlParams.get('sample') || 'ofw_demo_employees_fmb.xml';
@@ -468,7 +468,7 @@
     const updateDbPill = () => {
       const label = document.getElementById('dbStatusLabel');
       if (!label || !dbBackendSelect) return;
-      const user = dbUserInput?.value.trim() || 'forms_user';
+      const user = dbUserInput?.value.trim() || 'Logon required';
       const map = {
         'oracle-thin': `${user}@FREEPDB1`,
         'oracle': `${user}@23ai`,
@@ -483,7 +483,6 @@
 
     document.getElementById('logonConnectRunBtn')?.addEventListener('click', () => {
       updateDbPill();
-      document.getElementById('dbConfigModal')?.close();
       startRuntimeSession();
     });
 
@@ -831,6 +830,7 @@
       exportXmlBtn.addEventListener('click', async () => {
         if (!currentPayload) return showBanner('No module open to export.');
         try {
+          await syncModuleToServer();
           const res = await fetch('/api/forms/export-xml', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -859,28 +859,162 @@
       });
     }
 
+    const comparisonFiles = new Map();
+    document.getElementById('diffFilesInput')?.addEventListener('change', async event => {
+      for (const file of event.target.files) {
+        try {
+          const body = new FormData();
+          body.append('file', file);
+          const response = await fetch('/api/open-file', { method: 'POST', body });
+          const payload = await response.json();
+          if (!response.ok || !payload.moduleIndex) throw new Error(payload.error || 'Not a form module');
+          const key = `upload:${comparisonFiles.size}`;
+          comparisonFiles.set(key, payload.moduleIndex);
+          const option = new Option(file.name, key, false, true);
+          diffCompareSelect.add(option);
+          document.getElementById('diffBaseSelect').add(new Option(file.name, key));
+        } catch (error) { showBanner(`${file.name}: ${error.message}`); }
+      }
+      event.target.value = '';
+    });
     if (runDiffBtn) {
       runDiffBtn.addEventListener('click', async () => {
-        if (!currentPayload) return showBanner('Open a base form first.');
-        const compareTarget = diffCompareSelect?.value;
-        if (!compareTarget) return showBanner('Select a module to compare against.');
+        const baseline = document.getElementById('diffBaseSelect').value;
+        if (!baseline && !currentPayload) return showBanner('Open a baseline form first.');
+        const targets = Array.from(diffCompareSelect.selectedOptions, option => option.value);
+        if (!targets.length) return showBanner('Select at least one comparison form.');
+        const base = baseline ? comparisonFiles.get(baseline) : structuredClone(currentPayload.moduleIndex);
+        diffContainer.replaceChildren();
+        runDiffBtn.disabled = true;
         try {
-          const res = await fetch('/api/forms/diff', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              base: currentPayload.moduleIndex,
-              modifiedModule: compareTarget
-            })
-          });
-          if (!res.ok) throw new Error('Diff calculation failed');
-          const diff = await res.json();
-          renderDiffReport(diff);
-        } catch (err) {
-          showBanner("Diff calculation failed: " + err.message);
-        }
+          for (const target of targets) {
+            const section = document.createElement('section');
+            section.className = 'diff-comparison';
+            diffContainer.append(section);
+            try {
+              const response = await fetch('/api/forms/diff', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ base, baseModule: base ? undefined : baseline,
+                  modified: comparisonFiles.get(target), modifiedModule: target, includeModels: true })
+              });
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.error || 'Diff failed');
+              renderDiffReport(result.diff, section);
+              section.insertAdjacentHTML('afterbegin', renderDiffVisuals(result.base, result.modified));
+            } catch (error) { section.textContent = `${target}: ${error.message}`; }
+          }
+        } finally { runDiffBtn.disabled = false; }
       });
     }
+
+    document.getElementById('saveFormBtn').addEventListener('click', async event => {
+      if (!currentPayload) return showBanner('Open or create a form first.');
+      event.target.disabled = true;
+      try {
+        await syncModuleToServer();
+        const response = await checkedSave('/api/forms/save', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ moduleName: currentPayload.moduleIndex.key.name })
+        });
+        const result = await response.json();
+        showBanner(`Saved form to ${result.path}.${result.mode === 'summary' ? ' Model summary: unparsed Oracle properties are omitted.' : ' Original XML with item edits preserved.'} Existing files were kept.`);
+      } catch (error) { showBanner(`Save Form failed: ${error.message}`); }
+      finally { event.target.disabled = false; }
+    });
+    async function checkOracleReadiness() {
+      const button = document.getElementById('checkOracleReadinessBtn');
+      const launch = document.getElementById('launchOraclePreviewBtn');
+      const status = document.getElementById('oracleReadinessStatus');
+      const list = document.getElementById('oracleReadinessChecks');
+      button.disabled = true;
+      launch.disabled = true;
+      status.textContent = 'Checking the server computer and local Oracle testbed…';
+      list.replaceChildren();
+      try {
+        const response = await fetch('/api/forms/oracle-preview/readiness');
+        if (!response.ok) throw new Error('Setup checks unavailable. Restart the Rust server with the current build.');
+        const result = await response.json();
+        for (const check of result.checks) {
+          const item = document.createElement('li');
+          item.textContent = `${check.ready ? '✓' : check.required ? 'Missing / unavailable:' : 'Optional / unavailable:'} ${check.label}`;
+          list.append(item);
+        }
+        status.textContent = `${result.ready ? 'Ready to attempt Oracle preview.' : 'Complete the missing setup steps below, then check again.'} ${result.note}`;
+        launch.disabled = !result.ready;
+      } catch (error) { status.textContent = error.message; }
+      finally { button.disabled = false; }
+    }
+    document.getElementById('checkOracleReadinessBtn').addEventListener('click', checkOracleReadiness);
+
+    document.getElementById('launchOraclePreviewBtn').addEventListener('click', async event => {
+      if (!currentPayload) return;
+      const button = event.target;
+      const log = document.getElementById('oraclePreviewLog');
+      button.disabled = true;
+      try {
+        log.textContent = 'Saving XML and starting the Oracle reference toolchain…';
+        await syncModuleToServer();
+        const response = await checkedSave('/api/forms/oracle-preview', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ moduleName: currentPayload.moduleIndex.key.name, username: dbUserInput?.value.trim() || null, password: dbPassInput?.value || null })
+        });
+        const result = await response.json();
+        const heading = `Source form: ${currentPayload.moduleIndex.key.name}\nSaved samples/${result.fileName} (${result.mode}).\n`;
+        for (let poll = 0; poll < 300; poll++) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          const response = await fetch(`/api/forms/oracle-preview/${encodeURIComponent(result.jobId)}`);
+          const status = await response.json();
+          if (!response.ok) throw new Error(status.error || 'Preview status unavailable');
+          log.textContent = heading + status.log;
+          if (!status.running) {
+            log.textContent += status.success ? '\nOracle preview closed successfully.' : '\nOracle preview failed. Review the toolchain output above.';
+            return;
+          }
+        }
+        log.textContent += '\nStatus monitoring ended. Close the Oracle window when finished.';
+      } catch (error) { log.textContent = `Oracle preview failed: ${error.message}`; }
+      finally { button.disabled = false; }
+    });
+
+    document.addEventListener('click', event => {
+      document.querySelectorAll('.workspace-menu[open], .canvas-options[open]').forEach(menu => {
+        if (!menu.contains(event.target)) menu.open = false;
+      });
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') document.querySelectorAll('.workspace-menu[open], .canvas-options[open]').forEach(menu => { menu.open = false; });
+    });
+    const referenceForm = document.getElementById('oracleReferenceForm');
+    function updateOracleReference() {
+      const name = referenceForm.value.trim();
+      const valid = /^[a-zA-Z0-9_][a-zA-Z0-9_.-]*\.fmx$/i.test(name);
+      const link = document.getElementById('oracleReferenceLink');
+      const command = document.getElementById('oracleReferenceCommand');
+      if (!valid) {
+        link.removeAttribute('href');
+        command.textContent = 'Enter a plain compiled form filename ending in .fmx.';
+        document.getElementById('copyOracleReferenceBtn').disabled = true;
+        return;
+      }
+      link.href = `http://localhost:7001/forms/frmservlet?config=standaloneapp&form=${encodeURIComponent(name)}`;
+      command.textContent = `python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/launch_fsal.py ${name} --interactive`;
+      document.getElementById('copyOracleReferenceBtn').disabled = false;
+    }
+    document.getElementById('oracleReferenceBtn')?.addEventListener('click', () => {
+      if (!currentPayload) return showBanner('Open a form first.');
+      document.getElementById('oraclePreviewTitle').textContent = `Preview ${currentPayload.moduleIndex.key.name} in Oracle Forms 14c`;
+      referenceForm.value = `${currentPayload.moduleIndex.key.name.toLowerCase()}.fmx`;
+      updateOracleReference();
+      document.getElementById('oracleReferenceDialog').showModal();
+      checkOracleReadiness();
+    });
+    referenceForm?.addEventListener('input', updateOracleReference);
+    document.getElementById('copyOracleReferenceBtn')?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(document.getElementById('oracleReferenceCommand').textContent);
+        showBanner('FSAL command copied.');
+      } catch (error) { showBanner(`Select and copy the displayed command: ${error.message}`); }
+    });
 
     if (runReportBtn) {
       runReportBtn.addEventListener('click', executeReport);
@@ -895,7 +1029,8 @@
     }
 
     if (reportSelect) {
-      reportSelect.addEventListener('change', executeReport);
+      reportSelect.addEventListener('change', () => inspectReport());
+      reportBackendSelect?.addEventListener('change', () => invalidateReport('Backend changed. Run to refresh the preview.'));
     }
 
     sampleSelect.addEventListener('change', () => {
@@ -964,6 +1099,11 @@
       });
     }
 
+    document.getElementById('retrySaveBtn').addEventListener('click', async event => {
+      event.target.disabled = true;
+      try { await syncModuleToServer(); hideBanner(); } catch (_) { /* save error remains visible */ }
+      finally { event.target.disabled = false; }
+    });
     bannerDismissBtn.addEventListener('click', () => {
       conversionBanner.classList.add('hidden');
     });
@@ -1049,7 +1189,8 @@
         }
         sampleSelect.innerHTML = html;
         if (diffCompareSelect) {
-          diffCompareSelect.innerHTML = forms.map(s => `<option value="${s}">${s}</option>`).join('');
+          diffCompareSelect.replaceChildren(...forms.map(name => new Option(name, name)));
+          document.getElementById('diffBaseSelect').replaceChildren(new Option('Current form (including edits)', ''), ...forms.map(name => new Option(name, name)));
         }
         const urlSample = new URLSearchParams(window.location.search).get('sample');
         if (urlSample && samples.includes(urlSample)) {
@@ -1289,6 +1430,7 @@
 
   function showBanner(message, isConversion = false) {
     bannerMessage.textContent = message;
+    document.getElementById('retrySaveBtn')?.classList.toggle('hidden', !/save failed|Failed to save properties/.test(message));
     conversionBanner.classList.remove('hidden');
     bannerSampleBtn.style.display = isConversion ? 'inline-block' : 'none';
   }
@@ -1978,10 +2120,27 @@
 
   async function startRuntimeSession() {
     if (!currentPayload) return showBanner('Open a form before running it.');
+    if (runtime.active) return;
     const backend = dbBackendSelect ? dbBackendSelect.value : '';
+    const logonDialog = document.getElementById('dbConfigModal');
+    const logonStatus = document.getElementById('dbLogonStatus');
+    const connectButton = document.getElementById('logonConnectRunBtn');
+    if (FormsRuntime.requiresCredentials({
+      backend, username: dbUserInput?.value, password: dbPassInput?.value,
+      useServerCredentials: document.getElementById('useServerDbCredentials')?.checked
+    })) {
+      logonStatus.textContent = 'Enter your Oracle username and password, then choose Connect & Run. No session has started.';
+      if (!logonDialog.open) logonDialog.showModal();
+      if (!dbUserInput.value.trim()) dbUserInput.focus();
+      else dbPassInput.focus();
+      return;
+    }
+    logonStatus.textContent = 'Connecting and starting the form…';
+    connectButton.disabled = true;
     runFormBtn.disabled = true;
     runFormBtn.textContent = '⏳ Starting...';
     try {
+      await syncModuleToServer();
       const state = await runtime.start({
         moduleName: currentPayload.summary.moduleName || currentPayload.moduleIndex.key.name,
         backend: backend === 'mock' ? 'mock' : backend,
@@ -1990,6 +2149,8 @@
         allowWrites: allowWritesToggle?.checked,
       });
       if (dbPassInput) dbPassInput.value = '';
+      logonStatus.textContent = '';
+      if (logonDialog.open) logonDialog.close();
       sessionTrace.textContent = '';
       const previewToggle = document.getElementById('previewToggle');
       if (!previewToggle.checked) {
@@ -2002,11 +2163,14 @@
         showBanner(`Attached libraries not found (calls into them will fail): ${state.missingLibraries.join(', ')}`);
       }
     } catch (err) {
+      logonStatus.textContent = `Could not connect: ${err.message}`;
+      if (['oracle', 'oracle-thin'].includes(backend) && !logonDialog.open) logonDialog.showModal();
       showBanner(`Could not start the form: ${err.message}`);
     } finally {
+      connectButton.disabled = false;
       runFormBtn.disabled = false;
       runFormBtn.textContent = '▶ Run';
-      setRuntimeUi(null);
+      if (!runtime.active) setRuntimeUi(null);
     }
   }
 
@@ -2687,7 +2851,7 @@
       if (badge) badge.style.display = 'none';
 
       try {
-        await fetch(`/api/forms/module/${encodeURIComponent(currentPayload.moduleIndex.key.name)}/item`, {
+        await checkedSave(`/api/forms/module/${encodeURIComponent(currentPayload.moduleIndex.key.name)}/item`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2698,7 +2862,7 @@
           })
         });
       } catch (err) {
-        console.warn("Failed to persist dragged position:", err);
+        showBanner(`Position changed in this browser; server save failed: ${err.message}`);
       }
     };
 
@@ -3105,18 +3269,28 @@
     return named[v.toLowerCase()] || fallback;
   }
 
+  async function checkedSave(url, options) {
+    const response = await fetch(url, options);
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || `Save failed (${response.status})`);
+    }
+    return response;
+  }
+
   async function syncModuleToServer() {
     if (!currentPayload?.moduleIndex) return;
     const modName = currentPayload.moduleIndex.key?.name || currentPayload.summary?.moduleName;
     if (!modName) return;
     try {
-      await fetch(`/api/forms/module/${encodeURIComponent(modName)}/sync`, {
+      await checkedSave(`/api/forms/module/${encodeURIComponent(modName)}/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(currentPayload.moduleIndex)
       });
-    } catch (e) {
-      console.warn('Could not sync module index to server:', e);
+    } catch (error) {
+      showBanner(`Changes remain in this browser; server save failed: ${error.message}`);
+      throw error;
     }
   }
 
@@ -3150,13 +3324,13 @@
       const hexFg = normalizeHexColor(item.foreColor, '#111111');
 
       // Sync top formatting ribbon inputs if present
-      const rBg = document.getElementById('ribbonBackColor');
+      const rBg = document.getElementById('fmtBackColor');
       if (rBg) rBg.value = hexBg;
-      const rFg = document.getElementById('ribbonForeColor');
+      const rFg = document.getElementById('fmtForeColor');
       if (rFg) rFg.value = hexFg;
-      const rFont = document.getElementById('ribbonFontFamily');
+      const rFont = document.getElementById('fmtFontFamily');
       if (rFont && item.fontName) rFont.value = item.fontName;
-      const rSize = document.getElementById('ribbonFontSize');
+      const rSize = document.getElementById('fmtFontSize');
       if (rSize && item.fontSize) rSize.value = String(item.fontSize);
 
       html += `
@@ -3612,7 +3786,7 @@
           renderCanvasSvg();
 
           try {
-            await fetch(`/api/forms/module/${encodeURIComponent(currentPayload.moduleIndex.key.name)}/item`, {
+            await checkedSave(`/api/forms/module/${encodeURIComponent(currentPayload.moduleIndex.key.name)}/item`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -3820,7 +3994,7 @@
     async function addInFormNavigationButtons() {
       if (!currentPayload?.moduleIndex) return;
       const m = currentPayload.moduleIndex;
-      const canvasName = canvasSelect.value || (m.canvases?.[0]?.name) || 'CANVAS_MAIN';
+      const canvasName = canvasSelect.value || m.canvases?.[0]?.name || 'CANVAS_MAIN';
       let targetBlock = m.blocks.find(b => b.name === 'CONTROL') || m.blocks[0];
       if (!targetBlock) return;
 
@@ -3919,7 +4093,7 @@
     }
 
     // Wire Top Formatting Ribbon (#layoutFormatRibbon)
-    const ribbonBackColor = document.getElementById('ribbonBackColor');
+    const ribbonBackColor = document.getElementById('fmtBackColor');
     if (ribbonBackColor) {
       ribbonBackColor.addEventListener('input', async () => {
         if (selectedObject?.type === 'ITEM') {
@@ -3931,7 +4105,7 @@
       });
     }
 
-    const ribbonForeColor = document.getElementById('ribbonForeColor');
+    const ribbonForeColor = document.getElementById('fmtForeColor');
     if (ribbonForeColor) {
       ribbonForeColor.addEventListener('input', async () => {
         if (selectedObject?.type === 'ITEM') {
@@ -3943,9 +4117,9 @@
       });
     }
 
-    document.querySelectorAll('.color-preset').forEach(btn => {
+    document.querySelectorAll('.swatch-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const bg = btn.getAttribute('data-bg');
+        const bg = btn.getAttribute('data-fill');
         const fg = btn.getAttribute('data-fg');
         if (selectedObject?.type === 'ITEM') {
           selectedObject.item.backColor = bg;
@@ -3962,7 +4136,7 @@
       });
     });
 
-    const ribbonFontFamily = document.getElementById('ribbonFontFamily');
+    const ribbonFontFamily = document.getElementById('fmtFontFamily');
     if (ribbonFontFamily) {
       ribbonFontFamily.addEventListener('change', async () => {
         if (selectedObject?.type === 'ITEM') {
@@ -3974,7 +4148,7 @@
       });
     }
 
-    const ribbonFontSize = document.getElementById('ribbonFontSize');
+    const ribbonFontSize = document.getElementById('fmtFontSize');
     if (ribbonFontSize) {
       ribbonFontSize.addEventListener('change', async () => {
         if (selectedObject?.type === 'ITEM') {
@@ -3986,7 +4160,7 @@
       });
     }
 
-    const ribbonBoldBtn = document.getElementById('ribbonBoldBtn');
+    const ribbonBoldBtn = document.getElementById('fmtBoldBtn');
     if (ribbonBoldBtn) {
       ribbonBoldBtn.addEventListener('click', async () => {
         if (selectedObject?.type === 'ITEM') {
@@ -3999,7 +4173,7 @@
       });
     }
 
-    const ribbonItalicBtn = document.getElementById('ribbonItalicBtn');
+    const ribbonItalicBtn = document.getElementById('fmtItalicBtn');
     if (ribbonItalicBtn) {
       ribbonItalicBtn.addEventListener('click', async () => {
         if (selectedObject?.type === 'ITEM') {
@@ -4186,6 +4360,32 @@
       }
     }
 
+    document.getElementById('wizDescribeBtn')?.addEventListener('click', async event => {
+      const table = document.getElementById('wizLiveTableInput').value.trim().toUpperCase();
+      const status = document.getElementById('wizSchemaStatus');
+      event.target.disabled = true;
+      try {
+        status.textContent = 'Reading database schema…';
+        const response = await fetch('/api/db/describe', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tableName: table, backend: dbBackendSelect.value,
+            username: dbUserInput.value.trim() || null, password: dbPassInput.value || null })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not read schema');
+        const columns = result.records.map(row => ({ name: row.values.COLUMN_NAME,
+          type: /NUMBER|INT|REAL|FLOAT|DECIMAL/i.test(row.values.DATA_TYPE) ? 'Number' : /DATE|TIME/i.test(row.values.DATA_TYPE) ? 'Date' : 'Varchar2',
+          prompt: row.values.COLUMN_NAME, width: 140 }));
+        if (!columns.length) throw new Error('No columns found. Check the table name and connected schema.');
+        TABLE_SCHEMAS[table] = { blockName: table, frameTitle: table, windowTitle: table, columns };
+        if (![...wizTableSelect.options].some(option => option.value === table)) wizTableSelect.add(new Option(`${table} (database schema)`, table));
+        wizTableSelect.value = table;
+        populateWizardForTable(table);
+        status.textContent = `Loaded ${columns.length} columns from ${table} using ${dbBackendSelect.value}.`;
+      } catch (error) { status.textContent = error.message; }
+      finally { event.target.disabled = false; }
+    });
+
     function openWizardModal() {
       if (!wizModal) return;
       // Default table based on active module
@@ -4234,12 +4434,14 @@
 
     document.getElementById('wizApplyBtn')?.addEventListener('click', async () => {
       if (!currentPayload?.moduleIndex) return;
-      const m = currentPayload.moduleIndex;
+      if (runtime.active) return showBanner('Stop the running form before changing its structure.');
+      const mode = document.getElementById('wizBlockModeSelect').value;
+      const m = structuredClone(currentPayload.moduleIndex);
       const tableName = wizTableSelect?.value || 'OFW_DEMO_EMPLOYEES';
       const blockName = (wizBlockName?.value || 'DATA_BLOCK').trim().toUpperCase();
       const frameTitle = wizFrameTitle?.value || '';
       const windowTitle = wizWindowTitle?.value || '';
-      const layoutStyle = document.querySelector('input[name="wizLayoutStyle"]:checked')?.value || 'form';
+      const layoutStyle = wizStyleTabularCard?.classList.contains('active') ? 'tabular' : 'form';
       const recordsDisplayed = parseInt(wizRecordsDisplayed?.value, 10) || (layoutStyle === 'tabular' ? 5 : 1);
       const distanceBetweenRecords = parseInt(wizRecordDistance?.value, 10) || 0;
       const includeNav = document.getElementById('wizIncludeNavBtns')?.checked !== false;
@@ -4264,7 +4466,23 @@
         return;
       }
 
-      const canvasName = canvasSelect.value || (m.canvases?.[0]?.name) || 'CANVAS_MAIN';
+      if (!/^[A-Z][A-Z0-9_]*$/.test(blockName)) return showBanner('Use a valid Oracle block name: letters, digits and underscores.');
+      if (mode === 'append' && m.blocks.some(b => b.name.toUpperCase() === blockName)) {
+        return showBanner('That block already exists. Choose a new block name or Update / Replace.');
+      }
+      if (mode === 'newForm') {
+        const name = document.getElementById('wizFormNameInput').value.trim().toUpperCase();
+        if (!/^[A-Z][A-Z0-9_]*$/.test(name)) return showBanner('Enter a valid new form name.');
+        m.key = { name, type: 'FORM' };
+        m.sourceFile = '';
+        m.convertedFile = '';
+        for (const key of Object.keys(m)) if (Array.isArray(m[key])) m[key] = [];
+        m.menuModule = null;
+        m.coordinate = { coordinateSystem: 'Real', realUnit: 'Pixel', characterCellWidth: 8, characterCellHeight: 16, defaultFontScaling: true };
+        m.windows = [{ name: 'MAIN_WINDOW', title: windowTitle || name, width: 900, height: 650 }];
+        m.canvases = [{ name: 'CANVAS_MAIN', canvasType: 'Content', windowName: 'MAIN_WINDOW', width: 900, height: 650, tabPages: [] }];
+      }
+      const canvasName = mode === 'newForm' ? 'CANVAS_MAIN' : (canvasSelect.value || m.canvases?.[0]?.name || 'CANVAS_MAIN');
       const canvas = m.canvases.find(c => c.name === canvasName);
 
       // Update Window Title if provided
@@ -4438,6 +4656,7 @@
       // Update or create block
       let block = m.blocks.find(b => b.name === blockName);
       if (block) {
+        m.triggers = (m.triggers || []).filter(t => t.blockName?.toUpperCase() !== blockName || !t.itemName || items.some(i => i.name.toUpperCase() === t.itemName.toUpperCase()));
         block.queryDataSourceName = tableName;
         block.recordsDisplayed = recordsDisplayed;
         block.distanceBetweenRecords = distanceBetweenRecords;
@@ -4466,7 +4685,7 @@
       // Add or update Titled Frame on canvas
       if (canvas && frameTitle) {
         if (!m.graphics) m.graphics = [];
-        let existingFrame = m.graphics.find(g => g.canvasName === canvasName && (g.graphicsType || '').toLowerCase() === 'frame');
+        let existingFrame = m.graphics.find(g => g.canvasName === canvasName && g.name === `FRAME_${blockName}`);
         if (existingFrame) {
           existingFrame.frameTitle = frameTitle;
           existingFrame.xPosition = 16;
@@ -4487,26 +4706,47 @@
         }
       }
 
+      try {
+        const url = mode === 'newForm' ? '/api/forms/new' : `/api/forms/module/${encodeURIComponent(m.key.name)}/sync`;
+        const response = await checkedSave(url, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(m)
+        });
+        setModulePayload(await response.json());
+      } catch (error) { showBanner(`Could not save generated form: ${error.message}`); return; }
       if (typeof wizModal.close === 'function') wizModal.close();
       else wizModal.style.display = 'none';
-      selectedObject = { type: 'BLOCK', block };
-      renderNavigatorTree();
+      selectedObject = { type: 'BLOCK', block: currentPayload.moduleIndex.blocks.find(b => b.name === blockName) };
       renderPropertyInspector(selectedObject);
-      renderCanvasSvg();
-      await syncModuleToServer();
       showBanner(`🧙‍♂️ Generated Block '${blockName}' (${selectedCols.length} columns, ${layoutStyle === 'tabular' ? `${recordsDisplayed}-row Tabular Grid` : 'Form Layout'}) — click ▶ Run or Search to query!`);
       setTimeout(hideBanner, 3200);
     });
   }
 
-  function renderDiffReport(diff) {
-    if (!diffContainer) return;
+  function renderDiffChange(label, before, after) {
+    return `<details class="diff-change-item"><summary>${escapeHtml(label)}</summary><div class="diff-values"><pre>${escapeHtml(before ?? '(absent)')}</pre><pre>${escapeHtml(after ?? '(absent)')}</pre></div></details>`;
+  }
+
+  function renderDiffVisuals(base, modified) {
+    // Shared coordinate bounds preserve visible size and position differences.
+    const items = module => (module.blocks || []).flatMap(b => (b.items || [])
+      .filter(i => i.canvasName && i.visible !== false).map(i => ({ ...i, blockName: b.name })));
+    const all = [...items(base), ...items(modified)];
+    const minX = Math.min(0, ...all.map(i => i.xPosition || 0));
+    const minY = Math.min(0, ...all.map(i => i.yPosition || 0));
+    const width = Math.max(1, ...all.map(i => (i.xPosition || 0) + (i.width || 80))) - minX;
+    const height = Math.max(1, ...all.map(i => (i.yPosition || 0) + (i.height || 24))) - minY;
+    const draw = module => `<figure><figcaption>${escapeHtml(module.key.name)}</figcaption><svg role="img" aria-label="Item layout overview" viewBox="${minX - 10} ${minY - 10} ${width + 20} ${height + 20}">${items(module).map(i => `<g><title>${escapeHtml(`${i.blockName}.${i.name} · ${i.canvasName}`)}</title><rect x="${i.xPosition || 0}" y="${i.yPosition || 0}" width="${i.width || 80}" height="${i.height || 24}" fill="none" stroke="currentColor"/><text x="${(i.xPosition || 0) + 3}" y="${(i.yPosition || 0) + 13}" font-size="11" fill="currentColor">${escapeHtml(i.label || i.prompt || i.name)}</text></g>`).join('')}</svg></figure>`;
+    return `<p class="diff-note">Item geometry overview at a shared scale. Canvases are overlaid; fonts, graphics and Oracle runtime styling are not reproduced.</p><div class="diff-visuals">${draw(base)}${draw(modified)}</div>`;
+  }
+
+  function renderDiffReport(diff, container = diffContainer) {
+    if (!container) return;
     if (!diff || !diff.baseName) {
-      diffContainer.innerHTML = '<div class="empty-state">No diff results available.</div>';
+      container.innerHTML = '<div class="empty-state">No diff results available.</div>';
       return;
     }
 
-    const hasDiff = (diff.blocksAdded?.length || 0) > 0 ||
+    const hasDiff = (diff.modelChanges?.length || 0) > 0 || (diff.blocksAdded?.length || 0) > 0 ||
       (diff.blocksRemoved?.length || 0) > 0 ||
       (diff.blocksModified?.length || 0) > 0 ||
       (diff.canvasesModified?.length || 0) > 0 ||
@@ -4530,7 +4770,7 @@
 
     if (!hasDiff) {
       html += '<div style="padding: 16px; color: #3fb950; font-weight: bold;">✔️ No differences detected. Modules have matching structure and layout.</div>';
-      diffContainer.innerHTML = html;
+      container.innerHTML = html;
       return;
     }
 
@@ -4578,6 +4818,9 @@
           html += `<div class="diff-change-item" style="padding-left: 28px;">Property '${escapeHtml(pc.property)}': ${escapeHtml(pc.oldValue || 'null')} &rarr; <strong>${escapeHtml(pc.newValue || 'null')}</strong></div>`;
         }
       }
+      for (const item of (b.itemsModified || [])) {
+        for (const change of (item.propertyChanges || [])) html += renderDiffChange(`${item.name}.${change.property}`, change.oldValue, change.newValue);
+      }
       for (const t of (b.triggersAdded || [])) {
         html += `<div class="diff-change-item item-add">+ Trigger Added: <strong>${escapeHtml(t)}</strong></div>`;
       }
@@ -4590,7 +4833,21 @@
       html += `</div>`;
     }
 
-    diffContainer.innerHTML = html;
+    for (const change of (diff.modelChanges || [])) {
+      html += renderDiffChange(`Parsed model section: ${change.property}`, change.oldValue, change.newValue);
+    }
+    for (const canvas of (diff.canvasesModified || [])) {
+      for (const change of canvas.propertyChanges) html += renderDiffChange(`Canvas ${canvas.name}.${change.property}`, change.oldValue, change.newValue);
+    }
+    for (const window of (diff.windowsModified || [])) {
+      for (const change of window.propertyChanges) html += renderDiffChange(`Window ${window.name}.${change.property}`, change.oldValue, change.newValue);
+    }
+    for (const name of (diff.formTriggersAdded || [])) html += `<p>+ Form trigger: ${escapeHtml(name)}</p>`;
+    for (const name of (diff.formTriggersRemoved || [])) html += `<p>− Form trigger: ${escapeHtml(name)}</p>`;
+    for (const trigger of [...(diff.formTriggersModified || []), ...(diff.blocksModified || []).flatMap(b => b.triggersModified || [])]) {
+      html += renderDiffChange(`Trigger ${trigger.name}`, trigger.oldText, trigger.newText);
+    }
+    container.innerHTML = html;
   }
 
   function renderPropGroup(groupTitle, rows) {
@@ -4734,21 +4991,22 @@
   });
 
   document.getElementById('exportReportXmlBtn')?.addEventListener('click', () => {
-    if (!currentReportPayload?.report) {
-      showBanner('Run or select a Report first before exporting Report XML.');
+    const report = currentReportPayload?.report || reportDefinition;
+    if (!report) {
+      showBanner('Select a report before exporting its data model.');
       return;
     }
-    const xmlStr = serializeReportToXml(currentReportPayload.report);
+    const xmlStr = serializeReportToXml(report);
     const blob = new Blob([xmlStr], { type: 'application/xml' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${(currentReportPayload.report.name || 'report').toLowerCase()}_report.xml`;
+    a.download = `${(report.name || 'report').toLowerCase()}_report.xml`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showBanner(`💾 Exported Oracle Report XML (${a.download}) with current Data Model, PL/SQL Formulas, and Paper Layout.`);
+    showBanner(`💾 Exported Oracle Report XML (${a.download}) with the parsed data model. Paper layout and unparsed Oracle metadata are not included.`);
     setTimeout(hideBanner, 3600);
   });
 
@@ -4778,6 +5036,9 @@
     lines.push(`<?xml version="1.0" encoding="UTF-8"?>`);
     lines.push(`<report name="${escapeHtml(rep.name || 'REPORT')}" title="${escapeHtml(rep.title || '')}" unitOfMeasurement="${escapeHtml(rep.unit_of_measurement || 'inch')}">`);
     lines.push(`  <data>`);
+    for (const p of (rep.data?.parameters || [])) {
+      lines.push(`    <userParameter name="${escapeHtml(p.name)}" datatype="${escapeHtml(p.datatype || 'character')}"${p.initial_value == null ? '' : ` initialValue="${escapeHtml(p.initial_value)}"`}/>`);
+    }
     for (const ds of (rep.data?.data_sources || [])) {
       lines.push(`    <dataSource name="${escapeHtml(ds.name)}">`);
       lines.push(`      <select>${escapeHtml(ds.select_sql || '')}</select>`);
@@ -4810,60 +5071,121 @@
       const res = await fetch('/api/reports');
       if (res.ok) {
         const reports = await res.json();
-        reportSelect.innerHTML = reports.map(r => `<option value="${r.file_name}">${r.name} - ${r.title}</option>`).join('');
+        const selected = reportSelect.value;
+        reportSelect.replaceChildren(...reports.map(r => new Option(`${r.name} - ${r.title || ''}`, r.file_name)));
         // Default to OFW_EMP_DIRECTORY if available so it matches OFW_DEMO_EMPLOYEES
-        if (reports.some(r => r.file_name === 'ofw_employee_directory_report.xml')) {
+        if (selected && reports.some(r => r.file_name === selected)) {
+          reportSelect.value = selected;
+        } else if (reports.some(r => r.file_name === 'ofw_employee_directory_report.xml')) {
           reportSelect.value = 'ofw_employee_directory_report.xml';
         }
+        if (!reportDefinitionName) await inspectReport();
       }
     } catch (e) {
       console.warn("Could not load reports list:", e);
     }
   }
 
+  let reportRequestVersion = 0;
+  let reportDefinitionName = null;
+  let reportDefinition = null;
+
+  function invalidateReport(message) {
+    reportRequestVersion++;
+    currentReportPayload = null;
+    if (printReportBtn) printReportBtn.disabled = true;
+    if (runReportBtn) runReportBtn.disabled = false;
+    if (reportPreviewFrame) reportPreviewFrame.srcdoc = '';
+    const status = document.getElementById('reportStatus');
+    if (status) status.textContent = message;
+    if (reportDataTree) reportDataTree.textContent = message;
+    if (document.getElementById('reportsTab')?.classList.contains('active') && propertyInspector) {
+      propertyInspector.textContent = message;
+    }
+  }
+
+  function showReportDefinition(report, name) {
+    reportDefinition = report;
+    reportDefinitionName = name;
+    const fields = document.getElementById('reportParameterFields');
+    fields.replaceChildren();
+    for (const [index, parameter] of (report.data?.parameters || []).entries()) {
+      const label = document.createElement('label');
+      const input = document.createElement('input');
+      input.id = `reportParameter${index}`;
+      input.name = parameter.name;
+      input.type = 'text';
+      input.value = parameter.initial_value ?? '';
+      input.autocomplete = 'off';
+      label.htmlFor = input.id;
+      label.textContent = `${parameter.name} (${parameter.datatype || 'character'})`;
+      label.append(input);
+      fields.append(label);
+      input.addEventListener('input', () => invalidateReport('Parameters changed. Run to refresh the preview.'));
+    }
+    if (!fields.children.length) fields.textContent = 'This report has no declared parameters.';
+    renderReportPlsqlStudio(report, null);
+  }
+
+  async function inspectReport() {
+    if (!reportSelect?.value) return;
+    invalidateReport('Loading report definition…');
+    const version = reportRequestVersion;
+    const name = reportSelect.value;
+    reportDefinition = null;
+    reportDefinitionName = null;
+    document.getElementById('reportParameterFields').replaceChildren();
+    document.getElementById('reportCodeUnitsList').replaceChildren();
+    document.getElementById('reportPlsqlDisplay').textContent = '';
+    if (runReportBtn) runReportBtn.disabled = true;
+    try {
+      const response = await fetch(`/api/reports/${encodeURIComponent(name)}/definition`);
+      const report = await response.json();
+      if (!response.ok) throw new Error(report.error || 'Could not load report definition.');
+      if (version !== reportRequestVersion) return false;
+      showReportDefinition(report, name);
+      invalidateReport('Definition loaded. Review parameters, then run the report.');
+      return true;
+    } catch (error) {
+      if (version === reportRequestVersion) invalidateReport(error.message);
+      return false;
+    }
+  }
+
   async function executeReport() {
-    if (!reportSelect) return;
+    if (!reportSelect?.value) return;
+    if (reportDefinitionName !== reportSelect.value && !await inspectReport()) return;
     const reportName = reportSelect.value;
     const backend = reportBackendSelect?.value || 'mock';
-    if (!reportName) return;
-
-    if (reportDataTree) {
-      reportDataTree.innerHTML = '<div class="empty-state">Running report...</div>';
-    }
-
+    const parameters = Object.fromEntries(Array.from(
+      document.querySelectorAll('#reportParameterFields input'), input => [input.name, input.value]
+    ));
+    invalidateReport('Running report…');
+    const version = reportRequestVersion;
+    if (runReportBtn) runReportBtn.disabled = true;
     try {
       const res = await fetch('/api/reports/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          report_name: reportName,
-          backend: backend,
-          parameters: {}
-        })
+        body: JSON.stringify({ report_name: reportName, backend, parameters })
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Report execution failed');
-      }
-
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Report execution failed');
+      if (version !== reportRequestVersion) return;
       currentReportPayload = data;
-
       const theme = document.getElementById('reportTemplateSelect')?.value || 'blue';
-      if (reportPreviewFrame) {
-        reportPreviewFrame.srcdoc = applyReportTemplateTheme(data.html, theme);
-      }
-
+      if (reportPreviewFrame) reportPreviewFrame.srcdoc = applyReportTemplateTheme(data.html, theme);
+      if (printReportBtn) printReportBtn.disabled = false;
+      document.getElementById('reportStatus').textContent = `Completed · ${reportName} · ${backend}`;
       renderReportDataTree(data.execution, data.report);
       renderReportPlsqlStudio(data.report, data.execution);
       if (document.getElementById('reportsTab')?.classList.contains('active')) {
         renderReportPropertyInspector('REPORT', { report: data.report, execution: data.execution });
       }
-    } catch (err) {
-      if (reportDataTree) {
-        reportDataTree.innerHTML = `<div class="empty-state" style="color:#f85149;">Error: ${escapeHtml(err.message)}</div>`;
-      }
+    } catch (error) {
+      if (version === reportRequestVersion) invalidateReport(`Report failed: ${error.message}`);
+    } finally {
+      if (version === reportRequestVersion && runReportBtn) runReportBtn.disabled = false;
     }
   }
 
@@ -4881,29 +5203,11 @@
     for (const ds of (report.data?.data_sources || [])) {
       for (const grp of (ds.groups || [])) {
         for (const f of (grp.formulas || [])) {
-          const retType = (f.datatype || 'NUMBER').toUpperCase();
-          const rawExpr = (f.source || f.plsql || ':SALARY * 0.10').trim();
-          const bodyStmt = /^return\b/i.test(rawExpr) ? rawExpr : `RETURN (${rawExpr.replace(/;$/, '')});`;
-          const code = [
-            `-- =====================================================================`,
-            `-- Oracle Reports PL/SQL Formula Column: ${f.name}`,
-            `-- ReportModule : ${repName}`,
-            `-- Data Source  : ${ds.name} -> Group: ${grp.name}`,
-            `-- Return Type  : ${retType}`,
-            `-- =====================================================================`,
-            `FUNCTION ${f.name}Formula RETURN ${retType} IS`,
-            `BEGIN`,
-            `  -- Formula PL/SQL expression evaluated per row in ${grp.name}:`,
-            `  ${bodyStmt}`,
-            `EXCEPTION`,
-            `  WHEN OTHERS THEN`,
-            `    SRW.MESSAGE(100, 'Formula error in ${f.name}: ' || SQLERRM);`,
-            `    RETURN NULL;`,
-            `END ${f.name}Formula;`
-          ].join('\n');
+          const rawExpr = (f.source || f.plsql || '').trim();
+          const code = rawExpr || '-- No formula source was extracted.';
           units.push({
             section: 'PL/SQL Formula Columns',
-            name: `${f.name}Formula`,
+            name: f.name,
             badge: 'FORMULA',
             badgeClass: 'formula',
             sub: `${grp.name} · ${rawExpr}`,
@@ -4928,68 +5232,6 @@
           code: t.plsql || t.body || '-- Trigger body'
         });
       }
-    } else {
-      const dsNames = (report.data?.data_sources || []).map(d => d.name).join(', ') || 'Q_MAIN';
-      const sumNames = (report.data?.report_summaries || []).map(s => `${s.name} (${s.function}(${s.source}))`).join(', ') || 'None';
-      units.push({
-        section: 'Report Triggers',
-        name: 'BEFORE_REPORT',
-        badge: 'TRIGGER',
-        badgeClass: 'trigger',
-        sub: 'SRW Init & Context',
-        scope: `REPORT TRIGGER (${repName})`,
-        code: [
-          `-- =====================================================================`,
-          `-- Oracle Reports Lifecycle Trigger: BEFORE REPORT`,
-          `-- ReportModule : ${repName}`,
-          `-- Active Data Queries : ${dsNames}`,
-          `-- =====================================================================`,
-          `FUNCTION BeforeReport RETURN BOOLEAN IS`,
-          `BEGIN`,
-          `  -- Initialize Oracle Reports runtime environment & SRW trace`,
-          `  SRW.MESSAGE(001, 'Starting ${repName}: ${report.title || repName}');`,
-          `  RETURN (TRUE);`,
-          `END BeforeReport;`
-        ].join('\n')
-      });
-      units.push({
-        section: 'Report Triggers',
-        name: 'AFTER_PARAMETER_FORM',
-        badge: 'TRIGGER',
-        badgeClass: 'trigger',
-        sub: 'Parameter Validation',
-        scope: `REPORT TRIGGER (${repName})`,
-        code: [
-          `-- =====================================================================`,
-          `-- Oracle Reports Lifecycle Trigger: AFTER PARAMETER FORM`,
-          `-- Validates user bind parameters before executing Data Model SQL`,
-          `-- =====================================================================`,
-          `FUNCTION AfterPForm RETURN BOOLEAN IS`,
-          `BEGIN`,
-          `  -- Validate runtime parameters before opening cursor(s) ${dsNames}`,
-          `  RETURN (TRUE);`,
-          `END AfterPForm;`
-        ].join('\n')
-      });
-      units.push({
-        section: 'Report Triggers',
-        name: 'AFTER_REPORT',
-        badge: 'TRIGGER',
-        badgeClass: 'trigger',
-        sub: 'Summary & Cleanup',
-        scope: `REPORT TRIGGER (${repName})`,
-        code: [
-          `-- =====================================================================`,
-          `-- Oracle Reports Lifecycle Trigger: AFTER REPORT`,
-          `-- Report Summaries : ${sumNames}`,
-          `-- =====================================================================`,
-          `FUNCTION AfterReport RETURN BOOLEAN IS`,
-          `BEGIN`,
-          `  SRW.MESSAGE(002, 'Completed ${repName} execution.');`,
-          `  RETURN (TRUE);`,
-          `END AfterReport;`
-        ].join('\n')
-      });
     }
 
     // 3. Data Model SQL Queries (Q_*) & Summary Columns (CS_*)
@@ -5026,9 +5268,8 @@
         `-- Parent Group : ${lnk.parent_group}.${lnk.parent_column}`,
         `-- Child Query  : ${childTarget}.${lnk.child_column}`,
         `-- =====================================================================`,
-        `SELECT *`,
-        `  FROM (${childTarget}) child`,
-        ` WHERE child.${lnk.child_column} = :${lnk.parent_group}_${lnk.parent_column};`
+        `-- Declarative link metadata; no SQL source was extracted for this link.`,
+        `-- Condition: ${lnk.condition || 'eq'}`
       ].join('\n');
       units.push({
         section: 'Data Model SQL & Links',
@@ -5060,7 +5301,10 @@
       `;
     });
 
-    unitsListEl.innerHTML = html;
+    unitsListEl.innerHTML = html || '<div class="empty-state">No SQL or formula source was extracted.</div>';
+    codeDisplayEl.textContent = '';
+    if (codeTitleEl) codeTitleEl.textContent = 'Report source';
+    if (scopeBadgeEl) scopeBadgeEl.textContent = 'EXTRACTED SOURCE';
 
     const selectUnit = (idx) => {
       const u = units[idx];

@@ -28,14 +28,21 @@ pub fn app_router_with_security(service: FormsService, security_cfg: SecurityCon
         .route("/api/module/{module_name}/xml", get(get_xml))
         .route("/api/module/{module_name}/effective-item", get(get_effective_item))
         .route("/api/db/test", post(test_db_connection))
+        .route("/api/db/describe", post(describe_table))
         .route("/api/forms/query-block", post(query_form_block))
         .route("/api/forms/export-xml", post(export_form_xml))
+        .route("/api/forms/save", post(save_form_file))
+        .route("/api/forms/oracle-preview", post(start_oracle_preview))
+        .route("/api/forms/oracle-preview/{id}", get(oracle_preview_status))
+        .route("/api/forms/oracle-preview/readiness", get(oracle_preview_readiness))
         .route("/api/forms/diff", post(diff_forms))
+        .route("/api/forms/new", post(create_form))
         .route("/api/forms/module/{module_name}/item", post(update_form_item))
         .route("/api/forms/module/{module_name}/sync", post(sync_form_module))
         .route("/api/forms/module/{module_name}/attach-menu", post(attach_form_menu))
         .route("/api/reports", get(get_reports))
         .route("/api/reports/run", post(run_report_endpoint))
+        .route("/api/reports/{name}/definition", get(get_report_definition))
         .route("/api/reports/{name}/html", get(get_report_html))
         .route("/api/sessions", post(start_session))
         .route("/api/sessions/{id}", get(session_state).delete(end_session))
@@ -206,6 +213,41 @@ struct TestDbResponse {
     success: bool,
     message: String,
     backend: oracle_forms_db::DbBackend,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DescribeTableRequest {
+    table_name: String,
+    #[serde(flatten)]
+    connection: TestDbRequest,
+}
+
+async fn describe_table(State(service): State<FormsService>, Json(req): Json<DescribeTableRequest>) -> Response {
+    use oracle_forms_db::{BoundSql, DbBackend, DbConfig, SqlValue};
+    let table = req.table_name.trim().to_ascii_uppercase();
+    if table.is_empty() || !table.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_') {
+        return session_error(400, "Enter a plain table or view name in your connected schema".into());
+    }
+    let c = req.connection;
+    let config = service.apply_credential_policy(DbConfig {
+        backend: c.backend, host: c.host, port: c.port, service_name: c.service_name,
+        username: c.username, password: c.password, ..Default::default()
+    });
+    let (sql, placeholder) = match c.backend {
+        DbBackend::Oracle | DbBackend::OracleThin => (
+            "SELECT COLUMN_NAME, DATA_TYPE FROM USER_TAB_COLUMNS WHERE TABLE_NAME = :b1 ORDER BY COLUMN_ID", ":b1"),
+        DbBackend::Sqlite | DbBackend::Mock => (
+            "SELECT name AS COLUMN_NAME, type AS DATA_TYPE FROM pragma_table_info(?1) ORDER BY cid", "?1"),
+        _ => return session_error(400, "Schema discovery supports Oracle and SQLite".into()),
+    };
+    let driver = match oracle_forms_db::create_driver(&config) {
+        Ok(driver) => driver, Err(error) => return session_error(400, error.to_string()),
+    };
+    match driver.query(&BoundSql::with_binds(sql, vec![(placeholder.into(), SqlValue::Text(table))])).await {
+        Ok(result) => Json(result).into_response(),
+        Err(error) => session_error(400, error.to_string()),
+    }
 }
 
 async fn test_db_connection(
@@ -407,6 +449,40 @@ struct ExportXmlResponse {
     mode: crate::service::ExportMode,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveFormRequest { module_name: String, username: Option<String>, password: Option<String> }
+
+async fn save_form_file(State(service): State<FormsService>, Json(req): Json<SaveFormRequest>) -> Response {
+    match service.save_form_file(&req.module_name) {
+        Ok((filename, mode)) => Json(serde_json::json!({
+            "fileName": filename, "path": format!("samples/{}", filename), "mode": mode
+        })).into_response(),
+        Err(error) => session_error(400, error.to_string()),
+    }
+}
+
+async fn start_oracle_preview(State(service): State<FormsService>, Json(req): Json<SaveFormRequest>) -> Response {
+    match service.save_form_file(&req.module_name) {
+        Ok((filename, mode)) => match crate::oracle_preview::start(&filename, req.username.zip(req.password).filter(|(u, p)| !u.trim().is_empty() && !p.is_empty())) {
+            Ok(id) => Json(serde_json::json!({ "jobId": id, "fileName": filename, "mode": mode })).into_response(),
+            Err(error) => session_error(400, format!("Saved samples/{}. Oracle preview failed: {}", filename, error)),
+        },
+        Err(error) => session_error(400, error.to_string()),
+    }
+}
+
+async fn oracle_preview_readiness() -> impl IntoResponse {
+    Json(crate::oracle_preview::readiness().await)
+}
+
+async fn oracle_preview_status(AxumPath(id): AxumPath<String>) -> Response {
+    match crate::oracle_preview::status(&id) {
+        Some(status) => Json(status).into_response(),
+        None => session_error(404, "Preview job not found".into()),
+    }
+}
+
 async fn export_form_xml(
     State(service): State<FormsService>,
     Json(payload): Json<ExportXmlRequest>,
@@ -450,32 +526,36 @@ struct DiffRequest {
     modified_module: Option<String>,
     base: Option<ModuleIndex>,
     modified: Option<ModuleIndex>,
+    #[serde(default, rename = "includeModels")]
+    include_models: bool,
 }
 
 async fn diff_forms(
     State(service): State<FormsService>,
     Json(payload): Json<DiffRequest>,
 ) -> Response {
-    if let (Some(base), Some(modified)) = (payload.base, payload.modified) {
-        let diff = oracle_forms_core::diff::FormDiffer::diff(&base, &modified);
-        return Json(diff).into_response();
-    }
-
-    if let (Some(b_name), Some(m_name)) = (payload.base_module, payload.modified_module) {
-        match service.diff_modules(&b_name, &m_name) {
-            Ok(diff) => Json(diff).into_response(),
-            Err(e) => (
-                StatusCode::NOT_FOUND,
-                Json(serde_json::json!({ "error": e.to_string() })),
-            )
-                .into_response(),
-        }
+    let resolve = |model: Option<ModuleIndex>, name: Option<String>| {
+        model.map(Ok).unwrap_or_else(|| match name {
+            Some(name) => service.get_or_load_module(&name),
+            None => Err(oracle_forms_core::error::FormsError::InvalidFormat(
+                "Each side needs a model or module name".into()
+            )),
+        })
+    };
+    let (base, modified) = match (
+        resolve(payload.base, payload.base_module),
+        resolve(payload.modified, payload.modified_module),
+    ) {
+        (Ok(base), Ok(modified)) => (base, modified),
+        (Err(error), _) | (_, Err(error)) => return (
+            StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": error.to_string() }))
+        ).into_response(),
+    };
+    let diff = oracle_forms_core::diff::FormDiffer::diff(&base, &modified);
+    if payload.include_models {
+        Json(serde_json::json!({ "diff": diff, "base": base, "modified": modified })).into_response()
     } else {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": "Either 'baseModule'/'modifiedModule' or 'base'/'modified' must be provided" })),
-        )
-            .into_response()
+        Json(diff).into_response()
     }
 }
 
@@ -542,6 +622,21 @@ async fn attach_form_menu(
         )
             .into_response(),
     }
+}
+
+async fn create_form(State(service): State<FormsService>, Json(module): Json<ModuleIndex>) -> Response {
+    let name = &module.key.name;
+    if name.is_empty() || !name.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_') {
+        return session_error(400, "Use letters, digits and underscores for a form name".into());
+    }
+    if service.get_or_load_module(name).is_ok() {
+        return session_error(409, "A form with this name already exists".into());
+    }
+    let payload = module.clone().to_payload();
+    if !service.create_module(module) {
+        return session_error(409, "A form with this name already exists".into());
+    }
+    (StatusCode::CREATED, Json(payload)).into_response()
 }
 
 async fn sync_form_module(
@@ -710,6 +805,19 @@ async fn open_file(
 async fn get_reports(State(service): State<FormsService>) -> impl IntoResponse {
     let reports = service.get_report_samples();
     Json(reports)
+}
+
+/// Inspect report source and parameters without connecting to a database.
+async fn get_report_definition(
+    AxumPath(name): AxumPath<String>,
+    State(service): State<FormsService>,
+) -> Response {
+    match service.load_report(&name) {
+        Ok(report) => Json(report).into_response(),
+        Err(error) => (StatusCode::NOT_FOUND, Json(serde_json::json!({
+            "error": error.to_string()
+        }))).into_response(),
+    }
 }
 
 #[derive(Deserialize)]
@@ -940,6 +1048,95 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn live_schema_discovery_returns_columns_and_rejects_sql_text() {
+        let (service, cache) = security_test_service("schema-discovery");
+        for (table, expected) in [("test_items", StatusCode::OK), ("test_items; DROP TABLE orders", StatusCode::BAD_REQUEST)] {
+            let payload = serde_json::json!({ "tableName": table, "backend": "sqlite" });
+            let (status, body, _) = send(service.clone(), Request::builder().method("POST")
+                .uri("/api/db/describe").header("content-type", "application/json")
+                .body(Body::from(payload.to_string())).unwrap()).await;
+            assert_eq!(status, expected, "{body}");
+            if status == StatusCode::OK { assert!(body.contains("item_name"), "{body}"); }
+        }
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn diff_detects_added_canvases_program_units_and_unfocused_properties() {
+        let (service, cache) = security_test_service("diff-coverage");
+        let base = service.load_sample("orders_fmb.xml").unwrap();
+        let mut changed = base.clone();
+        changed.canvases.push(base.canvases[0].clone());
+        let diff = oracle_forms_core::diff::FormDiffer::diff(&base, &changed);
+        assert!(diff.has_differences());
+        assert!(diff.model_changes.iter().any(|c| c.property == "canvases"));
+        let mut changed = base.clone();
+        changed.blocks[0].items[0].back_color = Some("red".into());
+        let diff = oracle_forms_core::diff::FormDiffer::diff(&base, &changed);
+        assert!(diff.has_differences());
+        assert!(diff.model_changes.iter().any(|c| c.property == "blocks"));
+        let mut changed = base.clone();
+        let unit: ProgramUnitInfo = serde_json::from_value(serde_json::json!({
+            "name": "NEW_PROCEDURE", "sourceText": "BEGIN NULL; END;"
+        })).unwrap();
+        changed.program_units.push(unit);
+        let diff = oracle_forms_core::diff::FormDiffer::diff(&base, &changed);
+        assert!(diff.model_changes.iter().any(|c| c.property == "programUnits"));
+        let mut changed = base.clone();
+        changed.parsed_at = "different ingestion time".into();
+        changed.source_file = "another/location.xml".into();
+        assert!(!oracle_forms_core::diff::FormDiffer::diff(&base, &changed).has_differences());
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn diff_accepts_edited_model_against_named_sample_with_visual_models() {
+        let (service, cache) = security_test_service("mixed-diff");
+        let mut base = service.load_sample("orders_fmb.xml").unwrap();
+        base.blocks[0].items[0].prompt = Some("Edited in browser".into());
+        let body = serde_json::json!({ "base": base, "modifiedModule": "orders_fmb.xml", "includeModels": true });
+        let (status, body, _) = send(service, Request::builder().method("POST")
+            .uri("/api/forms/diff").header("content-type", "application/json")
+            .body(Body::from(body.to_string())).unwrap()).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let result: serde_json::Value = serde_json::from_str(&body).unwrap();
+        assert!(!result["diff"]["blocksModified"].as_array().unwrap().is_empty());
+        assert_eq!(result["base"]["blocks"][0]["items"][0]["prompt"], "Edited in browser");
+        assert!(result["modified"]["canvases"].is_array());
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn new_form_is_saved_and_duplicate_creation_is_rejected() {
+        let (service, cache) = security_test_service("new-form");
+        let mut module = service.load_sample("orders_fmb.xml").unwrap();
+        module.key.name = "NEW_WIZARD_FORM".into();
+        let request = || Request::builder().method("POST").uri("/api/forms/new")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_string(&module).unwrap())).unwrap();
+        let (status, body, _) = send(service.clone(), request()).await;
+        assert_eq!(status, StatusCode::CREATED, "{body}");
+        assert!(service.get_module("new_wizard_form").is_some());
+        let (status, _, _) = send(service, request()).await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn structural_edits_are_exported_instead_of_silently_discarded() {
+        let (service, cache) = security_test_service("structural-export");
+        let mut module = service.load_sample("orders_fmb.xml").unwrap();
+        let mut block = module.blocks[0].clone();
+        block.name = "NEW_BLOCK".into();
+        module.blocks.push(block);
+        service.save_module(module.clone());
+        let (xml, mode) = service.export_xml(&module.key.name).unwrap();
+        assert_eq!(mode, crate::service::ExportMode::Summary);
+        assert!(xml.contains("NEW_BLOCK"));
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
     async fn test_diff_endpoint() {
         let cache = std::env::temp_dir().join(format!("forms-diff-test-{}", std::process::id()));
         let service = FormsService::new(&cache);
@@ -1015,6 +1212,21 @@ mod tests {
         let resp: Vec<crate::service::ReportSampleItem> = serde_json::from_slice(&body).unwrap();
         assert!(resp.iter().any(|r| r.name == "ORDERS_SUMMARY"));
         assert!(resp.iter().any(|r| r.name == "DEPT_SALARIES"));
+        let _ = std::fs::remove_dir_all(cache);
+    }
+
+    #[tokio::test]
+    async fn report_definition_is_available_without_database_credentials() {
+        let cache = std::env::temp_dir().join(format!("forms-report-definition-{}", std::process::id()));
+        let app = app_router(FormsService::new(&cache));
+        let response = app.oneshot(Request::builder()
+            .uri("/api/reports/orders_summary_report.xml/definition")
+            .body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let report: oracle_forms_core::report::ReportDefinition = serde_json::from_slice(&body).unwrap();
+        assert_eq!(report.name, "ORDERS_SUMMARY");
+        assert!(!report.data.data_sources[0].select_sql.is_empty());
         let _ = std::fs::remove_dir_all(cache);
     }
 

@@ -105,6 +105,8 @@ pub struct WindowDiff {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModuleDiff {
+    #[serde(default)]
+    pub model_changes: Vec<PropertyChange>,
     pub base_name: String,
     pub modified_name: String,
     pub blocks_added: Vec<String>,
@@ -119,7 +121,8 @@ pub struct ModuleDiff {
 
 impl ModuleDiff {
     pub fn has_differences(&self) -> bool {
-        !self.blocks_added.is_empty()
+        !self.model_changes.is_empty()
+            || !self.blocks_added.is_empty()
             || !self.blocks_removed.is_empty()
             || self.blocks_modified.iter().any(|b| b.has_changes())
             || self.canvases_modified.iter().any(|c| !c.property_changes.is_empty())
@@ -148,6 +151,9 @@ impl ModuleDiff {
             out.push_str(&format!("Blocks Removed: {}\n", self.blocks_removed.join(", ")));
         }
 
+        for change in &self.model_changes {
+            out.push_str(&format!("Model section changed: {}\n", change.property));
+        }
         for block in &self.blocks_modified {
             if !block.has_changes() {
                 continue;
@@ -381,12 +387,12 @@ impl FormDiffer {
                     .collect();
 
                 for bt in &b_triggers {
-                    if !m_triggers.iter().any(|mt| mt.name.eq_ignore_ascii_case(&bt.name)) {
+                    if !m_triggers.iter().any(|mt| same_trigger(mt, bt)) {
                         triggers_removed.push(bt.name.clone());
                     }
                 }
                 for mt in &m_triggers {
-                    if let Some(bt) = b_triggers.iter().find(|t| t.name.eq_ignore_ascii_case(&mt.name)) {
+                    if let Some(bt) = b_triggers.iter().find(|t| same_trigger(t, mt)) {
                         if bt.source_text != mt.source_text || bt.first_line != mt.first_line {
                             triggers_modified.push(TriggerDiff {
                                 name: mt.name.clone(),
@@ -505,12 +511,12 @@ impl FormDiffer {
             .collect();
 
         for bt in &b_form_trigs {
-            if !m_form_trigs.iter().any(|mt| mt.name.eq_ignore_ascii_case(&bt.name)) {
+            if !m_form_trigs.iter().any(|mt| same_trigger(mt, bt)) {
                 form_triggers_removed.push(bt.name.clone());
             }
         }
         for mt in &m_form_trigs {
-            if let Some(bt) = b_form_trigs.iter().find(|t| t.name.eq_ignore_ascii_case(&mt.name)) {
+            if let Some(bt) = b_form_trigs.iter().find(|t| same_trigger(t, mt)) {
                 if bt.source_text != mt.source_text || bt.first_line != mt.first_line {
                     form_triggers_modified.push(TriggerDiff {
                         name: mt.name.clone(),
@@ -523,7 +529,21 @@ impl FormDiffer {
             }
         }
 
+        // Supplement the focused layout report with every differing parsed model section.
+        // Source locations and ingestion metadata do not represent a form behavior change.
+        let mut old = serde_json::to_value(base).expect("ModuleIndex serializes");
+        let mut new = serde_json::to_value(modified).expect("ModuleIndex serializes");
+        strip_locations(&mut old);
+        strip_locations(&mut new);
+        let mut model_changes = Vec::new();
+        for (name, value) in old.as_object().expect("ModuleIndex is an object") {
+            if matches!(name.as_str(), "key" | "sourceFile" | "convertedFile" | "parsedAt" | "fingerprint" | "indexVersion") { continue; }
+            if new.get(name) != Some(value) {
+                model_changes.push(PropertyChange::new(name.clone(), Some(value.to_string()), new.get(name).map(|v| v.to_string())));
+            }
+        }
         ModuleDiff {
+            model_changes,
             base_name,
             modified_name,
             blocks_added,
@@ -535,5 +555,24 @@ impl FormDiffer {
             form_triggers_removed,
             form_triggers_modified,
         }
+    }
+}
+
+fn same_trigger(a: &TriggerInfo, b: &TriggerInfo) -> bool {
+    fn same(a: Option<&str>, b: Option<&str>) -> bool {
+        match (a, b) { (Some(a), Some(b)) => a.eq_ignore_ascii_case(b), (None, None) => true, _ => false }
+    }
+    a.name.eq_ignore_ascii_case(&b.name) && same(a.block_name.as_deref(), b.block_name.as_deref())
+        && same(a.item_name.as_deref(), b.item_name.as_deref())
+}
+
+fn strip_locations(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            for name in ["sourceRef", "textRef", "xmlRef"] { map.remove(name); }
+            for child in map.values_mut() { strip_locations(child); }
+        }
+        serde_json::Value::Array(values) => { for child in values { strip_locations(child); } }
+        _ => {}
     }
 }

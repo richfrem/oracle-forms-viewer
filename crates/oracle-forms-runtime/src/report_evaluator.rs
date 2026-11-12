@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use oracle_forms_core::error::{FormsError, Result};
 use oracle_forms_core::report::*;
 use oracle_forms_db::driver::DatabaseDriver;
-use oracle_forms_db::model::BoundSql;
+use oracle_forms_db::model::{BoundSql, SqlValue};
+use oracle_forms_db::generator::rewrite_binds;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,7 +29,7 @@ impl ReportDataEvaluator {
     pub async fn evaluate(
         report: &ReportDefinition,
         driver: &dyn DatabaseDriver,
-        _params: &HashMap<String, String>,
+        params: &HashMap<String, String>,
     ) -> Result<ReportExecutionResult> {
         let mut group_records_map: HashMap<String, Vec<ReportRecord>> = HashMap::new();
         let mut query_results: HashMap<String, Vec<HashMap<String, String>>> = HashMap::new();
@@ -39,8 +40,46 @@ impl ReportDataEvaluator {
             if sql.is_empty() {
                 continue;
             }
+            let rewritten = rewrite_binds(sql, driver.backend(), 1);
+            let mut binds = Vec::new();
+            for reference in &rewritten.refs {
+                let definition = report.data.parameters.iter()
+                    .find(|p| p.name.eq_ignore_ascii_case(&reference.reference));
+                let supplied: Vec<_> = params.iter()
+                    .filter(|(name, _)| name.eq_ignore_ascii_case(&reference.reference))
+                    .collect();
+                if supplied.len() > 1 {
+                    return Err(FormsError::Database(format!(
+                        "Ambiguous report parameter :{}", reference.reference
+                    )));
+                }
+                let value = supplied.first().map(|(_, value)| value.as_str())
+                    .or_else(|| definition.and_then(|p| p.initial_value.as_deref()));
+                let value = match value {
+                    Some("") => SqlValue::Null,
+                    Some(value) => {
+                        let datatype = definition.and_then(|p| p.datatype.as_deref())
+                            .unwrap_or("character").to_ascii_lowercase();
+                        if matches!(datatype.as_str(), "number" | "integer" | "float" | "decimal") {
+                            value.trim().parse::<bigdecimal::BigDecimal>().map_err(|_| {
+                                FormsError::Database(format!(
+                                    "Report parameter :{} must be numeric", reference.reference
+                                ))
+                            })?;
+                            SqlValue::Number(value.trim().to_string())
+                        } else {
+                            SqlValue::Text(value.to_string())
+                        }
+                    }
+                    None if definition.is_some() => SqlValue::Null,
+                    None => return Err(FormsError::Database(format!(
+                        "Missing report parameter :{} in query '{}'", reference.reference, ds.name
+                    ))),
+                };
+                binds.push((reference.placeholder.clone(), value));
+            }
             let res = driver
-                .query(&BoundSql::new(sql))
+                .query(&BoundSql::with_binds(rewritten.sql, binds))
                 .await
                 .map_err(|e| FormsError::Database(format!("Error executing report query '{}': {}", ds.name, e)))?;
 
