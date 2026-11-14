@@ -55,6 +55,8 @@ Consumed by:
 import sys
 import os
 import argparse
+import platform
+import shlex
 import subprocess
 from pathlib import Path
 from typing import List
@@ -125,6 +127,38 @@ def build_compiler_command(container_path: str, mod_type: str, logon_param: str)
     )
 
 
+# Running inside WSL (Linux on a Windows machine): Podman is local, but the repo is on the Windows drive.
+IS_WSL = platform.system() == "Linux" and "microsoft" in platform.uname().release.lower()
+
+
+def podman_cmd(args: List[str]) -> List[str]:
+    """Podman command line.
+
+    Windows: Podman runs inside WSL, so the call goes through `wsl -d <distro>` (OFW_WSL_DISTRO, default Ubuntu).
+    WSL: Podman is local; its runtime directory must be /run/user/<uid>.
+    macOS and Linux: plain `podman`, unchanged.
+    """
+    on_windows = platform.system() == "Windows"
+    if on_windows or IS_WSL:
+        # Files on the Windows drive belong to the Windows user, which rootless Podman maps to container
+        # root. The container's "oracle" user cannot write the compiled .fmx next to the module (FRM-10044),
+        # so run exec as root.
+        if args and args[0] == "exec":
+            rest = list(args[1:])
+            if "-u" in rest and rest.index("-u") + 1 < len(rest):
+                rest[rest.index("-u") + 1] = "root"
+            else:
+                rest[:0] = ["-u", "root"]
+            args = ["exec", *rest]
+    if on_windows:
+        distro = os.environ.get("OFW_WSL_DISTRO") or "Ubuntu"
+        script = "export XDG_RUNTIME_DIR=/run/user/$(id -u); podman " + " ".join(shlex.quote(a) for a in args)
+        return ["wsl", "-d", distro, "--", "bash", "-lc", script]
+    if IS_WSL:
+        return ["env", f"XDG_RUNTIME_DIR=/run/user/{os.getuid()}", "podman", *args]
+    return ["podman", *args]
+
+
 # Dispatches the compilation command inside the container and processes output.
 def execute_compilation(cmd: str) -> int:
     """Execute the compiler inside the container via podman exec.
@@ -135,8 +169,8 @@ def execute_compilation(cmd: str) -> int:
     Returns:
         0 on success, non-zero on compilation failure.
     """
-    podman_cmd = ["podman", "exec", "-u", "oracle", "forms-server-14c", "/bin/sh", "-c", cmd]
-    res = subprocess.run(podman_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    res = subprocess.run(podman_cmd(["exec", "-u", "oracle", "forms-server-14c", "/bin/sh", "-c", cmd]),
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     print(res.stdout)
 
     if "Created form file" in res.stdout or "Created menu file" in res.stdout or res.returncode == 0:
@@ -185,7 +219,7 @@ def main() -> int:
     repo_root = resolve_workspace_root()
     try:
         rel_path = input_path.relative_to(repo_root)
-        container_module_path = f"/work/{rel_path}"
+        container_module_path = f"/work/{rel_path.as_posix()}"
     except ValueError:
         container_module_path = f"/work/{input_path.name}"
 

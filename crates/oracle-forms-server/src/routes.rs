@@ -122,17 +122,25 @@ async fn get_xml(
     Query(query): Query<XmlQuery>,
     State(service): State<FormsService>,
 ) -> Response {
+    // No line range means the whole file (the XML Source tab shows the full XML by default).
     let start_line = query.start_line.unwrap_or(1);
-    let end_line = query.end_line.unwrap_or(start_line);
+    let end_line = query.end_line.unwrap_or(usize::MAX);
 
     match service.read_xml_slice(&module_name, start_line, end_line) {
-        Some(xml) => Json(XmlSliceResponse {
-            module_name,
-            start_line,
-            end_line,
-            xml,
-        })
-        .into_response(),
+        Some(xml) => {
+            let end_line = if query.end_line.is_none() {
+                start_line.saturating_add(xml.lines().count().saturating_sub(1))
+            } else {
+                end_line
+            };
+            Json(XmlSliceResponse {
+                module_name,
+                start_line,
+                end_line,
+                xml,
+            })
+            .into_response()
+        }
         None => (
             StatusCode::NOT_FOUND,
             format!("XML slice not found for {}", module_name),

@@ -14,6 +14,8 @@ Provisions and configures the complete Oracle Forms 14c and Database 23ai Free c
 | macOS (Apple Silicon) | [references/podman-setup-guide.md](references/podman-setup-guide.md) | Podman machine with Rosetta 2 (`linux/amd64`) |
 | Windows 11 | [references/windows-podman-setup.md](references/windows-podman-setup.md) | **Everything inside Ubuntu on WSL2** (x86-64, no emulation): Podman, the containers, Python, Java 21, and the Rust app. No Visual Studio needed. Use `Linux x86-64` Oracle installers, not the Windows `.exe`. Full status log: [docs/WINDOWS-PODMAN-SETUP.md](../../../../../../docs/WINDOWS-PODMAN-SETUP.md) |
 
+Complete log of every repo change, every error with its fix, and every configuration adjustment: [references/windows-wsl-change-log.md](references/windows-wsl-change-log.md). Read it before changing the setup, and add to it as you work.
+
 ### Windows runbook (everything inside WSL2)
 
 Run every command below from the Ubuntu shell (`wsl -d Ubuntu`), from the repo root, with `.env` loaded. The commands are the same as on macOS. This is the verified setup; [references/windows-podman-setup.md](references/windows-podman-setup.md) has the detail for each step, section 10 lists every fix a fresh install needs, and section 11 covers the Rust app.
@@ -28,14 +30,16 @@ Run every command below from the Ubuntu shell (`wsl -d Ubuntu`), from the repo r
 8. **Restart later:** `python3 start_testbed.py` (step 7 of the workflow below), or the restart steps in `HOW-TO-RUN.md` section 6.
 
 Windows rules:
-- Never run the Rust app as a native Windows build unless you cannot use WSL for it; that path needs Visual Studio and is documented only as an alternative (`docs/DEPENDENCIES.md` section 3.1).
+- Never run the Rust app as a native Windows build. It was tried first (Visual Studio and the C++ requirements) and was a red herring; WSL worked much better. The record is in `references/windows-podman-setup.md` section 12 and `docs/DEPENDENCIES.md` section 3.1.
 - Use Java 17 or 21. WSL's OpenJDK 21 works. Windows Java 26 fails with `NoClassDefFoundError: java/applet/AppletStub`.
 - Keep `.sh`, `.rsp`, and `.loc` files LF-only; do not write them with PowerShell heredocs.
 - Container commands that write files on the Windows drive run as `root` (rootless Podman maps the container user to another UID).
 - Do not trigger **Save & launch in Oracle** to test things; every click rewrites the form's XML. Use the manual FSAL steps.
 - Keep the status log in `docs/WINDOWS-PODMAN-SETUP.md` current as steps run, and mark anything not run as not verified.
 
-Not yet verified on Windows: `health_check.py`, `compile_form.py`, `convert_fmb.py --check`, `ofw_sales.fmb`, the `frmbld` GUI, and whether the root `exec` rule is needed inside WSL.
+Verified in WSL: `health_check.py`, `compile_form.py`, `convert_fmb.py --check`, `ofw_sales.fmb`, the `frmbld` GUI (WSLg), and a cold stop and start with `start_testbed.py`. Not verified: whether the root `exec` rule is needed inside WSL, and `oracle-reference-stack/apply_forms14c_config.sh` on a clean Oracle Home (it was written from the verified manual steps and has not been run end to end).
+
+After the domain is created, run `bash oracle-reference-stack/apply_forms14c_config.sh` (with `.env` loaded) to apply every adjustment in one step: domain hooks, `boot.properties`, `tnsnames.ora` alias, terminal resources, the `frmweb` and `libfrmjapi` libraries, and the sample compiles. The adjustments live in the mounted `oracle_home_14c/` folder, so a rebuilt image or a recreated container does not lose them.
 
 Host prerequisites a Windows setup must check (full list: [docs/DEPENDENCIES.md](../../../../../docs/DEPENDENCIES.md) sections 2.1, 2.4-2.6):
 - WSL 2 current (`wsl --version`, verified 3.0.5.0) and an Ubuntu 24.04 distro with Python 3.12, `gcc`, and OpenJDK 21.

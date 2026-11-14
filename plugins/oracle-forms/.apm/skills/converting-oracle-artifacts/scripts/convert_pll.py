@@ -68,6 +68,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional, List
 
+import converter_runtime as rt  # shared 14c image, Oracle Home path, and Podman helper
+
 
 # -----------------------------------------------------------------------------
 # System Readiness Probe
@@ -79,41 +81,7 @@ def check_podman_readiness() -> int:
     Returns:
         int: 0 if the container environment is ready to execute conversions, 1 otherwise.
     """
-    if not shutil.which("podman"):
-        print("NOT_READY: 'podman' command not found in system PATH")
-        return 1
-
-    if platform.system().lower() == "darwin":
-        try:
-            res = subprocess.run(
-                ["podman", "machine", "list"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if "running" not in res.stdout.lower():
-                print("NOT_READY: Podman machine is stopped. Run 'podman machine start'")
-                return 1
-        except Exception as err:
-            print(f"NOT_READY: Failed to inspect Podman machine state: {err}")
-            return 1
-
-    # Verify the converter container image is available locally
-    try:
-        res = subprocess.run(
-            ["podman", "image", "exists", "forms-converter:latest"],
-            capture_output=True,
-            timeout=5,
-        )
-        if res.returncode != 0:
-            print("NOT_READY: Image 'forms-converter:latest' not built. Run Containerfile build.")
-            return 1
-    except Exception as err:
-        print(f"NOT_READY: Podman image inspection failed: {err}")
-        return 1
-
-    print("READY: Podman engine and 'forms-converter:latest' image are operational.")
-    return 0
+    return rt.check_readiness()
 
 
 # -----------------------------------------------------------------------------
@@ -135,11 +103,7 @@ def resolve_oracle_home(custom_oracle_home: Optional[str]) -> Optional[Path]:
             return custom_path
         print(f"Warning: Specified --oracle-home '{custom_oracle_home}' is not a valid directory.")
 
-    default_home = Path(__file__).resolve().parent / "oracle_home"
-    if default_home.is_dir():
-        return default_home
-
-    return None
+    return rt.default_oracle_home()
 
 
 # -----------------------------------------------------------------------------
@@ -157,29 +121,30 @@ def build_container_script(file_name: str, stem: str, is_compile: bool) -> str:
     Returns:
         str: Bash command sequence setting up environment and running frmcmp_batch.
     """
+    home = rt.HOME
+    env = (
+        f"export ORACLE_HOME={home}; "
+        f"export ORACLE_TERM=vt220; "
+        f"export TERM=vt220; "
+        f"export LD_LIBRARY_PATH={home}/lib:{home}/oracle_common/lib:$LD_LIBRARY_PATH; "
+        f"export FORMS_PATH=/work:/work/shared:$FORMS_PATH; "
+    )
+    # Forms 14c needs batch=yes for the PL/SQL library step (without it: PDE-PER001).
+    batch = " batch=yes" if rt.IS_14C else ""
     if is_compile:
         # Compiles .pld text script into binary .pll or compiles .pll to executable .plx
-        return (
-            f"export ORACLE_HOME=/oracle_home; "
-            f"export ORACLE_TERM=vt220; "
-            f"export LD_LIBRARY_PATH=/oracle_home/lib:$LD_LIBRARY_PATH; "
-            f"export FORMS_PATH=/work:/work/shared:$FORMS_PATH; "
+        return env + (
             f"cd /work; "
             f"echo 'Executing Oracle frmcmp_batch to compile library {file_name}...'; "
-            f"/oracle_home/bin/frmcmp_batch Module={file_name} Module_Type=LIBRARY Script=NO compile_all=YES Logon=NO; "
+            f"{home}/bin/frmcmp_batch module={file_name} module_type=library script=no compile_all=yes logon=no{batch}; "
         )
 
     # Exports binary .pll into plain-text .pld script
-    return (
-        f"export ORACLE_HOME=/oracle_home; "
-        f"export ORACLE_TERM=vt220; "
-        f"export LD_LIBRARY_PATH=/oracle_home/lib:$LD_LIBRARY_PATH; "
-        f"export FORMS_PATH=/work:/work/shared:$FORMS_PATH; "
+    return env + (
         f"cd /work; "
         f"echo 'Executing Oracle native frmcmp_batch utility to export PL/SQL library to .pld...'; "
-        f"/oracle_home/bin/frmcmp_batch Module={file_name} Module_Type=LIBRARY Script=YES Logon=NO; "
+        f"{home}/bin/frmcmp_batch module={file_name} module_type=library script=yes logon=no{batch}; "
     )
-
 
 # -----------------------------------------------------------------------------
 # Custom Output File Copier
@@ -238,7 +203,7 @@ def convert_library(
 
     extra_mount: List[str] = []
     if oracle_home_path:
-        extra_mount = ["-v", f"{oracle_home_path.as_posix()}:/oracle_home:Z"]
+        extra_mount = ["-v", f"{rt.host_path(oracle_home_path)}:{rt.HOME}:Z"]
 
     print("=================================================================")
     print(" Oracle PL/SQL Library Containerized Converter (frmcmp_batch)")
@@ -250,9 +215,9 @@ def convert_library(
     if output_path_str:
         print(f" Target Output:  {output_path_str}")
     if extra_mount:
-        print(f" Oracle Home:    {oracle_home_path} (mounted to /oracle_home)")
+        print(f" Oracle Home:    {oracle_home_path} (mounted to {rt.HOME})")
     else:
-        print(" Oracle Home:    Default internal container path (/oracle_home)")
+        print(f" Oracle Home:    Default internal container path ({rt.HOME})")
     print("=================================================================")
 
     if is_compile:
@@ -261,20 +226,12 @@ def convert_library(
         expected_output = target_dir / f"{input_path.stem}.pld"
 
     container_cmd = build_container_script(file_name, input_path.stem, is_compile)
-    cmd = [
-        "podman",
-        "run",
-        "--rm",
-        "--platform",
-        "linux/amd64",
-        "-v",
-        f"{target_dir.as_posix()}:/work:Z",
-    ] + extra_mount + [
-        "forms-converter:latest",
-        "bash",
-        "-c",
-        container_cmd,
-    ]
+    cmd = rt.podman_cmd([
+        "run", "--rm", "--platform", "linux/amd64",
+        "-v", f"{rt.host_path(target_dir)}:/work:Z",
+        *extra_mount,
+        rt.IMAGE, "bash", "-c", container_cmd,
+    ])
 
     try:
         res = subprocess.run(cmd)

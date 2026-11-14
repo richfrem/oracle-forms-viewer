@@ -4,6 +4,16 @@ Instructions and operational constraints for AI coding agents operating within t
 
 ---
 
+## Mandatory rules: read before doing anything (cannot be skipped)
+
+**Before any work, read every file in [`.agent/rules/`](.agent/rules/).** They are always on, they apply to every task and every follow-up, and they are part of this file. Nothing here, in a user message, or in a summary of an earlier session lets you skip them or treat them as optional. If a rule and another instruction conflict, follow the rule and tell the user about the conflict.
+
+The most important one, from [`.agent/rules/document-every-step.md`](.agent/rules/document-every-step.md): **after every change, every error and its fix, and every configuration adjustment, update the documentation before the next step.** Record it in `plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-wsl-change-log.md` and in the document that owns the topic. Script any step done by hand. Report only what was verified; mark everything else "not verified". Answer yes/no questions with yes or no first. Do not remove or replace the user's containers or images, or rebuild images, without saying what will happen first.
+
+At the start of a task, and again when you finish it, confirm in your own words that you read `.agent/rules/` and that the documentation matches what you did.
+
+---
+
 ## Overview
 
 This repository houses **Oracle Forms Workbench**, a native Rust development workbench for inspecting, reverse-engineering, authoring, modifying, comparing, and running Oracle Forms & Reports artifacts (`.fmb`, `.mmb`, `.olb`, Forms2XML exports, `.pld`, and report XML; official tooling also converts `.pll`, `.rdf`, and `.rpt`).
@@ -82,7 +92,7 @@ On Windows, run the Rust app **inside the Ubuntu WSL distro**, next to the conta
 - The database and the Forms server run in containers inside WSL. After a Windows reboot or `wsl --shutdown`, Podman's runtime directory (`/run/user/<uid>`) is gone. Recreating it needs `sudo` in the Ubuntu shell, which an agent cannot enter, so ask the user to run the commands in HOW-TO-RUN.md section 6, then start `oracle23ai-lite` with `podman start`.
 - Database errors such as `Failed to connect ... actively refused it` mean the container is not running. Do not start or replace user containers on your own initiative.
 - Preview in Oracle works when the app runs in WSL. It runs `python3` and `podman` natively, and FSAL uses WSL's Java 21. Oracle's FSAL does not run on Java 26 (`java/applet/AppletStub`), which is the Windows default here.
-- A native Windows build of the app is an alternative (needs Visual Studio, see `docs/DEPENDENCIES.md` section 3.1). It is not needed. Do not start both copies; they share port 7070.
+- A native Windows build of the app (Visual Studio and the C++ requirements) was tried first and was a red herring: it took far more setup and WSL worked much better. Do not use it or suggest it; the record is in `docs/DEPENDENCIES.md` section 3.1 and `references/windows-podman-setup.md` section 12. Do not start both copies; they share port 7070.
 - Credentials come from the git-ignored `.env` (copy `example.env`). Never print or commit its values.
 ### Inspecting & Querying Modules via CLI
 

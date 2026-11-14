@@ -77,6 +77,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional, List
 
+import converter_runtime as rt  # shared 14c image, Oracle Home path, and Podman helper
+
 
 # -----------------------------------------------------------------------------
 # System Readiness Probe
@@ -88,41 +90,7 @@ def check_podman_readiness() -> int:
     Returns:
         int: 0 if the container environment is ready to execute conversions, 1 otherwise.
     """
-    if not shutil.which("podman"):
-        print("NOT_READY: 'podman' command not found in system PATH")
-        return 1
-
-    if platform.system().lower() == "darwin":
-        try:
-            res = subprocess.run(
-                ["podman", "machine", "list"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if "running" not in res.stdout.lower():
-                print("NOT_READY: Podman machine is stopped. Run 'podman machine start'")
-                return 1
-        except Exception as err:
-            print(f"NOT_READY: Failed to inspect Podman machine state: {err}")
-            return 1
-
-    # Verify the converter container image is available locally
-    try:
-        res = subprocess.run(
-            ["podman", "image", "exists", "forms-converter:latest"],
-            capture_output=True,
-            timeout=5,
-        )
-        if res.returncode != 0:
-            print("NOT_READY: Image 'forms-converter:latest' not built. Run Containerfile build.")
-            return 1
-    except Exception as err:
-        print(f"NOT_READY: Podman image inspection failed: {err}")
-        return 1
-
-    print("READY: Podman engine and 'forms-converter:latest' image are operational.")
-    return 0
+    return rt.check_readiness()
 
 
 # -----------------------------------------------------------------------------
@@ -144,11 +112,7 @@ def resolve_oracle_home(custom_oracle_home: Optional[str]) -> Optional[Path]:
             return custom_path
         print(f"Warning: Specified --oracle-home '{custom_oracle_home}' is not a valid directory.")
 
-    default_home = Path(__file__).resolve().parent / "oracle_home"
-    if default_home.is_dir():
-        return default_home
-
-    return None
+    return rt.default_oracle_home()
 
 
 # -----------------------------------------------------------------------------
@@ -188,32 +152,27 @@ def build_container_script(file_name: str, stem: str, out_ext: str, dtype: str) 
         str: Bash command sequence setting up environment and running rwconverter.
     """
     dest_name = f"{stem}{out_ext}"
+    home = rt.HOME
     return (
-        f"export ORACLE_HOME=/oracle_home; "
+        f"export ORACLE_HOME={home}; "
         f"export ORACLE_TERM=vt220; "
-        f"export LD_LIBRARY_PATH=/oracle_home/lib:$LD_LIBRARY_PATH; "
+        f"export TERM=vt220; "
+        f"export LD_LIBRARY_PATH={home}/lib:{home}/oracle_common/lib:$LD_LIBRARY_PATH; "
         f"export REPORTS_PATH=/work:/work/shared:$REPORTS_PATH; "
         f"cd /work; "
-        f"if [ -f /oracle_home/bin/rwconverter.sh ]; then "
+        f"if [ -f {home}/bin/rwconverter.sh ]; then "
         f"  echo 'Executing Oracle native rwconverter.sh utility...'; "
-        f"  chmod +x /oracle_home/bin/rwconverter.sh 2>/dev/null || true; "
-        f"  /oracle_home/bin/rwconverter.sh stype=rdffile source={file_name} dtype={dtype} dest={dest_name} batch=yes overwrite=yes; "
+        f"  chmod +x {home}/bin/rwconverter.sh 2>/dev/null || true; "
+        f"  {home}/bin/rwconverter.sh stype=rdffile source={file_name} dtype={dtype} dest={dest_name} batch=yes overwrite=yes; "
         f"  echo 'Conversion complete: /work/{dest_name} generated.'; "
         f"else "
         f"  echo 'Notice: /work/{file_name} mounted successfully inside container.'; "
-        f"  echo 'Error: Oracle Reports converter (rwconverter.sh) is not installed in /oracle_home/bin.'; "
+        f"  echo 'Error: Oracle Reports converter (rwconverter.sh) is not installed in {home}/bin.'; "
         f"  echo ''; "
-        f"  echo 'Root Cause: The container oracle_home was installed using Standalone Forms Builder 12c,'; "
-        f"  echo 'which deliberately excludes Oracle Reports because Oracle 12c requires a separate full'; "
-        f"  echo 'WebLogic / Fusion Middleware Infrastructure installation before Reports can be installed.'; "
-        f"  echo ''; "
-        f"  echo 'RECOMMENDED SOLUTION (Track 2 Pure-Native Rust Toolchain):'; "
-        f"  echo '  Oracle Reports (.rdf) files share the exact same ROS.60050 storage format as Forms (.fmb).'; "
-        f"  echo '  You can inspect and dump PL/SQL directly using the pure-native Rust tool:'; "
-        f"  echo '    cargo run -p oracle-forms-cli -- inspect /path/to/report.rdf'; "
+        f"  echo 'Use an Oracle Home that includes Oracle Reports (Forms & Reports 14c install), or the'; "
+        f"  echo 'pure-native Rust tool, which needs no Oracle runtime:'; "
         f"  echo '    cargo run -p oracle-forms-cli -- inspect /path/to/{file_name}'; "
         f"  echo '    cargo run -p oracle-forms-cli -- dump-sql /path/to/{file_name} -o ./extracted-sql'; "
-        f"  echo '  (Requires zero JVM, zero WebLogic, zero Oracle runtime, and runs instantaneously!)'; "
         f"  exit 2; "
         f"fi"
     )
@@ -284,7 +243,7 @@ def convert_report(
 
     extra_mount: List[str] = []
     if oracle_home_path:
-        extra_mount = ["-v", f"{oracle_home_path.as_posix()}:/oracle_home:Z"]
+        extra_mount = ["-v", f"{rt.host_path(oracle_home_path)}:{rt.HOME}:Z"]
 
     print("=================================================================")
     print(" Oracle Reports Containerized Converter (rwconverter)")
@@ -296,26 +255,18 @@ def convert_report(
     if output_path_str:
         print(f" Target Output:  {output_path_str}")
     if extra_mount:
-        print(f" Oracle Home:    {oracle_home_path} (mounted to /oracle_home)")
+        print(f" Oracle Home:    {oracle_home_path} (mounted to {rt.HOME})")
     else:
-        print(" Oracle Home:    Default internal container path (/oracle_home)")
+        print(f" Oracle Home:    Default internal container path ({rt.HOME})")
     print("=================================================================")
 
     container_cmd = build_container_script(file_name, input_path.stem, out_ext, dtype)
-    cmd = [
-        "podman",
-        "run",
-        "--rm",
-        "--platform",
-        "linux/amd64",
-        "-v",
-        f"{target_dir.as_posix()}:/work:Z",
-    ] + extra_mount + [
-        "forms-converter:latest",
-        "bash",
-        "-c",
-        container_cmd,
-    ]
+    cmd = rt.podman_cmd([
+        "run", "--rm", "--platform", "linux/amd64",
+        "-v", f"{rt.host_path(target_dir)}:/work:Z",
+        *extra_mount,
+        rt.IMAGE, "bash", "-c", container_cmd,
+    ])
 
     try:
         res = subprocess.run(cmd)
