@@ -1,0 +1,3362 @@
+<?xml version = '1.0' encoding = 'UTF-8'?>
+<schema xmlns:tns="http://xmlns.oracle.com/Forms" targetNamespace="http://xmlns.oracle.com/Forms" xmlns="http://www.w3.org/2001/XMLSchema">
+   <annotation>
+      <documentation xml:lang="en">
+         Oracle Forms 12.2.1 Forms XML Schema Definition File
+         Copyright(c) 2001, 2017, Oracle and/or its affiliates.  All rights reserved.
+      </documentation>
+   </annotation>
+   <element name="Module" type="tns:Module"/>
+   <element name="Alert" type="tns:Alert"/>
+   <element name="AttachedLibrary" type="tns:AttachedLibrary"/>
+   <element name="Block" type="tns:Block"/>
+   <element name="Canvas" type="tns:Canvas"/>
+   <element name="CompoundText" type="tns:CompoundText"/>
+   <element name="Coordinate" type="tns:Coordinate"/>
+   <element name="DataSourceArgument" type="tns:DataSourceArgument"/>
+   <element name="DataSourceColumn" type="tns:DataSourceColumn"/>
+   <element name="Editor" type="tns:Editor"/>
+   <element name="Event" type="tns:Event"/>
+   <element name="Font" type="tns:Font"/>
+   <element name="FormModule" type="tns:FormModule"/>
+   <element name="Graphics" type="tns:Graphics"/>
+   <element name="Item" type="tns:Item"/>
+   <element name="LOV" type="tns:LOV"/>
+   <element name="LOVColumnMapping" type="tns:LOVColumnMapping"/>
+   <element name="Menu" type="tns:Menu"/>
+   <element name="MenuItem" type="tns:MenuItem"/>
+   <element name="MenuModule" type="tns:MenuModule"/>
+   <element name="ModuleParameter" type="tns:ModuleParameter"/>
+   <element name="ObjectGroup" type="tns:ObjectGroup"/>
+   <element name="ObjectGroupChild" type="tns:ObjectGroupChild"/>
+   <element name="ObjectLibrary" type="tns:ObjectLibrary"/>
+   <element name="ObjectLibraryTab" type="tns:ObjectLibraryTab"/>
+   <element name="Point" type="tns:Point"/>
+   <element name="ProgramUnit" type="tns:ProgramUnit"/>
+   <element name="PropertyClass" type="tns:PropertyClass"/>
+   <element name="RadioButton" type="tns:RadioButton"/>
+   <element name="RecordGroup" type="tns:RecordGroup"/>
+   <element name="RecordGroupColumn" type="tns:RecordGroupColumn"/>
+   <element name="Relation" type="tns:Relation"/>
+   <element name="Report" type="tns:Report"/>
+   <element name="TabPage" type="tns:TabPage"/>
+   <element name="TextSegment" type="tns:TextSegment"/>
+   <element name="Trigger" type="tns:Trigger"/>
+   <element name="VisualAttribute" type="tns:VisualAttribute"/>
+   <element name="VisualState" type="tns:VisualState"/>
+   <element name="Window" type="tns:Window"/>
+   <complexType name="Module">
+      <choice>
+         <element ref="tns:FormModule"/>
+         <element ref="tns:ObjectLibrary"/>
+         <element ref="tns:MenuModule"/>
+      </choice>
+      <attribute name="version" type="long"/>
+   </complexType>
+   <complexType name="Alert">
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="AlertStyle" type="tns:AlertStyleType"/>
+      <attribute name="DefaultAlertButton" type="tns:DefaultAlertButtonType"/>
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="LanguageDirection" type="tns:LanguageDirectionType"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="AlertMessage" type="string"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="Button1Label" type="string"/>
+      <attribute name="Button2Label" type="string"/>
+      <attribute name="Button3Label" type="string"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="FontName" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="Title" type="string"/>
+      <attribute name="VisualAttributeName" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="AttachedLibrary">
+      <attribute name="LibrarySource" type="tns:LibrarySourceType"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="LibraryLocation" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+   </complexType>
+   <complexType name="Block">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:DataSourceArgument" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:DataSourceColumn" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Item" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Relation" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Trigger" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DatabaseBlock" type="boolean"/>
+      <attribute name="DeleteAllowed" type="boolean"/>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="DMLReturnValue" type="boolean"/>
+      <attribute name="EnforcedColumnSecurity" type="boolean"/>
+      <attribute name="EnforcedPrimaryKey" type="boolean"/>
+      <attribute name="IncludeRefitem" type="boolean"/>
+      <attribute name="InsertAllowed" type="boolean"/>
+      <attribute name="PrecompSummary" type="boolean"/>
+      <attribute name="QueryAllRecords" type="boolean"/>
+      <attribute name="QueryAllowed" type="boolean"/>
+      <attribute name="ReverseDirection" type="boolean"/>
+      <attribute name="ShowScrollbar" type="boolean"/>
+      <attribute name="SingleRecord" type="boolean"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="UpdateAllowed" type="boolean"/>
+      <attribute name="UpdateChangedColumns" type="boolean"/>
+      <attribute name="DMLArraySize" type="integer"/>
+      <attribute name="DMLDataType" type="tns:DMLDataTypeType"/>
+      <attribute name="KeyMode" type="tns:KeyModeType"/>
+      <attribute name="LanguageDirection" type="tns:LanguageDirectionType"/>
+      <attribute name="LockMode" type="tns:LockModeType"/>
+      <attribute name="MaximumQueryTime" type="integer"/>
+      <attribute name="MaximumRecordsFetched" type="integer"/>
+      <attribute name="NavigationStyle" type="tns:NavigationStyleType"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="QueryDataSourceType" type="tns:QueryDataSourceTypeType"/>
+      <attribute name="RecordOrientation" type="tns:RecordOrientationType"/>
+      <attribute name="RecordsBufferedCount" type="integer"/>
+      <attribute name="RecordsDisplayCount" type="integer"/>
+      <attribute name="RecordsFetchedCount" type="integer"/>
+      <attribute name="RowBandingFreq" type="integer"/>
+      <attribute name="ScrollbarLength" type="integer"/>
+      <attribute name="ScrollbarOrientation" type="tns:ScrollbarOrientationType"/>
+      <attribute name="ScrollbarWidth" type="integer"/>
+      <attribute name="ScrollbarXPosition" type="integer"/>
+      <attribute name="ScrollbarYPosition" type="integer"/>
+      <attribute name="Alias" type="string"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="DeleteProcedureName" type="string"/>
+      <attribute name="DMLDataName" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="InsertProcedureName" type="string"/>
+      <attribute name="LockProcedureName" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="NextNavigationBlockName" type="string"/>
+      <attribute name="OptionHint" type="string"/>
+      <attribute name="OrderByClause" type="string"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="PreviousNavigationBlockName" type="string"/>
+      <attribute name="QueryDataSourceName" type="string"/>
+      <attribute name="RecordVisualAttributeGroupName" type="string"/>
+      <attribute name="ScrollbarCanvasName" type="string"/>
+      <attribute name="ScrollbarTabPageName" type="string"/>
+      <attribute name="UpdateProcedureName" type="string"/>
+      <attribute name="VisualAttributeName" type="string"/>
+      <attribute name="WhereClause" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="Canvas">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:Graphics" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:TabPage" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:VisualState" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="DisplayViewport" type="boolean"/>
+      <attribute name="RaiseOnEnter" type="boolean"/>
+      <attribute name="ShowHorizontalScrollbar" type="boolean"/>
+      <attribute name="ShowVerticalScrollbar" type="boolean"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="Visible" type="boolean"/>
+      <attribute name="Bevel" type="tns:BevelType"/>
+      <attribute name="CanvasType" type="tns:CanvasTypeType"/>
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="GradientStart" type="tns:GradientStartType"/>
+      <attribute name="Height" type="integer"/>
+      <attribute name="LanguageDirection" type="tns:LanguageDirectionType"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="TabActionStyle" type="integer"/>
+      <attribute name="TabAttachmentEdge" type="tns:TabAttachmentEdgeType"/>
+      <attribute name="TabStyle" type="tns:TabStyleType"/>
+      <attribute name="TabWidthStyle" type="integer"/>
+      <attribute name="ViewportHeight" type="integer"/>
+      <attribute name="ViewportWidth" type="integer"/>
+      <attribute name="ViewportXPosition" type="integer"/>
+      <attribute name="ViewportXPositionOnCanvas" type="integer"/>
+      <attribute name="ViewportYPosition" type="integer"/>
+      <attribute name="ViewportYPositionOnCanvas" type="integer"/>
+      <attribute name="Width" type="integer"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="FontName" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="HelpBookTopic" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="PopupMenuName" type="string"/>
+      <attribute name="VisualAttributeName" type="string"/>
+      <attribute name="WindowName" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="CompoundText">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:TextSegment" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+   </complexType>
+   <complexType name="Coordinate">
+      <attribute name="DefaultFontScaling" type="boolean"/>
+      <attribute name="CharacterCellHeight" type="integer"/>
+      <attribute name="CharacterCellWidth" type="integer"/>
+      <attribute name="CoordinateSystem" type="tns:CoordinateSystemType"/>
+      <attribute name="RealUnit" type="tns:RealUnitType"/>
+   </complexType>
+   <complexType name="DataSourceArgument">
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="DSAMode" type="tns:DSAModeType"/>
+      <attribute name="DSAType" type="tns:DSATypeType"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="DSAName" type="string"/>
+      <attribute name="DSATypeName" type="string"/>
+      <attribute name="DSAValue" type="string"/>
+      <attribute name="Type">
+         <simpleType>
+            <restriction base="string">
+               <enumeration value="Delete"/>
+               <enumeration value="Insert"/>
+               <enumeration value="Lock"/>
+               <enumeration value="Query"/>
+               <enumeration value="Update"/>
+            </restriction>
+         </simpleType>
+      </attribute>
+   </complexType>
+   <complexType name="DataSourceColumn">
+      <attribute name="DSCMandatory" type="boolean"/>
+      <attribute name="DSCNochildren" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="DSCLength" type="integer"/>
+      <attribute name="DSCPrecision" type="integer"/>
+      <attribute name="DSCScale" type="integer"/>
+      <attribute name="DSCType" type="tns:DSCTypeType"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="DSCName" type="string"/>
+      <attribute name="DSCParentName" type="string"/>
+      <attribute name="DSCTypeName" type="string"/>
+      <attribute name="Type">
+         <simpleType>
+            <restriction base="string">
+               <enumeration value="Delete"/>
+               <enumeration value="Insert"/>
+               <enumeration value="Lock"/>
+               <enumeration value="Query"/>
+               <enumeration value="Update"/>
+            </restriction>
+         </simpleType>
+      </attribute>
+   </complexType>
+   <complexType name="Editor">
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="ShowHorizontalScrollbar" type="boolean"/>
+      <attribute name="ShowVerticalScrollbar" type="boolean"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="Height" type="integer"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="Width" type="integer"/>
+      <attribute name="WrapStyle" type="tns:WrapStyleType"/>
+      <attribute name="XPosition" type="integer"/>
+      <attribute name="YPosition" type="integer"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="BottomTitle" type="string"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="FontName" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="Title" type="string"/>
+      <attribute name="VisualAttributeName" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="Event">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:Trigger" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="EventEnabled" type="boolean"/>
+      <attribute name="EventPriorityMode" type="integer"/>
+      <attribute name="EventScope" type="tns:EventScopeType"/>
+      <attribute name="EventType" type="tns:EventTypeType"/>
+      <attribute name="EventViewMode" type="tns:EventViewModeType"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="EventCorrid" type="string"/>
+      <attribute name="EventImplclass" type="string"/>
+      <attribute name="EventSubsName" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="Font">
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="FontName" type="string"/>
+   </complexType>
+   <complexType name="FormModule">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:Coordinate" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Alert" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:AttachedLibrary" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Block" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Canvas" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Editor" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Event" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:ModuleParameter" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:LOV" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Menu" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:ObjectGroup" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:ProgramUnit" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:PropertyClass" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:RecordGroup" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Report" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Trigger" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:VisualAttribute" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Window" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="SavepointMode" type="boolean"/>
+      <attribute name="Use3dControls" type="boolean"/>
+      <attribute name="CursorMode" type="tns:CursorModeType"/>
+      <attribute name="InteractionMode" type="tns:InteractionModeType"/>
+      <attribute name="IsolationMode" type="tns:IsolationModeType"/>
+      <attribute name="LanguageDirection" type="tns:LanguageDirectionType"/>
+      <attribute name="MaximumQueryTime" type="integer"/>
+      <attribute name="MaximumRecordsFetched" type="integer"/>
+      <attribute name="MouseNavigationLimit" type="tns:MouseNavigationLimitType"/>
+      <attribute name="NewdeferReqEnf" type="integer"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="RuntimeComp" type="tns:RuntimeCompType"/>
+      <attribute name="ValidationUnit" type="tns:ValidationUnitType"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="ConsoleWindow" type="string"/>
+      <attribute name="FirstNavigationBlockName" type="string"/>
+      <attribute name="HelpBookTitle" type="string"/>
+      <attribute name="HorizontalToolbarCanvas" type="string"/>
+      <attribute name="InitializeMenu" type="string"/>
+      <attribute name="MenuModule" type="string"/>
+      <attribute name="MenuRole" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="RecordVisualAttributeGroupName" type="string"/>
+      <attribute name="Title" type="string"/>
+      <attribute name="VerticalToolbarCanvas" type="string"/>
+   </complexType>
+   <complexType name="Graphics">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:CompoundText" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Graphics" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Point" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="AllowExpansion" type="boolean"/>
+      <attribute name="AllowMultiLinePrompts" type="boolean"/>
+      <attribute name="AllowStartAttachmentPrompts" type="boolean"/>
+      <attribute name="AllowTopAttachmentPrompts" type="boolean"/>
+      <attribute name="BoundingBoxScalable" type="boolean"/>
+      <attribute name="Closed" type="boolean"/>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="Dither" type="boolean"/>
+      <attribute name="FixedBoundingBox" type="boolean"/>
+      <attribute name="FontScaleable" type="boolean"/>
+      <attribute name="ShowScrollbar" type="boolean"/>
+      <attribute name="Shrinkwrap" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="VerticalFill" type="boolean"/>
+      <attribute name="WrapText" type="boolean"/>
+      <attribute name="ArrowStyle" type="tns:ArrowStyleType"/>
+      <attribute name="Bevel" type="tns:BevelType"/>
+      <attribute name="CapStyle" type="tns:CapStyleType"/>
+      <attribute name="ClipHeight" type="integer"/>
+      <attribute name="ClipWidth" type="integer"/>
+      <attribute name="ClipXPosition" type="integer"/>
+      <attribute name="ClipYPosition" type="integer"/>
+      <attribute name="CornerRadiusX" type="integer"/>
+      <attribute name="CornerRadiusY" type="integer"/>
+      <attribute name="CustomSpacing" type="integer"/>
+      <attribute name="DashStyle" type="tns:DashStyleType"/>
+      <attribute name="DisplayQuality" type="tns:DisplayQualityType"/>
+      <attribute name="DistanceBetweenRecords" type="integer"/>
+      <attribute name="FrameAlign" type="tns:FrameAlignType"/>
+      <attribute name="FrameTitleAlign" type="tns:FrameTitleAlignType"/>
+      <attribute name="FrameTitleFontSize" type="integer"/>
+      <attribute name="FrameTitleFontSpacing" type="tns:FrameTitleFontSpacingType"/>
+      <attribute name="FrameTitleFontStyle" type="tns:FrameTitleFontStyleType"/>
+      <attribute name="FrameTitleFontWeight" type="tns:FrameTitleFontWeightType"/>
+      <attribute name="FrameTitleOffset" type="integer"/>
+      <attribute name="FrameTitleSpacing" type="integer"/>
+      <attribute name="GraphicsFontColorCode" type="integer"/>
+      <attribute name="GraphicsFontSize" type="integer"/>
+      <attribute name="GraphicsFontSpacing" type="tns:GraphicsFontSpacingType"/>
+      <attribute name="GraphicsFontStyle" type="integer"/>
+      <attribute name="GraphicsFontWeight" type="tns:GraphicsFontWeightType"/>
+      <attribute name="GraphicsType" type="tns:GraphicsTypeType"/>
+      <attribute name="Height" type="integer"/>
+      <attribute name="HorizontalJustification" type="tns:HorizontalJustificationType"/>
+      <attribute name="HorizontalMargin" type="integer"/>
+      <attribute name="HorizontalObjectOffset" type="integer"/>
+      <attribute name="HorizontalOrigin" type="tns:HorizontalOriginType"/>
+      <attribute name="ImageDepth" type="tns:ImageDepthType"/>
+      <attribute name="ImageFormat" type="tns:ImageFormatType"/>
+      <attribute name="InternalEndAngle" type="integer"/>
+      <attribute name="InternalLineWidth" type="integer"/>
+      <attribute name="InternalRotationAngle" type="integer"/>
+      <attribute name="InternalStartAngle" type="integer"/>
+      <attribute name="JoinStyle" type="tns:JoinStyleType"/>
+      <attribute name="LanguageDirection" type="tns:LanguageDirectionType"/>
+      <attribute name="LayoutStyle" type="tns:LayoutStyleType"/>
+      <attribute name="LineSpacing" type="tns:LineSpacingType"/>
+      <attribute name="MaximumObjs" type="integer"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="RecordsDisplayCount" type="integer"/>
+      <attribute name="ScrollbarAlign" type="tns:ScrollbarAlignType"/>
+      <attribute name="ScrollbarWidth" type="integer"/>
+      <attribute name="SingleObjectAlign" type="tns:SingleObjectAlignType"/>
+      <attribute name="StartPromptAlign" type="tns:StartPromptAlignType"/>
+      <attribute name="StartPromptOffset" type="integer"/>
+      <attribute name="TopPromptAlign" type="tns:TopPromptAlignType"/>
+      <attribute name="TopPromptOffset" type="integer"/>
+      <attribute name="TitleReadingOrder" type="tns:TitleReadingOrderType"/>
+      <attribute name="UpdateLayout" type="tns:UpdateLayoutType"/>
+      <attribute name="VerticalJustification" type="tns:VerticalJustificationType"/>
+      <attribute name="VerticalMargin" type="integer"/>
+      <attribute name="VerticalObjectOffset" type="integer"/>
+      <attribute name="VerticalOrigin" type="tns:VerticalOriginType"/>
+      <attribute name="Width" type="integer"/>
+      <attribute name="XPosition" type="integer"/>
+      <attribute name="YPosition" type="integer"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="EdgeBackColor" type="string"/>
+      <attribute name="EdgeForegroundColor" type="string"/>
+      <attribute name="EdgePattern" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="FrameTitle" type="string"/>
+      <attribute name="FrameTitleBackColor" type="string"/>
+      <attribute name="FrameTitleFillPattern" type="string"/>
+      <attribute name="FrameTitleFontName" type="string"/>
+      <attribute name="FrameTitleForegroundColor" type="string"/>
+      <attribute name="FrameTitleVisualAttributeName" type="string"/>
+      <attribute name="GraphicsFontColor" type="string"/>
+      <attribute name="GraphicsFontName" type="string"/>
+      <attribute name="GraphicsText" type="string"/>
+      <attribute name="LayoutDataBlockName" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="TabPageName" type="string"/>
+      <attribute name="VisualAttributeName" type="string"/>
+      <attribute name="ImageFilename" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="Item">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:RadioButton" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Trigger" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:ListItemElement" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="AutoHint" type="boolean"/>
+      <attribute name="AutoSkip" type="boolean"/>
+      <attribute name="CaseInsensitiveQuery" type="boolean"/>
+      <attribute name="ConcealData" type="boolean"/>
+      <attribute name="DatabaseItem" type="boolean"/>
+      <attribute name="DefaultButton" type="boolean"/>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="Enabled" type="boolean"/>
+      <attribute name="FixedLength" type="boolean"/>
+      <attribute name="Iconic" type="boolean"/>
+      <attribute name="InsertAllowed" type="boolean"/>
+      <attribute name="KeyboardNavigable" type="boolean"/>
+      <attribute name="KeepCursorPosition" type="boolean"/>
+      <attribute name="LockRecord" type="boolean"/>
+      <attribute name="MultiLine" type="boolean"/>
+      <attribute name="MouseNavigate" type="boolean"/>
+      <attribute name="OleInPlaceAction" type="boolean"/>
+      <attribute name="OleInsideOutSupport" type="boolean"/>
+      <attribute name="OleShowPopupMenu" type="boolean"/>
+      <attribute name="OleShowTenantTypeType" type="boolean"/>
+      <attribute name="PrimaryKey" type="boolean"/>
+      <attribute name="QueryAllowed" type="boolean"/>
+      <attribute name="QueryOnly" type="boolean"/>
+      <attribute name="Rendered" type="boolean"/>
+      <attribute name="Required" type="boolean"/>
+      <attribute name="ShowFastForward" type="boolean"/>
+      <attribute name="ShowHorizontalScrollbar" type="boolean"/>
+      <attribute name="ShowPlay" type="boolean"/>
+      <attribute name="ShowRecord" type="boolean"/>
+      <attribute name="ShowRewind" type="boolean"/>
+      <attribute name="ShowSlider" type="boolean"/>
+      <attribute name="ShowTime" type="boolean"/>
+      <attribute name="ShowVerticalScrollbar" type="boolean"/>
+      <attribute name="ShowVolume" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="TreeAllowEmpBranch" type="boolean"/>
+      <attribute name="TreeMultiSelect" type="boolean"/>
+      <attribute name="TreeShowLines" type="boolean"/>
+      <attribute name="TreeShowSymbol" type="boolean"/>
+      <attribute name="UpdateAllowed" type="boolean"/>
+      <attribute name="UpdateCommit" type="boolean"/>
+      <attribute name="UpdateIfNull" type="boolean"/>
+      <attribute name="UpdateQuery" type="boolean"/>
+      <attribute name="ValidateFromList" type="boolean"/>
+      <attribute name="Visible" type="boolean"/>
+      <attribute name="AudioChannels" type="tns:AudioChannelsType"/>
+      <attribute name="Bevel" type="tns:BevelType"/>
+      <attribute name="CalculateMode" type="tns:CalculateModeType"/>
+      <attribute name="CaseRestriction" type="tns:CaseRestrictionType"/>
+      <attribute name="CheckBoxOtherValues" type="tns:CheckBoxOtherValuesType"/>
+      <attribute name="CompressionQuality" type="tns:CompressionQualityType"/>
+      <attribute name="CommMode" type="tns:CommModeType"/>
+      <attribute name="Compress" type="tns:CompressType"/>
+      <attribute name="CursorStyle" type="tns:CursorStyleType"/>
+      <attribute name="DataType" type="tns:DataTypeType"/>
+      <attribute name="DataLengthSemantics" type="tns:DataLengthSemanticsType"/>
+      <attribute name="DisplayQuality" type="tns:DisplayQualityType"/>
+      <attribute name="DistanceBetweenRecords" type="integer"/>
+      <attribute name="EditXPosition" type="integer"/>
+      <attribute name="EditYPosition" type="integer"/>
+      <attribute name="ExecuteMode" type="tns:ExecuteModeType"/>
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="Height" type="integer"/>
+      <attribute name="ImageDepth" type="tns:ImageDepthType"/>
+      <attribute name="ImageFormat" type="tns:ImageFormatType"/>
+      <attribute name="InitializeKeyboardDirection" type="tns:InitializeKeyboardDirectionType"/>
+      <attribute name="ItemType" type="tns:ItemTypeType"/>
+      <attribute name="ItemsDisplay" type="integer"/>
+      <attribute name="Justification" type="tns:JustificationType"/>
+      <attribute name="KeyboardState" type="tns:KeyboardStateType"/>
+      <attribute name="LanguageDirection" type="tns:LanguageDirectionType"/>
+      <attribute name="LovXPosition" type="integer"/>
+      <attribute name="LovYPosition" type="integer"/>
+      <attribute name="ListElementCount" type="integer"/>
+      <attribute name="ListStyle" type="tns:ListStyleType"/>
+      <attribute name="MaximumLength" type="integer"/>
+      <attribute name="OleActionStyle" type="tns:OleActionStyleType"/>
+      <attribute name="OlePopupMenuItems" type="integer"/>
+      <attribute name="OleResizStyle" type="tns:OleResizStyleType"/>
+      <attribute name="OleTenantTypeAspect" type="tns:OleTenantTypeAspectType"/>
+      <attribute name="OleTenantTypeType" type="tns:OleTenantTypeTypeType"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentSourceLevel1ObjectType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="PromptAlign" type="tns:PromptAlignType"/>
+      <attribute name="PromptAlignOffset" type="integer"/>
+      <attribute name="PromptAttachmentEdge" type="tns:PromptAttachmentEdgeType"/>
+      <attribute name="PromptAttachmentOffset" type="integer"/>
+      <attribute name="PromptDisplayStyle" type="tns:PromptDisplayStyleType"/>
+      <attribute name="PromptFontSize" type="integer"/>
+      <attribute name="PromptFontSpacing" type="tns:PromptFontSpacingType"/>
+      <attribute name="PromptFontStyle" type="tns:PromptFontStyleType"/>
+      <attribute name="PromptFontWeight" type="tns:PromptFontWeightType"/>
+      <attribute name="PromptJustification" type="tns:PromptJustificationType"/>
+      <attribute name="PromptReadingOrder" type="tns:PromptReadingOrderType"/>
+      <attribute name="QueryLength" type="integer"/>
+      <attribute name="ReadingOrder" type="tns:ReadingOrderType"/>
+      <attribute name="RowBandingFreq" type="integer"/>
+      <attribute name="SizingStyle" type="tns:SizingStyleType"/>
+      <attribute name="SoundFormat" type="tns:SoundFormatType"/>
+      <attribute name="SoundQuality" type="tns:SoundQualityType"/>
+      <attribute name="SummaryFunction" type="tns:SummaryFunctionType"/>
+      <attribute name="Width" type="integer"/>
+      <attribute name="WrapStyle" type="tns:WrapStyleType"/>
+      <attribute name="XPosition" type="integer"/>
+      <attribute name="YPosition" type="integer"/>
+      <attribute name="AccessKey" type="string"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="CheckedValue" type="string"/>
+      <attribute name="CanvasName" type="string"/>
+      <attribute name="ColumnName" type="string"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="CopyValueFromItem" type="string"/>
+      <attribute name="DataSourceBlock" type="string"/>
+      <attribute name="DataSourceXAxis" type="string"/>
+      <attribute name="DataSourceYAxis" type="string"/>
+      <attribute name="EditName" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="Filename" type="string"/>
+      <attribute name="FormatMask" type="string"/>
+      <attribute name="FontName" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="Formula" type="string"/>
+      <attribute name="HelpBookTopic" type="string"/>
+      <attribute name="HighestAllowedValue" type="string"/>
+      <attribute name="Hint" type="string"/>
+      <attribute name="IconFilename" type="string"/>
+      <attribute name="ImplementationClass" type="string"/>
+      <attribute name="InitializeValue" type="string"/>
+      <attribute name="Label" type="string"/>
+      <attribute name="LovName" type="string"/>
+      <attribute name="LowestAllowedValue" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="NextNavigationItemName" type="string"/>
+      <attribute name="OleClass" type="string"/>
+      <attribute name="OtherValues" type="string"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="ParentSourceLevel1ObjectName" type="string"/>
+      <attribute name="PopupMenuName" type="string"/>
+      <attribute name="PreviousNavigationItemName" type="string"/>
+      <attribute name="Prompt" type="string"/>
+      <attribute name="PromptBackColor" type="string"/>
+      <attribute name="PromptFillPattern" type="string"/>
+      <attribute name="PromptFontName" type="string"/>
+      <attribute name="PromptForegroundColor" type="string"/>
+      <attribute name="PromptVisualAttributeName" type="string"/>
+      <attribute name="QueryName" type="string"/>
+      <attribute name="RecordGroupName" type="string"/>
+      <attribute name="RecordVisualAttributeGroupName" type="string"/>
+      <attribute name="SummaryBlockName" type="string"/>
+      <attribute name="SummaryItemName" type="string"/>
+      <attribute name="SynchronizedItemName" type="string"/>
+      <attribute name="TabPageName" type="string"/>
+      <attribute name="Tooltip" type="string"/>
+      <attribute name="TooltipVisualAttributeGroup" type="string"/>
+      <attribute name="TreeDataQuery" type="string"/>
+      <attribute name="UncheckedValue" type="string"/>
+      <attribute name="VisualAttributeName" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="LOV">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:LOVColumnMapping" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="AutoColumnWidth" type="boolean"/>
+      <attribute name="AutoDisplay" type="boolean"/>
+      <attribute name="AutoPosition" type="boolean"/>
+      <attribute name="AutoRefresh" type="boolean"/>
+      <attribute name="AutoSkip" type="boolean"/>
+      <attribute name="AutoSelect" type="boolean"/>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="FilterBeforeDisplay" type="boolean"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="Height" type="integer"/>
+      <attribute name="LanguageDirection" type="tns:LanguageDirectionType"/>
+      <attribute name="ListType" type="tns:ListTypeType"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="Width" type="integer"/>
+      <attribute name="XPosition" type="integer"/>
+      <attribute name="YPosition" type="integer"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="FontName" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="OldLovText" type="string"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="RecordGroupName" type="string"/>
+      <attribute name="Title" type="string"/>
+      <attribute name="VisualAttributeName" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="LOVColumnMapping">
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="DisplayWidth" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ReturnItem" type="string"/>
+      <attribute name="Title" type="string"/>
+   </complexType>
+   <complexType name="Menu">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:MenuItem" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="TearOffMenu" type="boolean"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="BottomTitle" type="string"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="SubTitle" type="string"/>
+      <attribute name="Title" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="MenuItem">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:MenuItemRole" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="DisplayNoPriv" type="boolean"/>
+      <attribute name="Enabled" type="boolean"/>
+      <attribute name="IconInMenu" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="Visible" type="boolean"/>
+      <attribute name="VisibleInHorizontalMenuToolbar" type="boolean"/>
+      <attribute name="VisibleInMenu" type="boolean"/>
+      <attribute name="VisibleInVerticalMenuToolbar" type="boolean"/>
+      <attribute name="CommandType" type="tns:CommandTypeType"/>
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="MagicItem" type="tns:MagicItemType"/>
+      <attribute name="MenuItemType" type="tns:MenuItemTypeType"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentSourceLevel1ObjectType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="RoleCount" type="integer"/>
+      <attribute name="CommandText" type="string"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="FontName" type="string"/>
+      <attribute name="Hint" type="string"/>
+      <attribute name="IconFilename" type="string"/>
+      <attribute name="KeyboardAccelerator" type="string"/>
+      <attribute name="Label" type="string"/>
+      <attribute name="MenuItemCode" type="string"/>
+      <attribute name="MenuItemRadioGroup" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="ParentSourceLevel1ObjectName" type="string"/>
+      <attribute name="SubMenuName" type="string"/>
+      <attribute name="VisualAttributeName" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="MenuModule">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:AttachedLibrary" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:Menu" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:ObjectGroup" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:ProgramUnit" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:PropertyClass" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:VisualAttribute" minOccurs="0" maxOccurs="unbounded"/>
+         <element ref="tns:MenuModuleRole" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="ShareLibrary" type="boolean"/>
+      <attribute name="UseSecurity" type="boolean"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="RoleCount" type="integer"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="MainMenu" type="string"/>
+      <attribute name="MenuDirectory" type="string"/>
+      <attribute name="MenuFilename" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="StartupCode" type="string"/>
+   </complexType>
+   <complexType name="ModuleParameter">
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="ParameterDataType" type="tns:ParameterDataTypeType"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="ParameterInitializeValue" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="ObjectGroup">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:ObjectGroupChild" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="ObjectGroupType" type="integer"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="ObjectGroupChild">
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="Type" type="string"/>
+      <attribute name="ProgramUnitType" type="string"/>
+   </complexType>
+   <complexType name="ObjectLibrary">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:ObjectLibraryTab" minOccurs="0" maxOccurs="unbounded"/>
+         <group ref="tns:JdapiElements" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="ObjectCount" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+   </complexType>
+   <complexType name="ObjectLibraryTab">
+      <choice maxOccurs="unbounded">
+         <group ref="tns:JdapiElements" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="ObjectCount" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="Label" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+   </complexType>
+   <complexType name="Point">
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="XPosition" type="integer"/>
+      <attribute name="YPosition" type="integer"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+   </complexType>
+   <complexType name="ProgramUnit">
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="ProgramUnitType" type="tns:ProgramUnitTypeType"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="ProgramUnitText" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="PropertyClass">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:Trigger" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attributeGroup ref="tns:JdapiProperties"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="RadioButton">
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="Enabled" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="Visible" type="boolean"/>
+      <attribute name="DistanceBetweenRecords" type="integer"/>
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="Height" type="integer"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentSourceLevel1ObjectType" type="integer"/>
+      <attribute name="ParentSourceLevel2ObjectType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="PromptAlign" type="tns:PromptAlignType"/>
+      <attribute name="PromptAlignOffset" type="integer"/>
+      <attribute name="PromptAttachmentEdge" type="tns:PromptAttachmentEdgeType"/>
+      <attribute name="PromptAttachmentOffset" type="integer"/>
+      <attribute name="PromptDisplayStyle" type="tns:PromptDisplayStyleType"/>
+      <attribute name="PromptFontSize" type="integer"/>
+      <attribute name="PromptFontSpacing" type="tns:PromptFontSpacingType"/>
+      <attribute name="PromptFontStyle" type="tns:PromptFontStyleType"/>
+      <attribute name="PromptFontWeight" type="tns:PromptFontWeightType"/>
+      <attribute name="PromptJustification" type="tns:PromptJustificationType"/>
+      <attribute name="PromptReadingOrder" type="tns:PromptReadingOrderType"/>
+      <attribute name="Width" type="integer"/>
+      <attribute name="XPosition" type="integer"/>
+      <attribute name="YPosition" type="integer"/>
+      <attribute name="AccessKey" type="string"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="FontName" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="Label" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="ParentSourceLevel1ObjectName" type="string"/>
+      <attribute name="ParentSourceLevel2ObjectName" type="string"/>
+      <attribute name="Prompt" type="string"/>
+      <attribute name="PromptBackColor" type="string"/>
+      <attribute name="PromptFillPattern" type="string"/>
+      <attribute name="PromptFontName" type="string"/>
+      <attribute name="PromptForegroundColor" type="string"/>
+      <attribute name="PromptVisualAttributeName" type="string"/>
+      <attribute name="RadioButtonValue" type="string"/>
+      <attribute name="VisualAttributeName" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="RecordGroup">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:RecordGroupColumn" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="RecordGroupFetchSize" type="integer"/>
+      <attribute name="RecordGroupType" type="tns:RecordGroupTypeType"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="RecordGroupQuery" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="RecordGroupColumn">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:RecordGroupColumnRow" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="ColumnDataType" type="tns:ColumnDataTypeType"/>
+      <attribute name="ColumnValuesCount" type="integer"/>
+      <attribute name="DataLengthSemantics" type="tns:DataLengthSemanticsType"/>
+      <attribute name="MaximumLength" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+   </complexType>
+   <complexType name="Relation">
+      <attribute name="AutoQuery" type="boolean"/>
+      <attribute name="Deferred" type="boolean"/>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="PreventMasterlessOperations" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="DeleteRecord" type="tns:DeleteRecordType"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="RelationType" type="tns:RelationTypeType"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="DetailBlock" type="string"/>
+      <attribute name="DetailItemref" type="string"/>
+      <attribute name="JoinCondition" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+   </complexType>
+   <complexType name="Report">
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="ReportFtpSecured" type="boolean"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="CommMode" type="tns:CommModeType"/>
+      <attribute name="ExecuteMode" type="tns:ExecuteModeType"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="ReportDeleteType" type="integer"/>
+      <attribute name="ReportDestinationType" type="tns:ReportDestinationTypeType"/>
+      <attribute name="ReportObjectType" type="integer"/>
+      <attribute name="ReportPrintNumberofcopy" type="integer"/>
+      <attribute name="ReportPrintOrientation" type="integer"/>
+      <attribute name="ReportPrintSide" type="integer"/>
+      <attribute name="ReportPrintTray" type="integer"/>
+      <attribute name="ReportSslConn" type="integer"/>
+      <attribute name="ReportWebdavAuthtype" type="integer"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="DataSourceBlock" type="string"/>
+      <attribute name="Filename" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="QueryName" type="string"/>
+      <attribute name="ReportAbsPath" type="string"/>
+      <attribute name="ReportBipParameters" type="string"/>
+      <attribute name="ReportDestinationFormat" type="string"/>
+      <attribute name="ReportDestinationName" type="string"/>
+      <attribute name="ReportFaxNumber" type="string"/>
+      <attribute name="ReportFaxServer" type="string"/>
+      <attribute name="ReportFtpFilename" type="string"/>
+      <attribute name="ReportFtpServer" type="string"/>
+      <attribute name="ReportFtpUser" type="string"/>
+      <attribute name="ReportLocalFilename" type="string"/>
+      <attribute name="ReportLocale" type="string"/>
+      <attribute name="ReportMailBcc" type="string"/>
+      <attribute name="ReportMailBody" type="string"/>
+      <attribute name="ReportMailCc" type="string"/>
+      <attribute name="ReportMailFrom" type="string"/>
+      <attribute name="ReportMailReplyto" type="string"/>
+      <attribute name="ReportMailServer" type="string"/>
+      <attribute name="ReportMailSubject" type="string"/>
+      <attribute name="ReportMailTo" type="string"/>
+      <attribute name="ReportOptionFormat" type="string"/>
+      <attribute name="ReportParameters" type="string"/>
+      <attribute name="ReportPrintName" type="string"/>
+      <attribute name="ReportPrintPagerange" type="string"/>
+      <attribute name="ReportSrvcLocation" type="string"/>
+      <attribute name="ReportServer" type="string"/>
+      <attribute name="ReportTemplateName" type="string"/>
+      <attribute name="ReportWebdavFile" type="string"/>
+      <attribute name="ReportWebdavServer" type="string"/>
+      <attribute name="ReportWebdavUser" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="TabPage">
+      <choice maxOccurs="unbounded">
+         <element ref="tns:Graphics" minOccurs="0" maxOccurs="unbounded"/>
+      </choice>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="Enabled" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="Visible" type="boolean"/>
+      <attribute name="GradientStart" type="tns:GradientStartType"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentSourceLevel1ObjectType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="IconFilename" type="string"/>
+      <attribute name="Label" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="ParentSourceLevel1ObjectName" type="string"/>
+      <attribute name="VisualAttributeName" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="TextSegment">
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="FontName" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="Text" type="string"/>
+   </complexType>
+   <complexType name="Trigger">
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="DisplayInKeyboardHelp" type="boolean"/>
+      <attribute name="FireInQuery" type="boolean"/>
+      <attribute name="Hide" type="boolean"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="ExecuteHierarchy" type="tns:ExecuteHierarchyType"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentSourceLevel1ObjectType" type="integer"/>
+      <attribute name="ParentSourceLevel2ObjectType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="TriggerInternalType" type="integer"/>
+      <attribute name="TriggerStyle" type="tns:TriggerStyleType"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="KeyboardHelpText" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="ParentSourceLevel1ObjectName" type="string"/>
+      <attribute name="ParentSourceLevel2ObjectName" type="string"/>
+      <attribute name="TriggerText" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="VisualAttribute">
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="FrameTitleFontSize" type="integer"/>
+      <attribute name="FrameTitleFontSpacing" type="tns:FrameTitleFontSpacingType"/>
+      <attribute name="FrameTitleFontStyle" type="tns:FrameTitleFontStyleType"/>
+      <attribute name="FrameTitleFontWeight" type="tns:FrameTitleFontWeightType"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="PromptFontSize" type="integer"/>
+      <attribute name="PromptFontSpacing" type="tns:PromptFontSpacingType"/>
+      <attribute name="PromptFontStyle" type="tns:PromptFontStyleType"/>
+      <attribute name="PromptFontWeight" type="tns:PromptFontWeightType"/>
+      <attribute name="VisualAttributeType" type="tns:VisualAttributeTypeType"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="FontName" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="FrameTitleBackColor" type="string"/>
+      <attribute name="FrameTitleFillPattern" type="string"/>
+      <attribute name="FrameTitleFontName" type="string"/>
+      <attribute name="FrameTitleForegroundColor" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="PromptBackColor" type="string"/>
+      <attribute name="PromptFillPattern" type="string"/>
+      <attribute name="PromptFontName" type="string"/>
+      <attribute name="PromptForegroundColor" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <complexType name="VisualState">
+      <attribute name="BoundingBoxScalable" type="boolean"/>
+      <attribute name="CenterTracking" type="boolean"/>
+      <attribute name="Closed" type="boolean"/>
+      <attribute name="Dither" type="boolean"/>
+      <attribute name="FixedBoundingBox" type="boolean"/>
+      <attribute name="FontScaleable" type="boolean"/>
+      <attribute name="GridFlag" type="boolean"/>
+      <attribute name="GridsnapFlag" type="boolean"/>
+      <attribute name="PageCountSeq" type="boolean"/>
+      <attribute name="PagebreakFlag" type="boolean"/>
+      <attribute name="ResizableFlag" type="boolean"/>
+      <attribute name="RulerFlag" type="boolean"/>
+      <attribute name="RulerGuideFlag" type="boolean"/>
+      <attribute name="ShowCanvas" type="boolean"/>
+      <attribute name="ShowView" type="boolean"/>
+      <attribute name="StatusLineFlag" type="boolean"/>
+      <attribute name="ToolpaletteFlag" type="boolean"/>
+      <attribute name="VisualStateValid" type="boolean"/>
+      <attribute name="WrapText" type="boolean"/>
+      <attribute name="ArrowStyle" type="tns:ArrowStyleType"/>
+      <attribute name="CapStyle" type="tns:CapStyleType"/>
+      <attribute name="CharacterCellHden" type="integer"/>
+      <attribute name="CharacterCellHnum" type="integer"/>
+      <attribute name="CharacterCellVden" type="integer"/>
+      <attribute name="CharacterCellVnum" type="integer"/>
+      <attribute name="CornerRadiusX" type="integer"/>
+      <attribute name="CornerRadiusY" type="integer"/>
+      <attribute name="DashStyle" type="tns:DashStyleType"/>
+      <attribute name="DisplayQuality" type="tns:DisplayQualityType"/>
+      <attribute name="DrawingHden" type="integer"/>
+      <attribute name="DrawingHnum" type="integer"/>
+      <attribute name="DrawingWden" type="integer"/>
+      <attribute name="DrawingWnum" type="integer"/>
+      <attribute name="EditorHeight" type="integer"/>
+      <attribute name="EditorWidth" type="integer"/>
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="FrameTitleAlign" type="tns:FrameTitleAlignType"/>
+      <attribute name="FrameTitleOffset" type="integer"/>
+      <attribute name="FrameTitleSpacing" type="integer"/>
+      <attribute name="GridIntervalCnt" type="integer"/>
+      <attribute name="GridSnapCnt" type="integer"/>
+      <attribute name="GridUnitCnt" type="integer"/>
+      <attribute name="InternalLineWidth" type="integer"/>
+      <attribute name="InternalRotationAngle" type="integer"/>
+      <attribute name="RulerMajor" type="integer"/>
+      <attribute name="RulerMinor" type="integer"/>
+      <attribute name="RulerUnit" type="integer"/>
+      <attribute name="WindowHeight" type="integer"/>
+      <attribute name="WindowWidth" type="integer"/>
+      <attribute name="WindowXPosition" type="integer"/>
+      <attribute name="WindowYPosition" type="integer"/>
+      <attribute name="ZoomLevel" type="integer"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="EdgeBackColor" type="string"/>
+      <attribute name="EdgeForegroundColor" type="string"/>
+      <attribute name="EdgePattern" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="FontName" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+   </complexType>
+   <complexType name="Window">
+      <attribute name="ClearAllowed" type="boolean"/>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="HideOnExit" type="boolean"/>
+      <attribute name="InheritMenu" type="boolean"/>
+      <attribute name="MaximizeAllowed" type="boolean"/>
+      <attribute name="MinimizeAllowed" type="boolean"/>
+      <attribute name="Modal" type="boolean"/>
+      <attribute name="MoveAllowed" type="boolean"/>
+      <attribute name="ResizeAllowed" type="boolean"/>
+      <attribute name="ShowHorizontalScrollbar" type="boolean"/>
+      <attribute name="ShowVerticalScrollbar" type="boolean"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="Bevel" type="tns:BevelType"/>
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="Height" type="integer"/>
+      <attribute name="LanguageDirection" type="tns:LanguageDirectionType"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="Width" type="integer"/>
+      <attribute name="WindowStyle" type="tns:WindowStyleType"/>
+      <attribute name="XPosition" type="integer"/>
+      <attribute name="YPosition" type="integer"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="FontName" type="string"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="HelpBookTopic" type="string"/>
+      <attribute name="HorizontalToolbarCanvasName" type="string"/>
+      <attribute name="IconFilename" type="string"/>
+      <attribute name="MinimizeTitle" type="string"/>
+      <attribute name="Name" type="tns:nameType" use="required"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="PrimaryCanvas" type="string"/>
+      <attribute name="Title" type="string"/>
+      <attribute name="VisualAttributeName" type="string"/>
+      <attribute name="VerticalToolbarCanvasName" type="string"/>
+      <attribute name="SmartClass" type="boolean"/>
+   </complexType>
+   <attributeGroup name="JdapiProperties">
+      <attribute name="AccessKey" type="string"/>
+      <attribute name="AlertMessage" type="string"/>
+      <attribute name="AlertStyle" type="tns:AlertStyleType"/>
+      <attribute name="Alias" type="string"/>
+      <attribute name="AllowExpansion" type="boolean"/>
+      <attribute name="AllowMultiLinePrompts" type="boolean"/>
+      <attribute name="AllowStartAttachmentPrompts" type="boolean"/>
+      <attribute name="AllowTopAttachmentPrompts" type="boolean"/>
+      <attribute name="ArrowStyle" type="tns:ArrowStyleType"/>
+      <attribute name="AudioChannels" type="tns:AudioChannelsType"/>
+      <attribute name="AutoColumnWidth" type="boolean"/>
+      <attribute name="AutoDisplay" type="boolean"/>
+      <attribute name="AutoHint" type="boolean"/>
+      <attribute name="AutoPosition" type="boolean"/>
+      <attribute name="AutoQuery" type="boolean"/>
+      <attribute name="AutoRefresh" type="boolean"/>
+      <attribute name="AutoSelect" type="boolean"/>
+      <attribute name="AutoSkip" type="boolean"/>
+      <attribute name="BackColor" type="string"/>
+      <attribute name="Bevel" type="tns:BevelType"/>
+      <attribute name="BottomTitle" type="string"/>
+      <attribute name="BoundingBoxScalable" type="boolean"/>
+      <attribute name="Button1Label" type="string"/>
+      <attribute name="Button2Label" type="string"/>
+      <attribute name="Button3Label" type="string"/>
+      <attribute name="CalculateMode" type="tns:CalculateModeType"/>
+      <attribute name="CanvasName" type="string"/>
+      <attribute name="CanvasType" type="tns:CanvasTypeType"/>
+      <attribute name="CapStyle" type="tns:CapStyleType"/>
+      <attribute name="CaseInsensitiveQuery" type="boolean"/>
+      <attribute name="CaseRestriction" type="tns:CaseRestrictionType"/>
+      <attribute name="CenterTracking" type="boolean"/>
+      <attribute name="CharacterCellHden" type="integer"/>
+      <attribute name="CharacterCellHeight" type="integer"/>
+      <attribute name="CharacterCellHnum" type="integer"/>
+      <attribute name="CharacterCellVden" type="integer"/>
+      <attribute name="CharacterCellVnum" type="integer"/>
+      <attribute name="CharacterCellWidth" type="integer"/>
+      <attribute name="CheckBoxOtherValues" type="tns:CheckBoxOtherValuesType"/>
+      <attribute name="CheckedValue" type="string"/>
+      <attribute name="ClearAllowed" type="boolean"/>
+      <attribute name="ClipHeight" type="integer"/>
+      <attribute name="ClipWidth" type="integer"/>
+      <attribute name="ClipXPosition" type="integer"/>
+      <attribute name="ClipYPosition" type="integer"/>
+      <attribute name="Closed" type="boolean"/>
+      <attribute name="ColumnDataType" type="tns:ColumnDataTypeType"/>
+      <attribute name="ColumnName" type="string"/>
+      <attribute name="ColumnValuesCount" type="integer"/>
+      <attribute name="CommMode" type="tns:CommModeType"/>
+      <attribute name="CommandText" type="string"/>
+      <attribute name="CommandType" type="tns:CommandTypeType"/>
+      <attribute name="Comment" type="string"/>
+      <attribute name="Compress" type="tns:CompressType"/>
+      <attribute name="CompressionQuality" type="tns:CompressionQualityType"/>
+      <attribute name="ConcealData" type="boolean"/>
+      <attribute name="ConsoleWindow" type="string"/>
+      <attribute name="CoordinateSystem" type="tns:CoordinateSystemType"/>
+      <attribute name="CopyValueFromItem" type="string"/>
+      <attribute name="CornerRadiusX" type="integer"/>
+      <attribute name="CornerRadiusY" type="integer"/>
+      <attribute name="CursorMode" type="tns:CursorModeType"/>
+      <attribute name="CursorStyle" type="tns:CursorStyleType"/>
+      <attribute name="CustomSpacing" type="integer"/>
+      <attribute name="DMLArraySize" type="integer"/>
+      <attribute name="DMLDataName" type="string"/>
+      <attribute name="DMLDataType" type="tns:DMLDataTypeType"/>
+      <attribute name="DMLReturnValue" type="boolean"/>
+      <attribute name="DSAMode" type="tns:DSAModeType"/>
+      <attribute name="DSAName" type="string"/>
+      <attribute name="DSAType" type="tns:DSATypeType"/>
+      <attribute name="DSATypeName" type="string"/>
+      <attribute name="DSAValue" type="string"/>
+      <attribute name="DSCLength" type="integer"/>
+      <attribute name="DSCMandatory" type="boolean"/>
+      <attribute name="DSCName" type="string"/>
+      <attribute name="DSCNochildren" type="boolean"/>
+      <attribute name="DSCParentName" type="string"/>
+      <attribute name="DSCPrecision" type="integer"/>
+      <attribute name="DSCScale" type="integer"/>
+      <attribute name="DSCType" type="tns:DSCTypeType"/>
+      <attribute name="DSCTypeName" type="string"/>
+      <attribute name="DashStyle" type="tns:DashStyleType"/>
+      <attribute name="DataLengthSemantics" type="tns:DataLengthSemanticsType"/>
+      <attribute name="DataSourceBlock" type="string"/>
+      <attribute name="DataSourceXAxis" type="string"/>
+      <attribute name="DataSourceYAxis" type="string"/>
+      <attribute name="DataType" type="tns:DataTypeType"/>
+      <attribute name="DatabaseBlock" type="boolean"/>
+      <attribute name="DatabaseItem" type="boolean"/>
+      <attribute name="DefaultAlertButton" type="tns:DefaultAlertButtonType"/>
+      <attribute name="DefaultButton" type="boolean"/>
+      <attribute name="DefaultFontScaling" type="boolean"/>
+      <attribute name="Deferred" type="boolean"/>
+      <attribute name="DeleteAllowed" type="boolean"/>
+      <attribute name="DeleteProcedureName" type="string"/>
+      <attribute name="DeleteRecord" type="tns:DeleteRecordType"/>
+      <attribute name="DetailBlock" type="string"/>
+      <attribute name="DetailItemref" type="string"/>
+      <attribute name="DirtyInfo" type="boolean"/>
+      <attribute name="DisplayInKeyboardHelp" type="boolean"/>
+      <attribute name="DisplayNoPriv" type="boolean"/>
+      <attribute name="DisplayQuality" type="tns:DisplayQualityType"/>
+      <attribute name="DisplayViewport" type="boolean"/>
+      <attribute name="DisplayWidth" type="integer"/>
+      <attribute name="DistanceBetweenRecords" type="integer"/>
+      <attribute name="Dither" type="boolean"/>
+      <attribute name="DrawingHden" type="integer"/>
+      <attribute name="DrawingHnum" type="integer"/>
+      <attribute name="DrawingWden" type="integer"/>
+      <attribute name="DrawingWnum" type="integer"/>
+      <attribute name="EdgeBackColor" type="string"/>
+      <attribute name="EdgeForegroundColor" type="string"/>
+      <attribute name="EdgePattern" type="string"/>
+      <attribute name="EditName" type="string"/>
+      <attribute name="EditXPosition" type="integer"/>
+      <attribute name="EditYPosition" type="integer"/>
+      <attribute name="EditorHeight" type="integer"/>
+      <attribute name="EditorWidth" type="integer"/>
+      <attribute name="Enabled" type="boolean"/>
+      <attribute name="EnforcedColumnSecurity" type="boolean"/>
+      <attribute name="EnforcedPrimaryKey" type="boolean"/>
+      <attribute name="EventCorrid" type="string"/>
+      <attribute name="EventEnabled" type="boolean"/>
+      <attribute name="EventImplclass" type="string"/>
+      <attribute name="EventPriorityMode" type="integer"/>
+      <attribute name="EventScope" type="tns:EventScopeType"/>
+      <attribute name="EventSubsName" type="string"/>
+      <attribute name="EventType" type="tns:EventTypeType"/>
+      <attribute name="EventViewMode" type="tns:EventViewModeType"/>
+      <attribute name="ExecuteHierarchy" type="tns:ExecuteHierarchyType"/>
+      <attribute name="ExecuteMode" type="tns:ExecuteModeType"/>
+      <attribute name="Filename" type="string"/>
+      <attribute name="FillPattern" type="string"/>
+      <attribute name="FilterBeforeDisplay" type="boolean"/>
+      <attribute name="FireInQuery" type="boolean"/>
+      <attribute name="FirstNavigationBlockName" type="string"/>
+      <attribute name="FixedBoundingBox" type="boolean"/>
+      <attribute name="FixedLength" type="boolean"/>
+      <attribute name="FontName" type="string"/>
+      <attribute name="FontScaleable" type="boolean"/>
+      <attribute name="FontSize" type="integer"/>
+      <attribute name="FontSpacing" type="tns:FontSpacingType"/>
+      <attribute name="FontStyle" type="tns:FontStyleType"/>
+      <attribute name="FontWeight" type="tns:FontWeightType"/>
+      <attribute name="ForegroundColor" type="string"/>
+      <attribute name="FormatMask" type="string"/>
+      <attribute name="Formula" type="string"/>
+      <attribute name="FrameAlign" type="tns:FrameAlignType"/>
+      <attribute name="FrameTitle" type="string"/>
+      <attribute name="FrameTitleAlign" type="tns:FrameTitleAlignType"/>
+      <attribute name="FrameTitleBackColor" type="string"/>
+      <attribute name="FrameTitleFillPattern" type="string"/>
+      <attribute name="FrameTitleFontName" type="string"/>
+      <attribute name="FrameTitleFontSize" type="integer"/>
+      <attribute name="FrameTitleFontSpacing" type="tns:FrameTitleFontSpacingType"/>
+      <attribute name="FrameTitleFontStyle" type="tns:FrameTitleFontStyleType"/>
+      <attribute name="FrameTitleFontWeight" type="tns:FrameTitleFontWeightType"/>
+      <attribute name="FrameTitleForegroundColor" type="string"/>
+      <attribute name="FrameTitleOffset" type="integer"/>
+      <attribute name="FrameTitleSpacing" type="integer"/>
+      <attribute name="FrameTitleVisualAttributeName" type="string"/>
+      <attribute name="GradientStart" type="tns:GradientStartType"/>
+      <attribute name="GraphicsFontColor" type="string"/>
+      <attribute name="GraphicsFontColorCode" type="integer"/>
+      <attribute name="GraphicsFontName" type="string"/>
+      <attribute name="GraphicsFontSize" type="integer"/>
+      <attribute name="GraphicsFontSpacing" type="tns:GraphicsFontSpacingType"/>
+      <attribute name="GraphicsFontStyle" type="integer"/>
+      <attribute name="GraphicsFontWeight" type="tns:GraphicsFontWeightType"/>
+      <attribute name="GraphicsText" type="string"/>
+      <attribute name="GraphicsType" type="tns:GraphicsTypeType"/>
+      <attribute name="GridFlag" type="boolean"/>
+      <attribute name="GridIntervalCnt" type="integer"/>
+      <attribute name="GridSnapCnt" type="integer"/>
+      <attribute name="GridUnitCnt" type="integer"/>
+      <attribute name="GridsnapFlag" type="boolean"/>
+      <attribute name="Height" type="integer"/>
+      <attribute name="HelpBookTitle" type="string"/>
+      <attribute name="HelpBookTopic" type="string"/>
+      <attribute name="Hide" type="boolean"/>
+      <attribute name="HideOnExit" type="boolean"/>
+      <attribute name="HighestAllowedValue" type="string"/>
+      <attribute name="Hint" type="string"/>
+      <attribute name="HorizontalJustification" type="tns:HorizontalJustificationType"/>
+      <attribute name="HorizontalMargin" type="integer"/>
+      <attribute name="HorizontalObjectOffset" type="integer"/>
+      <attribute name="HorizontalOrigin" type="tns:HorizontalOriginType"/>
+      <attribute name="HorizontalToolbarCanvas" type="string"/>
+      <attribute name="HorizontalToolbarCanvasName" type="string"/>
+      <attribute name="IconFilename" type="string"/>
+      <attribute name="IconInMenu" type="boolean"/>
+      <attribute name="Iconic" type="boolean"/>
+      <attribute name="ImageDepth" type="tns:ImageDepthType"/>
+      <attribute name="ImageFormat" type="tns:ImageFormatType"/>
+      <attribute name="ImplementationClass" type="string"/>
+      <attribute name="IncludeRefitem" type="boolean"/>
+      <attribute name="InheritMenu" type="boolean"/>
+      <attribute name="InitializeKeyboardDirection" type="tns:InitializeKeyboardDirectionType"/>
+      <attribute name="InitializeMenu" type="string"/>
+      <attribute name="InitializeValue" type="string"/>
+      <attribute name="InsertAllowed" type="boolean"/>
+      <attribute name="InsertProcedureName" type="string"/>
+      <attribute name="InteractionMode" type="tns:InteractionModeType"/>
+      <attribute name="InternalEndAngle" type="integer"/>
+      <attribute name="InternalLineWidth" type="integer"/>
+      <attribute name="InternalRotationAngle" type="integer"/>
+      <attribute name="InternalStartAngle" type="integer"/>
+      <attribute name="IsolationMode" type="tns:IsolationModeType"/>
+      <attribute name="ItemType" type="tns:ItemTypeType"/>
+      <attribute name="ItemsDisplay" type="integer"/>
+      <attribute name="JoinCondition" type="string"/>
+      <attribute name="JoinStyle" type="tns:JoinStyleType"/>
+      <attribute name="Justification" type="tns:JustificationType"/>
+      <attribute name="KeepCursorPosition" type="boolean"/>
+      <attribute name="KeyMode" type="tns:KeyModeType"/>
+      <attribute name="KeyboardAccelerator" type="string"/>
+      <attribute name="KeyboardHelpText" type="string"/>
+      <attribute name="KeyboardNavigable" type="boolean"/>
+      <attribute name="KeyboardState" type="tns:KeyboardStateType"/>
+      <attribute name="Label" type="string"/>
+      <attribute name="LanguageDirection" type="tns:LanguageDirectionType"/>
+      <attribute name="LayoutDataBlockName" type="string"/>
+      <attribute name="LayoutStyle" type="tns:LayoutStyleType"/>
+      <attribute name="LibraryLocation" type="string"/>
+      <attribute name="LibrarySource" type="tns:LibrarySourceType"/>
+      <attribute name="LineSpacing" type="tns:LineSpacingType"/>
+      <attribute name="ListElementCount" type="integer"/>
+      <attribute name="ListStyle" type="tns:ListStyleType"/>
+      <attribute name="ListType" type="tns:ListTypeType"/>
+      <attribute name="LockMode" type="tns:LockModeType"/>
+      <attribute name="LockProcedureName" type="string"/>
+      <attribute name="LockRecord" type="boolean"/>
+      <attribute name="LovName" type="string"/>
+      <attribute name="LovXPosition" type="integer"/>
+      <attribute name="LovYPosition" type="integer"/>
+      <attribute name="LowestAllowedValue" type="string"/>
+      <attribute name="MagicItem" type="tns:MagicItemType"/>
+      <attribute name="MainMenu" type="string"/>
+      <attribute name="MaximizeAllowed" type="boolean"/>
+      <attribute name="MaximumLength" type="integer"/>
+      <attribute name="MaximumObjs" type="integer"/>
+      <attribute name="MaximumQueryTime" type="integer"/>
+      <attribute name="MaximumRecordsFetched" type="integer"/>
+      <attribute name="MenuDirectory" type="string"/>
+      <attribute name="MenuFilename" type="string"/>
+      <attribute name="MenuItemCode" type="string"/>
+      <attribute name="MenuItemRadioGroup" type="string"/>
+      <attribute name="MenuItemType" type="tns:MenuItemTypeType"/>
+      <attribute name="MenuModule" type="string"/>
+      <attribute name="MenuRole" type="string"/>
+      <attribute name="MinimizeAllowed" type="boolean"/>
+      <attribute name="MinimizeTitle" type="string"/>
+      <attribute name="Modal" type="boolean"/>
+      <attribute name="MouseNavigate" type="boolean"/>
+      <attribute name="MouseNavigationLimit" type="tns:MouseNavigationLimitType"/>
+      <attribute name="MoveAllowed" type="boolean"/>
+      <attribute name="MultiLine" type="boolean"/>
+      <attribute name="Name" type="string"/>
+      <attribute name="NavigationStyle" type="tns:NavigationStyleType"/>
+      <attribute name="NewdeferReqEnf" type="integer"/>
+      <attribute name="NextNavigationBlockName" type="string"/>
+      <attribute name="NextNavigationItemName" type="string"/>
+      <attribute name="ObjectCount" type="integer"/>
+      <attribute name="ObjectGroupType" type="integer"/>
+      <attribute name="OldLovText" type="string"/>
+      <attribute name="OleActionStyle" type="tns:OleActionStyleType"/>
+      <attribute name="OleClass" type="string"/>
+      <attribute name="OleInPlaceAction" type="boolean"/>
+      <attribute name="OleInsideOutSupport" type="boolean"/>
+      <attribute name="OlePopupMenuItems" type="integer"/>
+      <attribute name="OleResizStyle" type="tns:OleResizStyleType"/>
+      <attribute name="OleShowPopupMenu" type="boolean"/>
+      <attribute name="OleShowTenantTypeType" type="boolean"/>
+      <attribute name="OleTenantTypeAspect" type="tns:OleTenantTypeAspectType"/>
+      <attribute name="OleTenantTypeType" type="tns:OleTenantTypeTypeType"/>
+      <attribute name="OptionHint" type="string"/>
+      <attribute name="OrderByClause" type="string"/>
+      <attribute name="OtherValues" type="string"/>
+      <attribute name="PageCountSeq" type="boolean"/>
+      <attribute name="PagebreakFlag" type="boolean"/>
+      <attribute name="ParameterDataType" type="tns:ParameterDataTypeType"/>
+      <attribute name="ParameterInitializeValue" type="string"/>
+      <attribute name="ParentFilename" type="string"/>
+      <attribute name="ParentFilepath" type="string"/>
+      <attribute name="ParentModule" type="string"/>
+      <attribute name="ParentModuleType" type="integer"/>
+      <attribute name="ParentName" type="string"/>
+      <attribute name="ParentSourceLevel1ObjectName" type="string"/>
+      <attribute name="ParentSourceLevel1ObjectType" type="integer"/>
+      <attribute name="ParentSourceLevel2ObjectName" type="string"/>
+      <attribute name="ParentSourceLevel2ObjectType" type="integer"/>
+      <attribute name="ParentType" type="integer"/>
+      <attribute name="PersistentClientInfoLength" type="integer"/>
+      <attribute name="PopupMenuName" type="string"/>
+      <attribute name="PrecompSummary" type="boolean"/>
+      <attribute name="PreventMasterlessOperations" type="boolean"/>
+      <attribute name="PreviousNavigationBlockName" type="string"/>
+      <attribute name="PreviousNavigationItemName" type="string"/>
+      <attribute name="PrimaryCanvas" type="string"/>
+      <attribute name="PrimaryKey" type="boolean"/>
+      <attribute name="ProgramUnitText" type="string"/>
+      <attribute name="ProgramUnitType" type="tns:ProgramUnitTypeType"/>
+      <attribute name="Prompt" type="string"/>
+      <attribute name="PromptAlign" type="tns:PromptAlignType"/>
+      <attribute name="PromptAlignOffset" type="integer"/>
+      <attribute name="PromptAttachmentEdge" type="tns:PromptAttachmentEdgeType"/>
+      <attribute name="PromptAttachmentOffset" type="integer"/>
+      <attribute name="PromptBackColor" type="string"/>
+      <attribute name="PromptDisplayStyle" type="tns:PromptDisplayStyleType"/>
+      <attribute name="PromptFillPattern" type="string"/>
+      <attribute name="PromptFontName" type="string"/>
+      <attribute name="PromptFontSize" type="integer"/>
+      <attribute name="PromptFontSpacing" type="tns:PromptFontSpacingType"/>
+      <attribute name="PromptFontStyle" type="tns:PromptFontStyleType"/>
+      <attribute name="PromptFontWeight" type="tns:PromptFontWeightType"/>
+      <attribute name="PromptForegroundColor" type="string"/>
+      <attribute name="PromptJustification" type="tns:PromptJustificationType"/>
+      <attribute name="PromptReadingOrder" type="tns:PromptReadingOrderType"/>
+      <attribute name="PromptVisualAttributeName" type="string"/>
+      <attribute name="QueryAllRecords" type="boolean"/>
+      <attribute name="QueryAllowed" type="boolean"/>
+      <attribute name="QueryDataSourceName" type="string"/>
+      <attribute name="QueryDataSourceType" type="tns:QueryDataSourceTypeType"/>
+      <attribute name="QueryLength" type="integer"/>
+      <attribute name="QueryName" type="string"/>
+      <attribute name="QueryOnly" type="boolean"/>
+      <attribute name="RadioButtonValue" type="string"/>
+      <attribute name="RaiseOnEnter" type="boolean"/>
+      <attribute name="ReadingOrder" type="tns:ReadingOrderType"/>
+      <attribute name="RealUnit" type="tns:RealUnitType"/>
+      <attribute name="RecordGroupFetchSize" type="integer"/>
+      <attribute name="RecordGroupName" type="string"/>
+      <attribute name="RecordGroupQuery" type="string"/>
+      <attribute name="RecordGroupType" type="tns:RecordGroupTypeType"/>
+      <attribute name="RecordOrientation" type="tns:RecordOrientationType"/>
+      <attribute name="RecordVisualAttributeGroupName" type="string"/>
+      <attribute name="RecordsBufferedCount" type="integer"/>
+      <attribute name="RecordsDisplayCount" type="integer"/>
+      <attribute name="RecordsFetchedCount" type="integer"/>
+      <attribute name="RelationType" type="tns:RelationTypeType"/>
+      <attribute name="Rendered" type="boolean"/>
+      <attribute name="ReportAbsPath" type="string"/>
+      <attribute name="ReportBipParameters" type="string"/>
+      <attribute name="ReportDeleteType" type="integer"/>
+      <attribute name="ReportDestinationFormat" type="string"/>
+      <attribute name="ReportDestinationName" type="string"/>
+      <attribute name="ReportDestinationType" type="tns:ReportDestinationTypeType"/>
+      <attribute name="ReportFaxNumber" type="string"/>
+      <attribute name="ReportFaxServer" type="string"/>
+      <attribute name="ReportFtpFilename" type="string"/>
+      <attribute name="ReportFtpSecured" type="boolean"/>
+      <attribute name="ReportFtpServer" type="string"/>
+      <attribute name="ReportFtpUser" type="string"/>
+      <attribute name="ReportLocalFilename" type="string"/>
+      <attribute name="ReportLocale" type="string"/>
+      <attribute name="ReportMailBcc" type="string"/>
+      <attribute name="ReportMailBody" type="string"/>
+      <attribute name="ReportMailCc" type="string"/>
+      <attribute name="ReportMailFrom" type="string"/>
+      <attribute name="ReportMailReplyto" type="string"/>
+      <attribute name="ReportMailServer" type="string"/>
+      <attribute name="ReportMailSubject" type="string"/>
+      <attribute name="ReportMailTo" type="string"/>
+      <attribute name="ReportObjectType" type="integer"/>
+      <attribute name="ReportOptionFormat" type="string"/>
+      <attribute name="ReportParameters" type="string"/>
+      <attribute name="ReportPrintName" type="string"/>
+      <attribute name="ReportPrintNumberofcopy" type="integer"/>
+      <attribute name="ReportPrintOrientation" type="integer"/>
+      <attribute name="ReportPrintPagerange" type="string"/>
+      <attribute name="ReportPrintSide" type="integer"/>
+      <attribute name="ReportPrintTray" type="integer"/>
+      <attribute name="ReportServer" type="string"/>
+      <attribute name="ReportSrvcLocation" type="string"/>
+      <attribute name="ReportSslConn" type="integer"/>
+      <attribute name="ReportTemplateName" type="string"/>
+      <attribute name="ReportWebdavAuthtype" type="integer"/>
+      <attribute name="ReportWebdavFile" type="string"/>
+      <attribute name="ReportWebdavServer" type="string"/>
+      <attribute name="ReportWebdavUser" type="string"/>
+      <attribute name="Required" type="boolean"/>
+      <attribute name="ResizableFlag" type="boolean"/>
+      <attribute name="ResizeAllowed" type="boolean"/>
+      <attribute name="ReturnItem" type="string"/>
+      <attribute name="ReverseDirection" type="boolean"/>
+      <attribute name="RoleCount" type="integer"/>
+      <attribute name="RowBandingFreq" type="integer"/>
+      <attribute name="RulerFlag" type="boolean"/>
+      <attribute name="RulerGuideFlag" type="boolean"/>
+      <attribute name="RulerMajor" type="integer"/>
+      <attribute name="RulerMinor" type="integer"/>
+      <attribute name="RulerUnit" type="integer"/>
+      <attribute name="RuntimeComp" type="tns:RuntimeCompType"/>
+      <attribute name="SavepointMode" type="boolean"/>
+      <attribute name="ScrollbarAlign" type="tns:ScrollbarAlignType"/>
+      <attribute name="ScrollbarCanvasName" type="string"/>
+      <attribute name="ScrollbarLength" type="integer"/>
+      <attribute name="ScrollbarOrientation" type="tns:ScrollbarOrientationType"/>
+      <attribute name="ScrollbarTabPageName" type="string"/>
+      <attribute name="ScrollbarWidth" type="integer"/>
+      <attribute name="ScrollbarXPosition" type="integer"/>
+      <attribute name="ScrollbarYPosition" type="integer"/>
+      <attribute name="ShareLibrary" type="boolean"/>
+      <attribute name="ShowCanvas" type="boolean"/>
+      <attribute name="ShowFastForward" type="boolean"/>
+      <attribute name="ShowHorizontalScrollbar" type="boolean"/>
+      <attribute name="ShowPlay" type="boolean"/>
+      <attribute name="ShowRecord" type="boolean"/>
+      <attribute name="ShowRewind" type="boolean"/>
+      <attribute name="ShowScrollbar" type="boolean"/>
+      <attribute name="ShowSlider" type="boolean"/>
+      <attribute name="ShowTime" type="boolean"/>
+      <attribute name="ShowVerticalScrollbar" type="boolean"/>
+      <attribute name="ShowView" type="boolean"/>
+      <attribute name="ShowVolume" type="boolean"/>
+      <attribute name="Shrinkwrap" type="boolean"/>
+      <attribute name="SingleObjectAlign" type="tns:SingleObjectAlignType"/>
+      <attribute name="SingleRecord" type="boolean"/>
+      <attribute name="SizingStyle" type="tns:SizingStyleType"/>
+      <attribute name="SoundFormat" type="tns:SoundFormatType"/>
+      <attribute name="SoundQuality" type="tns:SoundQualityType"/>
+      <attribute name="StartPromptAlign" type="tns:StartPromptAlignType"/>
+      <attribute name="StartPromptOffset" type="integer"/>
+      <attribute name="StartupCode" type="string"/>
+      <attribute name="StatusLineFlag" type="boolean"/>
+      <attribute name="SubMenuName" type="string"/>
+      <attribute name="SubTitle" type="string"/>
+      <attribute name="SubclassObjectGroup" type="boolean"/>
+      <attribute name="SubclassSubObject" type="boolean"/>
+      <attribute name="SummaryBlockName" type="string"/>
+      <attribute name="SummaryFunction" type="tns:SummaryFunctionType"/>
+      <attribute name="SummaryItemName" type="string"/>
+      <attribute name="SynchronizedItemName" type="string"/>
+      <attribute name="TabActionStyle" type="integer"/>
+      <attribute name="TabAttachmentEdge" type="tns:TabAttachmentEdgeType"/>
+      <attribute name="TabPageName" type="string"/>
+      <attribute name="TabStyle" type="tns:TabStyleType"/>
+      <attribute name="TabWidthStyle" type="integer"/>
+      <attribute name="TearOffMenu" type="boolean"/>
+      <attribute name="Text" type="string"/>
+      <attribute name="Title" type="string"/>
+      <attribute name="TitleReadingOrder" type="tns:TitleReadingOrderType"/>
+      <attribute name="ToolpaletteFlag" type="boolean"/>
+      <attribute name="Tooltip" type="string"/>
+      <attribute name="TooltipVisualAttributeGroup" type="string"/>
+      <attribute name="TopPromptAlign" type="tns:TopPromptAlignType"/>
+      <attribute name="TopPromptOffset" type="integer"/>
+      <attribute name="TreeAllowEmpBranch" type="boolean"/>
+      <attribute name="TreeDataQuery" type="string"/>
+      <attribute name="TreeMultiSelect" type="boolean"/>
+      <attribute name="TreeShowLines" type="boolean"/>
+      <attribute name="TreeShowSymbol" type="boolean"/>
+      <attribute name="TriggerInternalType" type="integer"/>
+      <attribute name="TriggerStyle" type="tns:TriggerStyleType"/>
+      <attribute name="TriggerText" type="string"/>
+      <attribute name="UncheckedValue" type="string"/>
+      <attribute name="UpdateAllowed" type="boolean"/>
+      <attribute name="UpdateChangedColumns" type="boolean"/>
+      <attribute name="UpdateCommit" type="boolean"/>
+      <attribute name="UpdateIfNull" type="boolean"/>
+      <attribute name="UpdateLayout" type="tns:UpdateLayoutType"/>
+      <attribute name="UpdateProcedureName" type="string"/>
+      <attribute name="UpdateQuery" type="boolean"/>
+      <attribute name="Use3dControls" type="boolean"/>
+      <attribute name="UseSecurity" type="boolean"/>
+      <attribute name="ValidateFromList" type="boolean"/>
+      <attribute name="ValidationUnit" type="tns:ValidationUnitType"/>
+      <attribute name="VerticalFill" type="boolean"/>
+      <attribute name="VerticalJustification" type="tns:VerticalJustificationType"/>
+      <attribute name="VerticalMargin" type="integer"/>
+      <attribute name="VerticalObjectOffset" type="integer"/>
+      <attribute name="VerticalOrigin" type="tns:VerticalOriginType"/>
+      <attribute name="VerticalToolbarCanvas" type="string"/>
+      <attribute name="VerticalToolbarCanvasName" type="string"/>
+      <attribute name="ViewportHeight" type="integer"/>
+      <attribute name="ViewportWidth" type="integer"/>
+      <attribute name="ViewportXPosition" type="integer"/>
+      <attribute name="ViewportXPositionOnCanvas" type="integer"/>
+      <attribute name="ViewportYPosition" type="integer"/>
+      <attribute name="ViewportYPositionOnCanvas" type="integer"/>
+      <attribute name="Visible" type="boolean"/>
+      <attribute name="VisibleInHorizontalMenuToolbar" type="boolean"/>
+      <attribute name="VisibleInMenu" type="boolean"/>
+      <attribute name="VisibleInVerticalMenuToolbar" type="boolean"/>
+      <attribute name="VisualAttributeName" type="string"/>
+      <attribute name="VisualAttributeType" type="tns:VisualAttributeTypeType"/>
+      <attribute name="VisualStateValid" type="boolean"/>
+      <attribute name="WhereClause" type="string"/>
+      <attribute name="Width" type="integer"/>
+      <attribute name="WindowHeight" type="integer"/>
+      <attribute name="WindowName" type="string"/>
+      <attribute name="WindowStyle" type="tns:WindowStyleType"/>
+      <attribute name="WindowWidth" type="integer"/>
+      <attribute name="WindowXPosition" type="integer"/>
+      <attribute name="WindowYPosition" type="integer"/>
+      <attribute name="WrapStyle" type="tns:WrapStyleType"/>
+      <attribute name="WrapText" type="boolean"/>
+      <attribute name="XPosition" type="integer"/>
+      <attribute name="YPosition" type="integer"/>
+      <attribute name="ZoomLevel" type="integer"/>
+   </attributeGroup>
+   <group name="JdapiElements">
+      <choice>
+         <element ref="tns:Alert"/>
+         <element ref="tns:AttachedLibrary"/>
+         <element ref="tns:Block"/>
+         <element ref="tns:Canvas"/>
+         <element ref="tns:CompoundText"/>
+         <element ref="tns:Coordinate"/>
+         <element ref="tns:DataSourceArgument"/>
+         <element ref="tns:DataSourceColumn"/>
+         <element ref="tns:Editor"/>
+         <element ref="tns:Event"/>
+         <element ref="tns:Font"/>
+         <element ref="tns:Graphics"/>
+         <element ref="tns:Item"/>
+         <element ref="tns:LOV"/>
+         <element ref="tns:LOVColumnMapping"/>
+         <element ref="tns:Menu"/>
+         <element ref="tns:MenuItem"/>
+         <element ref="tns:ModuleParameter"/>
+         <element ref="tns:ObjectGroup"/>
+         <element ref="tns:Point"/>
+         <element ref="tns:ProgramUnit"/>
+         <element ref="tns:PropertyClass"/>
+         <element ref="tns:RadioButton"/>
+         <element ref="tns:RecordGroup"/>
+         <element ref="tns:RecordGroupColumn"/>
+         <element ref="tns:Relation"/>
+         <element ref="tns:Report"/>
+         <element ref="tns:TabPage"/>
+         <element ref="tns:TextSegment"/>
+         <element ref="tns:Trigger"/>
+         <element ref="tns:VisualAttribute"/>
+         <element ref="tns:VisualState"/>
+         <element ref="tns:Window"/>
+      </choice>
+   </group>
+   <simpleType name="ValidationUnitType">
+      <restriction base="string">
+         <enumeration value="Default"/>
+         <enumeration value="0"/>
+         <enumeration value="Form"/>
+         <enumeration value="1"/>
+         <enumeration value="Data Block"/>
+         <enumeration value="2"/>
+         <enumeration value="Record"/>
+         <enumeration value="3"/>
+         <enumeration value="Item"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="JustificationType">
+      <restriction base="string">
+         <enumeration value="Left"/>
+         <enumeration value="0"/>
+         <enumeration value="Right"/>
+         <enumeration value="1"/>
+         <enumeration value="Center"/>
+         <enumeration value="2"/>
+         <enumeration value="Start"/>
+         <enumeration value="3"/>
+         <enumeration value="End"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="DefaultAlertButtonType">
+      <restriction base="string">
+         <enumeration value="Button 1"/>
+         <enumeration value="0"/>
+         <enumeration value="Button 2"/>
+         <enumeration value="1"/>
+         <enumeration value="Button 3"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="AlertStyleType">
+      <restriction base="string">
+         <enumeration value="Stop"/>
+         <enumeration value="0"/>
+         <enumeration value="Caution"/>
+         <enumeration value="1"/>
+         <enumeration value="Note"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="WindowStyleType">
+      <restriction base="string">
+         <enumeration value="Document"/>
+         <enumeration value="0"/>
+         <enumeration value="Dialog"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="WrapStyleType">
+      <restriction base="string">
+         <enumeration value="None"/>
+         <enumeration value="0"/>
+         <enumeration value="Character"/>
+         <enumeration value="1"/>
+         <enumeration value="Word"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="BevelType">
+      <restriction base="string">
+         <enumeration value="Raised"/>
+         <enumeration value="0"/>
+         <enumeration value="Lowered"/>
+         <enumeration value="1"/>
+         <enumeration value="None"/>
+         <enumeration value="2"/>
+         <enumeration value="Inset"/>
+         <enumeration value="3"/>
+         <enumeration value="Outset"/>
+         <enumeration value="4"/>
+         <enumeration value="Plain"/>
+         <enumeration value="5"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="RuntimeCompType">
+      <restriction base="string">
+         <enumeration value="4.5"/>
+         <enumeration value="0"/>
+         <enumeration value="5.0"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="GraphicsFontWeightType">
+      <restriction base="string">
+         <enumeration value="Ultralight"/>
+         <enumeration value="0"/>
+         <enumeration value="Extralight"/>
+         <enumeration value="1"/>
+         <enumeration value="Light"/>
+         <enumeration value="2"/>
+         <enumeration value="Demilight"/>
+         <enumeration value="3"/>
+         <enumeration value="Medium"/>
+         <enumeration value="4"/>
+         <enumeration value="Demibold"/>
+         <enumeration value="5"/>
+         <enumeration value="Bold"/>
+         <enumeration value="6"/>
+         <enumeration value="Extrabold"/>
+         <enumeration value="7"/>
+         <enumeration value="Ultrabold"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="GraphicsFontSpacingType">
+      <restriction base="string">
+         <enumeration value="Ultradense"/>
+         <enumeration value="0"/>
+         <enumeration value="Extradense"/>
+         <enumeration value="1"/>
+         <enumeration value="Dense"/>
+         <enumeration value="2"/>
+         <enumeration value="Semidense"/>
+         <enumeration value="3"/>
+         <enumeration value="Normal"/>
+         <enumeration value="4"/>
+         <enumeration value="Semiexpand"/>
+         <enumeration value="5"/>
+         <enumeration value="Expand"/>
+         <enumeration value="6"/>
+         <enumeration value="Extraexpand"/>
+         <enumeration value="7"/>
+         <enumeration value="Ultraexpand"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="GraphicsTypeType">
+      <restriction base="string">
+         <enumeration value="Arc"/>
+         <enumeration value="0"/>
+         <enumeration value="Image"/>
+         <enumeration value="1"/>
+         <enumeration value="Line"/>
+         <enumeration value="2"/>
+         <enumeration value="Polygon"/>
+         <enumeration value="3"/>
+         <enumeration value="Rectangle"/>
+         <enumeration value="4"/>
+         <enumeration value="Rounded Rectangle"/>
+         <enumeration value="5"/>
+         <enumeration value="Text"/>
+         <enumeration value="6"/>
+         <enumeration value="Group"/>
+         <enumeration value="7"/>
+         <enumeration value="Frame"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ArrowStyleType">
+      <restriction base="string">
+         <enumeration value="None"/>
+         <enumeration value="0"/>
+         <enumeration value="Start"/>
+         <enumeration value="1"/>
+         <enumeration value="End"/>
+         <enumeration value="2"/>
+         <enumeration value="Both ends"/>
+         <enumeration value="3"/>
+         <enumeration value="Middle to Start"/>
+         <enumeration value="4"/>
+         <enumeration value="Middle to End"/>
+         <enumeration value="5"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="CaseRestrictionType">
+      <restriction base="string">
+         <enumeration value="Mixed"/>
+         <enumeration value="0"/>
+         <enumeration value="Upper"/>
+         <enumeration value="1"/>
+         <enumeration value="Lower"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="CheckBoxOtherValuesType">
+      <restriction base="string">
+         <enumeration value="Not Allowed"/>
+         <enumeration value="0"/>
+         <enumeration value="Checked"/>
+         <enumeration value="1"/>
+         <enumeration value="Unchecked"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="RelationTypeType">
+      <restriction base="string">
+         <enumeration value="Join"/>
+         <enumeration value="0"/>
+         <enumeration value="Ref"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="PromptReadingOrderType">
+      <restriction base="string">
+         <enumeration value="Default"/>
+         <enumeration value="0"/>
+         <enumeration value="Left To Right"/>
+         <enumeration value="1"/>
+         <enumeration value="Right To Left"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="PromptJustificationType">
+      <restriction base="string">
+         <enumeration value="Left"/>
+         <enumeration value="0"/>
+         <enumeration value="Right"/>
+         <enumeration value="1"/>
+         <enumeration value="Center"/>
+         <enumeration value="2"/>
+         <enumeration value="Start"/>
+         <enumeration value="3"/>
+         <enumeration value="End"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="CanvasTypeType">
+      <restriction base="string">
+         <enumeration value="Content"/>
+         <enumeration value="0"/>
+         <enumeration value="Stacked"/>
+         <enumeration value="1"/>
+         <enumeration value="Vertical Toolbar"/>
+         <enumeration value="2"/>
+         <enumeration value="Horizontal Toolbar"/>
+         <enumeration value="3"/>
+         <enumeration value="Tab"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="PromptAttachmentEdgeType">
+      <restriction base="string">
+         <enumeration value="Start"/>
+         <enumeration value="0"/>
+         <enumeration value="End"/>
+         <enumeration value="1"/>
+         <enumeration value="Top"/>
+         <enumeration value="2"/>
+         <enumeration value="Bottom"/>
+         <enumeration value="3"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ColumnDataTypeType">
+      <restriction base="string">
+         <enumeration value="Character"/>
+         <enumeration value="0"/>
+         <enumeration value="Number"/>
+         <enumeration value="1"/>
+         <enumeration value="Date"/>
+         <enumeration value="2"/>
+         <enumeration value="Long"/>
+         <enumeration value="3"/>
+         <enumeration value="Object REF"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="PromptAlignType">
+      <restriction base="string">
+         <enumeration value="Start"/>
+         <enumeration value="0"/>
+         <enumeration value="End"/>
+         <enumeration value="1"/>
+         <enumeration value="Center"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="CommandTypeType">
+      <restriction base="string">
+         <enumeration value="Null"/>
+         <enumeration value="0"/>
+         <enumeration value="Menu"/>
+         <enumeration value="1"/>
+         <enumeration value="PL/SQL"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ImageFormatType">
+      <restriction base="string">
+         <enumeration value="BMP"/>
+         <enumeration value="0"/>
+         <enumeration value="CALS"/>
+         <enumeration value="1"/>
+         <enumeration value="GIF"/>
+         <enumeration value="2"/>
+         <enumeration value="JFIF"/>
+         <enumeration value="3"/>
+         <enumeration value="PICT"/>
+         <enumeration value="4"/>
+         <enumeration value="RAS"/>
+         <enumeration value="5"/>
+         <enumeration value="TIFF"/>
+         <enumeration value="6"/>
+         <enumeration value="TPIC"/>
+         <enumeration value="7"/>
+         <enumeration value="Native"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ImageDepthType">
+      <restriction base="string">
+         <enumeration value="Original"/>
+         <enumeration value="0"/>
+         <enumeration value="Monochrome"/>
+         <enumeration value="1"/>
+         <enumeration value="Gray"/>
+         <enumeration value="2"/>
+         <enumeration value="LUT"/>
+         <enumeration value="3"/>
+         <enumeration value="RGB"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="CoordinateSystemType">
+      <restriction base="string">
+         <enumeration value="Character"/>
+         <enumeration value="0"/>
+         <enumeration value="Real"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="TitleReadingOrderType">
+      <restriction base="string">
+         <enumeration value="Default"/>
+         <enumeration value="0"/>
+         <enumeration value="Left To Right"/>
+         <enumeration value="1"/>
+         <enumeration value="Right To Left"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="CursorModeType">
+      <restriction base="string">
+         <enumeration value="Open"/>
+         <enumeration value="0"/>
+         <enumeration value="Close"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="FrameTitleAlignType">
+      <restriction base="string">
+         <enumeration value="Left"/>
+         <enumeration value="0"/>
+         <enumeration value="Right"/>
+         <enumeration value="1"/>
+         <enumeration value="Center"/>
+         <enumeration value="2"/>
+         <enumeration value="Start"/>
+         <enumeration value="3"/>
+         <enumeration value="End"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="DeleteRecordType">
+      <restriction base="string">
+         <enumeration value="Cascading"/>
+         <enumeration value="0"/>
+         <enumeration value="Isolated"/>
+         <enumeration value="1"/>
+         <enumeration value="Non Isolated"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="LayoutStyleType">
+      <restriction base="string">
+         <enumeration value="Form"/>
+         <enumeration value="0"/>
+         <enumeration value="Tabular"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="FrameAlignType">
+      <restriction base="string">
+         <enumeration value="Start"/>
+         <enumeration value="0"/>
+         <enumeration value="End"/>
+         <enumeration value="1"/>
+         <enumeration value="Center"/>
+         <enumeration value="2"/>
+         <enumeration value="Fill"/>
+         <enumeration value="3"/>
+         <enumeration value="Column"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="SingleObjectAlignType">
+      <restriction base="string">
+         <enumeration value="Start"/>
+         <enumeration value="0"/>
+         <enumeration value="End"/>
+         <enumeration value="1"/>
+         <enumeration value="Center"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="InitializeKeyboardDirectionType">
+      <restriction base="string">
+         <enumeration value="Default"/>
+         <enumeration value="0"/>
+         <enumeration value="Roman"/>
+         <enumeration value="1"/>
+         <enumeration value="Local"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="LanguageDirectionType">
+      <restriction base="string">
+         <enumeration value="Default"/>
+         <enumeration value="0"/>
+         <enumeration value="Left To Right"/>
+         <enumeration value="1"/>
+         <enumeration value="Right To Left"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="DataLengthSemanticsType">
+      <restriction base="string">
+         <enumeration value="Null"/>
+         <enumeration value="0"/>
+         <enumeration value="BYTE"/>
+         <enumeration value="1"/>
+         <enumeration value="CHAR"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="EventTypeType">
+      <restriction base="string">
+         <enumeration value="Database"/>
+         <enumeration value="0"/>
+         <enumeration value="User Defined"/>
+         <enumeration value="1"/>
+         <enumeration value="System Client-Idle"/>
+         <enumeration value="2"/>
+         <enumeration value="System DB-Idle"/>
+         <enumeration value="3"/>
+         <enumeration value="System Single-Sign-Off"/>
+         <enumeration value="4"/>
+         <enumeration value="System Notification"/>
+         <enumeration value="5"/>
+         <enumeration value="System Media Completion"/>
+         <enumeration value="6"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="StartPromptAlignType">
+      <restriction base="string">
+         <enumeration value="Start"/>
+         <enumeration value="0"/>
+         <enumeration value="End"/>
+         <enumeration value="1"/>
+         <enumeration value="Center"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="EventScopeType">
+      <restriction base="string">
+         <enumeration value="Application"/>
+         <enumeration value="0"/>
+         <enumeration value="Form"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="TopPromptAlignType">
+      <restriction base="string">
+         <enumeration value="Start"/>
+         <enumeration value="0"/>
+         <enumeration value="End"/>
+         <enumeration value="1"/>
+         <enumeration value="Center"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="UpdateLayoutType">
+      <restriction base="string">
+         <enumeration value="Manually"/>
+         <enumeration value="0"/>
+         <enumeration value="Automatically"/>
+         <enumeration value="1"/>
+         <enumeration value="Locked"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="EventViewModeType">
+      <restriction base="string">
+         <enumeration value="Browse"/>
+         <enumeration value="0"/>
+         <enumeration value="Locked"/>
+         <enumeration value="1"/>
+         <enumeration value="Removed"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ExecuteHierarchyType">
+      <restriction base="string">
+         <enumeration value="Override"/>
+         <enumeration value="0"/>
+         <enumeration value="Before"/>
+         <enumeration value="1"/>
+         <enumeration value="After"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="DashStyleType">
+      <restriction base="string">
+         <enumeration value="Solid"/>
+         <enumeration value="0"/>
+         <enumeration value="Dotted"/>
+         <enumeration value="1"/>
+         <enumeration value="Dashed"/>
+         <enumeration value="2"/>
+         <enumeration value="Dash Dot"/>
+         <enumeration value="3"/>
+         <enumeration value="Double Dot"/>
+         <enumeration value="4"/>
+         <enumeration value="Long Dash"/>
+         <enumeration value="5"/>
+         <enumeration value="Dash Double Dot"/>
+         <enumeration value="6"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="CapStyleType">
+      <restriction base="string">
+         <enumeration value="Butt"/>
+         <enumeration value="0"/>
+         <enumeration value="Round"/>
+         <enumeration value="1"/>
+         <enumeration value="Projecting"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="JoinStyleType">
+      <restriction base="string">
+         <enumeration value="Mitre"/>
+         <enumeration value="0"/>
+         <enumeration value="Bevel"/>
+         <enumeration value="1"/>
+         <enumeration value="Round"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="LineSpacingType">
+      <restriction base="string">
+         <enumeration value="Single"/>
+         <enumeration value="0"/>
+         <enumeration value="One-and-a-half"/>
+         <enumeration value="1"/>
+         <enumeration value="Double"/>
+         <enumeration value="2"/>
+         <enumeration value="Custom"/>
+         <enumeration value="3"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="FontStyleType">
+      <restriction base="string">
+         <enumeration value="Plain"/>
+         <enumeration value="0"/>
+         <enumeration value="Italic"/>
+         <enumeration value="1"/>
+         <enumeration value="Oblique"/>
+         <enumeration value="2"/>
+         <enumeration value="Underline"/>
+         <enumeration value="3"/>
+         <enumeration value="Outline"/>
+         <enumeration value="4"/>
+         <enumeration value="Shadow"/>
+         <enumeration value="5"/>
+         <enumeration value="Inverted"/>
+         <enumeration value="6"/>
+         <enumeration value="Overstrike"/>
+         <enumeration value="7"/>
+         <enumeration value="Blink"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="HorizontalOriginType">
+      <restriction base="string">
+         <enumeration value="Left"/>
+         <enumeration value="0"/>
+         <enumeration value="Right"/>
+         <enumeration value="1"/>
+         <enumeration value="Center"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="FontWeightType">
+      <restriction base="string">
+         <enumeration value="Ultralight"/>
+         <enumeration value="0"/>
+         <enumeration value="Extralight"/>
+         <enumeration value="1"/>
+         <enumeration value="Light"/>
+         <enumeration value="2"/>
+         <enumeration value="Demilight"/>
+         <enumeration value="3"/>
+         <enumeration value="Medium"/>
+         <enumeration value="4"/>
+         <enumeration value="Demibold"/>
+         <enumeration value="5"/>
+         <enumeration value="Bold"/>
+         <enumeration value="6"/>
+         <enumeration value="Extrabold"/>
+         <enumeration value="7"/>
+         <enumeration value="Ultrabold"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="VerticalOriginType">
+      <restriction base="string">
+         <enumeration value="Top"/>
+         <enumeration value="0"/>
+         <enumeration value="Center"/>
+         <enumeration value="1"/>
+         <enumeration value="Bottom"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="FontSpacingType">
+      <restriction base="string">
+         <enumeration value="Ultradense"/>
+         <enumeration value="0"/>
+         <enumeration value="Extradense"/>
+         <enumeration value="1"/>
+         <enumeration value="Dense"/>
+         <enumeration value="2"/>
+         <enumeration value="Semidense"/>
+         <enumeration value="3"/>
+         <enumeration value="Normal"/>
+         <enumeration value="4"/>
+         <enumeration value="Semiexpand"/>
+         <enumeration value="5"/>
+         <enumeration value="Expand"/>
+         <enumeration value="6"/>
+         <enumeration value="Extraexpand"/>
+         <enumeration value="7"/>
+         <enumeration value="Ultraexpand"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="HorizontalJustificationType">
+      <restriction base="string">
+         <enumeration value="Left"/>
+         <enumeration value="0"/>
+         <enumeration value="Right"/>
+         <enumeration value="1"/>
+         <enumeration value="Center"/>
+         <enumeration value="2"/>
+         <enumeration value="Start"/>
+         <enumeration value="3"/>
+         <enumeration value="End"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="VerticalJustificationType">
+      <restriction base="string">
+         <enumeration value="Top"/>
+         <enumeration value="0"/>
+         <enumeration value="Center"/>
+         <enumeration value="1"/>
+         <enumeration value="Bottom"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ParameterDataTypeType">
+      <restriction base="string">
+         <enumeration value="Char"/>
+         <enumeration value="0"/>
+         <enumeration value="Number"/>
+         <enumeration value="1"/>
+         <enumeration value="Date"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="SummaryFunctionType">
+      <restriction base="string">
+         <enumeration value="None"/>
+         <enumeration value="0"/>
+         <enumeration value="Avg"/>
+         <enumeration value="1"/>
+         <enumeration value="Count"/>
+         <enumeration value="2"/>
+         <enumeration value="Max"/>
+         <enumeration value="3"/>
+         <enumeration value="Min"/>
+         <enumeration value="4"/>
+         <enumeration value="Stddev"/>
+         <enumeration value="5"/>
+         <enumeration value="Sum"/>
+         <enumeration value="6"/>
+         <enumeration value="Variance"/>
+         <enumeration value="7"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ExecuteModeType">
+      <restriction base="string">
+         <enumeration value="Batch"/>
+         <enumeration value="0"/>
+         <enumeration value="Runtime"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="DSAModeType">
+      <restriction base="string">
+         <enumeration value="IN"/>
+         <enumeration value="0"/>
+         <enumeration value="OUT"/>
+         <enumeration value="1"/>
+         <enumeration value="IN OUT"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="SoundFormatType">
+      <restriction base="string">
+         <enumeration value="AU"/>
+         <enumeration value="0"/>
+         <enumeration value="AIFF"/>
+         <enumeration value="1"/>
+         <enumeration value="AIFF_C"/>
+         <enumeration value="2"/>
+         <enumeration value="WAVE"/>
+         <enumeration value="3"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="AudioChannelsType">
+      <restriction base="string">
+         <enumeration value="Automatic"/>
+         <enumeration value="0"/>
+         <enumeration value="Mono"/>
+         <enumeration value="1"/>
+         <enumeration value="Stereo"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="CompressType">
+      <restriction base="string">
+         <enumeration value="Automatic"/>
+         <enumeration value="0"/>
+         <enumeration value="No Compression"/>
+         <enumeration value="1"/>
+         <enumeration value="Use Compression"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="SoundQualityType">
+      <restriction base="string">
+         <enumeration value="Automatic"/>
+         <enumeration value="0"/>
+         <enumeration value="Highest"/>
+         <enumeration value="1"/>
+         <enumeration value="High"/>
+         <enumeration value="2"/>
+         <enumeration value="Medium"/>
+         <enumeration value="3"/>
+         <enumeration value="Low"/>
+         <enumeration value="4"/>
+         <enumeration value="Lowest"/>
+         <enumeration value="5"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="CommModeType">
+      <restriction base="string">
+         <enumeration value="Synchronous"/>
+         <enumeration value="0"/>
+         <enumeration value="Asynchronous"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="CursorStyleType">
+      <restriction base="string">
+         <enumeration value="&lt;Unspecified>"/>
+         <enumeration value="0"/>
+         <enumeration value="busy"/>
+         <enumeration value="1"/>
+         <enumeration value="crosshair"/>
+         <enumeration value="2"/>
+         <enumeration value="default"/>
+         <enumeration value="3"/>
+         <enumeration value="insertion"/>
+         <enumeration value="4"/>
+         <enumeration value="hand"/>
+         <enumeration value="5"/>
+         <enumeration value="move"/>
+         <enumeration value="6"/>
+         <enumeration value="nresize"/>
+         <enumeration value="7"/>
+         <enumeration value="sresize"/>
+         <enumeration value="8"/>
+         <enumeration value="eresize"/>
+         <enumeration value="9"/>
+         <enumeration value="wresize"/>
+         <enumeration value="10"/>
+         <enumeration value="neresize"/>
+         <enumeration value="11"/>
+         <enumeration value="nwresize"/>
+         <enumeration value="12"/>
+         <enumeration value="seresize"/>
+         <enumeration value="13"/>
+         <enumeration value="swresize"/>
+         <enumeration value="14"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ItemTypeType">
+      <restriction base="string">
+         <enumeration value="Bean Area"/>
+         <enumeration value="0"/>
+         <enumeration value="Check Box"/>
+         <enumeration value="1"/>
+         <enumeration value="Display Item"/>
+         <enumeration value="2"/>
+         <enumeration value="Hierarchical Tree"/>
+         <enumeration value="3"/>
+         <enumeration value="Image"/>
+         <enumeration value="4"/>
+         <enumeration value="List Item"/>
+         <enumeration value="5"/>
+         <enumeration value="Push Button"/>
+         <enumeration value="6"/>
+         <enumeration value="Radio Group"/>
+         <enumeration value="7"/>
+         <enumeration value="Text Item"/>
+         <enumeration value="8"/>
+         <enumeration value="User Area"/>
+         <enumeration value="9"/>
+         <enumeration value="ActiveX Control (Obsolete)"/>
+         <enumeration value="10"/>
+         <enumeration value="Chart Item (Obsolete)"/>
+         <enumeration value="11"/>
+         <enumeration value="OLE Container (Obsolete)"/>
+         <enumeration value="12"/>
+         <enumeration value="Sound (Obsolete)"/>
+         <enumeration value="13"/>
+         <enumeration value="VBX Control (Obsolete)"/>
+         <enumeration value="14"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="GradientStartType">
+      <restriction base="string">
+         <enumeration value="None"/>
+         <enumeration value="0"/>
+         <enumeration value="Left"/>
+         <enumeration value="1"/>
+         <enumeration value="Top"/>
+         <enumeration value="2"/>
+         <enumeration value="Right"/>
+         <enumeration value="3"/>
+         <enumeration value="Bottom"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="DataTypeType">
+      <restriction base="string">
+         <enumeration value="Char"/>
+         <enumeration value="0"/>
+         <enumeration value="Number"/>
+         <enumeration value="1"/>
+         <enumeration value="Date"/>
+         <enumeration value="2"/>
+         <enumeration value="Alpha"/>
+         <enumeration value="3"/>
+         <enumeration value="Integer"/>
+         <enumeration value="4"/>
+         <enumeration value="Datetime"/>
+         <enumeration value="5"/>
+         <enumeration value="Long"/>
+         <enumeration value="6"/>
+         <enumeration value="Rnumber"/>
+         <enumeration value="7"/>
+         <enumeration value="Jdate"/>
+         <enumeration value="8"/>
+         <enumeration value="Edate"/>
+         <enumeration value="9"/>
+         <enumeration value="Time"/>
+         <enumeration value="10"/>
+         <enumeration value="Rinteger"/>
+         <enumeration value="11"/>
+         <enumeration value="Money"/>
+         <enumeration value="12"/>
+         <enumeration value="Rmoney"/>
+         <enumeration value="13"/>
+         <enumeration value="Object REF"/>
+         <enumeration value="14"/>
+         <enumeration value="Nchar"/>
+         <enumeration value="15"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="KeyModeType">
+      <restriction base="string">
+         <enumeration value="Unique"/>
+         <enumeration value="0"/>
+         <enumeration value="Updateable"/>
+         <enumeration value="1"/>
+         <enumeration value="Non-Updateable"/>
+         <enumeration value="2"/>
+         <enumeration value="Automatic"/>
+         <enumeration value="3"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="DSCTypeType">
+      <restriction base="string">
+         <enumeration value="VARCHAR2"/>
+         <enumeration value="0"/>
+         <enumeration value="NUMBER"/>
+         <enumeration value="1"/>
+         <enumeration value="LONG"/>
+         <enumeration value="2"/>
+         <enumeration value="ROWID"/>
+         <enumeration value="3"/>
+         <enumeration value="DATE"/>
+         <enumeration value="4"/>
+         <enumeration value="RAW"/>
+         <enumeration value="5"/>
+         <enumeration value="LONG RAW"/>
+         <enumeration value="6"/>
+         <enumeration value="CHAR"/>
+         <enumeration value="7"/>
+         <enumeration value="MLSLABEL"/>
+         <enumeration value="8"/>
+         <enumeration value="TABLE"/>
+         <enumeration value="9"/>
+         <enumeration value="RECORD"/>
+         <enumeration value="10"/>
+         <enumeration value="REFCURSOR"/>
+         <enumeration value="11"/>
+         <enumeration value="NAMED TYPE"/>
+         <enumeration value="12"/>
+         <enumeration value="OBJECT REF"/>
+         <enumeration value="13"/>
+         <enumeration value="VARRAY"/>
+         <enumeration value="14"/>
+         <enumeration value="Nested Table"/>
+         <enumeration value="15"/>
+         <enumeration value="BLOB"/>
+         <enumeration value="16"/>
+         <enumeration value="CLOB"/>
+         <enumeration value="17"/>
+         <enumeration value="BFILE"/>
+         <enumeration value="18"/>
+         <enumeration value="NVARCHAR2"/>
+         <enumeration value="19"/>
+         <enumeration value="NCHAR"/>
+         <enumeration value="20"/>
+         <enumeration value="NCLOB"/>
+         <enumeration value="21"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="DSATypeType">
+      <restriction base="string">
+         <enumeration value="VARCHAR2"/>
+         <enumeration value="0"/>
+         <enumeration value="NUMBER"/>
+         <enumeration value="1"/>
+         <enumeration value="LONG"/>
+         <enumeration value="2"/>
+         <enumeration value="ROWID"/>
+         <enumeration value="3"/>
+         <enumeration value="DATE"/>
+         <enumeration value="4"/>
+         <enumeration value="RAW"/>
+         <enumeration value="5"/>
+         <enumeration value="LONG RAW"/>
+         <enumeration value="6"/>
+         <enumeration value="CHAR"/>
+         <enumeration value="7"/>
+         <enumeration value="MLSLABEL"/>
+         <enumeration value="8"/>
+         <enumeration value="TABLE"/>
+         <enumeration value="9"/>
+         <enumeration value="RECORD"/>
+         <enumeration value="10"/>
+         <enumeration value="REFCURSOR"/>
+         <enumeration value="11"/>
+         <enumeration value="NAMED TYPE"/>
+         <enumeration value="12"/>
+         <enumeration value="OBJECT REF"/>
+         <enumeration value="13"/>
+         <enumeration value="VARRAY"/>
+         <enumeration value="14"/>
+         <enumeration value="Nested Table"/>
+         <enumeration value="15"/>
+         <enumeration value="BLOB"/>
+         <enumeration value="16"/>
+         <enumeration value="CLOB"/>
+         <enumeration value="17"/>
+         <enumeration value="BFILE"/>
+         <enumeration value="18"/>
+         <enumeration value="NVARCHAR2"/>
+         <enumeration value="19"/>
+         <enumeration value="NCHAR"/>
+         <enumeration value="20"/>
+         <enumeration value="NCLOB"/>
+         <enumeration value="21"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="LibrarySourceType">
+      <restriction base="string">
+         <enumeration value="File"/>
+         <enumeration value="0"/>
+         <enumeration value="Database"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="QueryDataSourceTypeType">
+      <restriction base="string">
+         <enumeration value="None"/>
+         <enumeration value="0"/>
+         <enumeration value="Table"/>
+         <enumeration value="1"/>
+         <enumeration value="Procedure"/>
+         <enumeration value="2"/>
+         <enumeration value="Transactional Triggers"/>
+         <enumeration value="3"/>
+         <enumeration value="FROM clause query"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="LockModeType">
+      <restriction base="string">
+         <enumeration value="Immediate"/>
+         <enumeration value="0"/>
+         <enumeration value="Delayed"/>
+         <enumeration value="1"/>
+         <enumeration value="Automatic"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="DMLDataTypeType">
+      <restriction base="string">
+         <enumeration value="None"/>
+         <enumeration value="0"/>
+         <enumeration value="Table"/>
+         <enumeration value="1"/>
+         <enumeration value="Procedure"/>
+         <enumeration value="2"/>
+         <enumeration value="Transactional Triggers"/>
+         <enumeration value="3"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ListTypeType">
+      <restriction base="string">
+         <enumeration value="Record Group"/>
+         <enumeration value="0"/>
+         <enumeration value="Old"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ListStyleType">
+      <restriction base="string">
+         <enumeration value="Poplist"/>
+         <enumeration value="0"/>
+         <enumeration value="Tlist"/>
+         <enumeration value="1"/>
+         <enumeration value="Combo Box"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="MagicItemType">
+      <restriction base="string">
+         <enumeration value="None"/>
+         <enumeration value="0"/>
+         <enumeration value="Cut"/>
+         <enumeration value="1"/>
+         <enumeration value="Copy"/>
+         <enumeration value="2"/>
+         <enumeration value="Paste"/>
+         <enumeration value="3"/>
+         <enumeration value="Clear"/>
+         <enumeration value="4"/>
+         <enumeration value="Undo"/>
+         <enumeration value="5"/>
+         <enumeration value="Help"/>
+         <enumeration value="6"/>
+         <enumeration value="About"/>
+         <enumeration value="7"/>
+         <enumeration value="Quit"/>
+         <enumeration value="8"/>
+         <enumeration value="Window"/>
+         <enumeration value="9"/>
+         <enumeration value="Page Setup (Obsolete)"/>
+         <enumeration value="10"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="MenuItemTypeType">
+      <restriction base="string">
+         <enumeration value="Plain"/>
+         <enumeration value="0"/>
+         <enumeration value="Check"/>
+         <enumeration value="1"/>
+         <enumeration value="Radio"/>
+         <enumeration value="2"/>
+         <enumeration value="Separator"/>
+         <enumeration value="3"/>
+         <enumeration value="Magic"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="CompressionQualityType">
+      <restriction base="string">
+         <enumeration value="None"/>
+         <enumeration value="0"/>
+         <enumeration value="Minimum"/>
+         <enumeration value="1"/>
+         <enumeration value="Low"/>
+         <enumeration value="2"/>
+         <enumeration value="Medium"/>
+         <enumeration value="3"/>
+         <enumeration value="High"/>
+         <enumeration value="4"/>
+         <enumeration value="Maximum"/>
+         <enumeration value="5"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="MouseNavigationLimitType">
+      <restriction base="string">
+         <enumeration value="Form"/>
+         <enumeration value="0"/>
+         <enumeration value="Data Block"/>
+         <enumeration value="1"/>
+         <enumeration value="Record"/>
+         <enumeration value="2"/>
+         <enumeration value="Item"/>
+         <enumeration value="3"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="NavigationStyleType">
+      <restriction base="string">
+         <enumeration value="Same Record"/>
+         <enumeration value="0"/>
+         <enumeration value="Change Record"/>
+         <enumeration value="1"/>
+         <enumeration value="Change Data Block"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="OleActionStyleType">
+      <restriction base="string">
+         <enumeration value="Double Click"/>
+         <enumeration value="0"/>
+         <enumeration value="Manual"/>
+         <enumeration value="1"/>
+         <enumeration value="Focus-in"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="OleResizStyleType">
+      <restriction base="string">
+         <enumeration value="Clip"/>
+         <enumeration value="0"/>
+         <enumeration value="Scale"/>
+         <enumeration value="1"/>
+         <enumeration value="Initial"/>
+         <enumeration value="2"/>
+         <enumeration value="Dynamic"/>
+         <enumeration value="3"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="OleTenantTypeAspectType">
+      <restriction base="string">
+         <enumeration value="Content"/>
+         <enumeration value="0"/>
+         <enumeration value="Icon"/>
+         <enumeration value="1"/>
+         <enumeration value="Thumbnail Preview"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="OleTenantTypeTypeType">
+      <restriction base="string">
+         <enumeration value="Any"/>
+         <enumeration value="0"/>
+         <enumeration value="None"/>
+         <enumeration value="1"/>
+         <enumeration value="Static"/>
+         <enumeration value="2"/>
+         <enumeration value="Linked"/>
+         <enumeration value="3"/>
+         <enumeration value="Embedded"/>
+         <enumeration value="4"/>
+         <enumeration value="Control"/>
+         <enumeration value="5"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="DisplayQualityType">
+      <restriction base="string">
+         <enumeration value="High"/>
+         <enumeration value="0"/>
+         <enumeration value="Medium"/>
+         <enumeration value="1"/>
+         <enumeration value="Low"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="TabAttachmentEdgeType">
+      <restriction base="string">
+         <enumeration value="Top"/>
+         <enumeration value="0"/>
+         <enumeration value="Bottom"/>
+         <enumeration value="1"/>
+         <enumeration value="Left"/>
+         <enumeration value="2"/>
+         <enumeration value="Right"/>
+         <enumeration value="3"/>
+         <enumeration value="Start"/>
+         <enumeration value="4"/>
+         <enumeration value="End"/>
+         <enumeration value="5"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ReadingOrderType">
+      <restriction base="string">
+         <enumeration value="Default"/>
+         <enumeration value="0"/>
+         <enumeration value="Left To Right"/>
+         <enumeration value="1"/>
+         <enumeration value="Right To Left"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="RealUnitType">
+      <restriction base="string">
+         <enumeration value="Pixel"/>
+         <enumeration value="0"/>
+         <enumeration value="Centimeter"/>
+         <enumeration value="1"/>
+         <enumeration value="Inch"/>
+         <enumeration value="2"/>
+         <enumeration value="Point"/>
+         <enumeration value="3"/>
+         <enumeration value="Decipoint"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="VisualAttributeTypeType">
+      <restriction base="string">
+         <enumeration value="Common"/>
+         <enumeration value="0"/>
+         <enumeration value="Prompt"/>
+         <enumeration value="1"/>
+         <enumeration value="Title"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="RecordGroupTypeType">
+      <restriction base="string">
+         <enumeration value="Query"/>
+         <enumeration value="0"/>
+         <enumeration value="Static"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="RecordOrientationType">
+      <restriction base="string">
+         <enumeration value="Vertical"/>
+         <enumeration value="0"/>
+         <enumeration value="Horizontal"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="FrameTitleFontStyleType">
+      <restriction base="string">
+         <enumeration value="Plain"/>
+         <enumeration value="0"/>
+         <enumeration value="Italic"/>
+         <enumeration value="1"/>
+         <enumeration value="Oblique"/>
+         <enumeration value="2"/>
+         <enumeration value="Underline"/>
+         <enumeration value="3"/>
+         <enumeration value="Outline"/>
+         <enumeration value="4"/>
+         <enumeration value="Shadow"/>
+         <enumeration value="5"/>
+         <enumeration value="Inverted"/>
+         <enumeration value="6"/>
+         <enumeration value="Overstrike"/>
+         <enumeration value="7"/>
+         <enumeration value="Blink"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="FrameTitleFontWeightType">
+      <restriction base="string">
+         <enumeration value="Ultralight"/>
+         <enumeration value="0"/>
+         <enumeration value="Extralight"/>
+         <enumeration value="1"/>
+         <enumeration value="Light"/>
+         <enumeration value="2"/>
+         <enumeration value="Demilight"/>
+         <enumeration value="3"/>
+         <enumeration value="Medium"/>
+         <enumeration value="4"/>
+         <enumeration value="Demibold"/>
+         <enumeration value="5"/>
+         <enumeration value="Bold"/>
+         <enumeration value="6"/>
+         <enumeration value="Extrabold"/>
+         <enumeration value="7"/>
+         <enumeration value="Ultrabold"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="FrameTitleFontSpacingType">
+      <restriction base="string">
+         <enumeration value="Ultradense"/>
+         <enumeration value="0"/>
+         <enumeration value="Extradense"/>
+         <enumeration value="1"/>
+         <enumeration value="Dense"/>
+         <enumeration value="2"/>
+         <enumeration value="Semidense"/>
+         <enumeration value="3"/>
+         <enumeration value="Normal"/>
+         <enumeration value="4"/>
+         <enumeration value="Semiexpand"/>
+         <enumeration value="5"/>
+         <enumeration value="Expand"/>
+         <enumeration value="6"/>
+         <enumeration value="Extraexpand"/>
+         <enumeration value="7"/>
+         <enumeration value="Ultraexpand"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="TabStyleType">
+      <restriction base="string">
+         <enumeration value="Chamfered"/>
+         <enumeration value="0"/>
+         <enumeration value="Square"/>
+         <enumeration value="1"/>
+         <enumeration value="Rounded"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="InteractionModeType">
+      <restriction base="string">
+         <enumeration value="Blocking"/>
+         <enumeration value="0"/>
+         <enumeration value="Non-Blocking"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="IsolationModeType">
+      <restriction base="string">
+         <enumeration value="Read Committed"/>
+         <enumeration value="0"/>
+         <enumeration value="Serializable"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ScrollbarOrientationType">
+      <restriction base="string">
+         <enumeration value="Vertical"/>
+         <enumeration value="0"/>
+         <enumeration value="Horizontal"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ReportDestinationTypeType">
+      <restriction base="string">
+         <enumeration value="Preview"/>
+         <enumeration value="0"/>
+         <enumeration value="File"/>
+         <enumeration value="1"/>
+         <enumeration value="Printer"/>
+         <enumeration value="2"/>
+         <enumeration value="Mail"/>
+         <enumeration value="3"/>
+         <enumeration value="Cache"/>
+         <enumeration value="4"/>
+         <enumeration value="Screen"/>
+         <enumeration value="5"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="SizingStyleType">
+      <restriction base="string">
+         <enumeration value="Crop"/>
+         <enumeration value="0"/>
+         <enumeration value="Adjust"/>
+         <enumeration value="1"/>
+         <enumeration value="Fill"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="KeyboardStateType">
+      <restriction base="string">
+         <enumeration value="Any"/>
+         <enumeration value="0"/>
+         <enumeration value="Roman Only"/>
+         <enumeration value="1"/>
+         <enumeration value="Local Only"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ScrollbarAlignType">
+      <restriction base="string">
+         <enumeration value="Start"/>
+         <enumeration value="0"/>
+         <enumeration value="End"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="TriggerStyleType">
+      <restriction base="string">
+         <enumeration value="PL/SQL"/>
+         <enumeration value="0"/>
+         <enumeration value="V2"/>
+         <enumeration value="1"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="PromptFontStyleType">
+      <restriction base="string">
+         <enumeration value="Plain"/>
+         <enumeration value="0"/>
+         <enumeration value="Italic"/>
+         <enumeration value="1"/>
+         <enumeration value="Oblique"/>
+         <enumeration value="2"/>
+         <enumeration value="Underline"/>
+         <enumeration value="3"/>
+         <enumeration value="Outline"/>
+         <enumeration value="4"/>
+         <enumeration value="Shadow"/>
+         <enumeration value="5"/>
+         <enumeration value="Inverted"/>
+         <enumeration value="6"/>
+         <enumeration value="Overstrike"/>
+         <enumeration value="7"/>
+         <enumeration value="Blink"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="CalculateModeType">
+      <restriction base="string">
+         <enumeration value="None"/>
+         <enumeration value="0"/>
+         <enumeration value="Formula"/>
+         <enumeration value="1"/>
+         <enumeration value="Summary"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="ProgramUnitTypeType">
+      <restriction base="string">
+         <enumeration value="Unknown"/>
+         <enumeration value="0"/>
+         <enumeration value="Procedure"/>
+         <enumeration value="1"/>
+         <enumeration value="Function"/>
+         <enumeration value="2"/>
+         <enumeration value="Package Spec"/>
+         <enumeration value="3"/>
+         <enumeration value="Package Body"/>
+         <enumeration value="4"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="PromptFontWeightType">
+      <restriction base="string">
+         <enumeration value="Ultralight"/>
+         <enumeration value="0"/>
+         <enumeration value="Extralight"/>
+         <enumeration value="1"/>
+         <enumeration value="Light"/>
+         <enumeration value="2"/>
+         <enumeration value="Demilight"/>
+         <enumeration value="3"/>
+         <enumeration value="Medium"/>
+         <enumeration value="4"/>
+         <enumeration value="Demibold"/>
+         <enumeration value="5"/>
+         <enumeration value="Bold"/>
+         <enumeration value="6"/>
+         <enumeration value="Extrabold"/>
+         <enumeration value="7"/>
+         <enumeration value="Ultrabold"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="PromptFontSpacingType">
+      <restriction base="string">
+         <enumeration value="Ultradense"/>
+         <enumeration value="0"/>
+         <enumeration value="Extradense"/>
+         <enumeration value="1"/>
+         <enumeration value="Dense"/>
+         <enumeration value="2"/>
+         <enumeration value="Semidense"/>
+         <enumeration value="3"/>
+         <enumeration value="Normal"/>
+         <enumeration value="4"/>
+         <enumeration value="Semiexpand"/>
+         <enumeration value="5"/>
+         <enumeration value="Expand"/>
+         <enumeration value="6"/>
+         <enumeration value="Extraexpand"/>
+         <enumeration value="7"/>
+         <enumeration value="Ultraexpand"/>
+         <enumeration value="8"/>
+      </restriction>
+   </simpleType>
+   <simpleType name="PromptDisplayStyleType">
+      <restriction base="string">
+         <enumeration value="Hidden"/>
+         <enumeration value="0"/>
+         <enumeration value="First Record"/>
+         <enumeration value="1"/>
+         <enumeration value="All Records"/>
+         <enumeration value="2"/>
+      </restriction>
+   </simpleType>
+   <element name="ListItemElement" type="tns:IndexedListWithName"/>
+   <element name="MenuItemRole" type="tns:IndexedListWithoutName"/>
+   <element name="MenuModuleRole" type="tns:IndexedListWithoutName"/>
+   <element name="RecordGroupColumnRow" type="tns:IndexedListWithoutName"/>
+   <complexType name="IndexedListWithName">
+      <attribute name="Index" type="positiveInteger" use="required"/>
+      <attribute name="Name" type="string" use="required"/>
+      <attribute name="Value" type="string" use="required"/>
+   </complexType>
+   <complexType name="IndexedListWithoutName">
+      <attribute name="Index" type="positiveInteger" use="required"/>
+      <attribute name="Value" type="string" use="required"/>
+   </complexType>
+   <simpleType name="nameType">
+      <restriction base="string">
+         <minLength value="1"/>
+         <maxLength value="30"/>
+      </restriction>
+   </simpleType>
+</schema>

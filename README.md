@@ -59,14 +59,14 @@ For server configuration, environment credential opt-in, custom ports, and runti
 
 The **Preview in Oracle** button launches the current saved form through the configured local Oracle Forms 14c environment. It opens a Java desktop window **on the computer running the Rust server**. The advanced option for opening an already compiled FMX is separate from publishing current edits.
 
-This optional path needs Python 3, Podman, a provisioned and running Forms 14c/WebLogic installation, host Java 17+, the FSAL launcher JAR, and access to any referenced database schema, menus, or libraries. Oracle installers must be supplied separately. The dialog includes a dependency checklist and setup/startup instructions; it does not install the stack automatically. See the [Oracle automation plugin](plugins/oracle-forms/README.md) and [Forms & Reports testing guide](docs/FORMS-AND-REPORTS-14C-TESTING-GUIDE.md).
+This optional path needs Python 3, Podman, a provisioned and running Forms 14c/WebLogic installation, host Java 17+, the FSAL launcher JAR, and access to any referenced database schema, menus, or libraries. Oracle installers must be supplied separately. The dialog includes a dependency checklist and setup/startup instructions; it does not install the stack automatically. See the [Oracle automation plugin](plugins/oracle-forms/README.md) and [Forms & Reports testing guide](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/forms-and-reports-testing-guide.md).
 
 **Validated platforms.** The reference stack has been run on two hosts:
 
-- **macOS (Apple Silicon):** Podman machine with Rosetta 2 for the `linux/amd64` Forms image. This is the original path, documented in [PODMAN-CONVERTER-SETUP-AND-HISTORY.md](docs/PODMAN-CONVERTER-SETUP-AND-HISTORY.md) and [the Mac setup guide](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/podman-setup-guide.md).
-- **Windows 11 (x86-64):** everything runs inside an Ubuntu WSL2 distribution with no emulation: Podman and the containers, Python, Java 21, and the Rust app itself. This is the recommended Windows setup, and it needs no Visual Studio. Verified: Forms 14.1.2 installed; Oracle Database 23ai Free running with seeded data; the WebLogic Forms server on port 7001; the Rust app building and serving on port 7070 in WSL; **Save & launch in Oracle** converting, compiling, and opening a sample form (`ofw_demo_employees`) with live database rows; `launch_fsal.py` run from the Ubuntu shell; and the AGENTS.md gate in WSL (`cargo check` with 0 errors, `cargo test` with 120 passed and 0 failed). The ordered steps are in [HOW-TO-RUN.md](HOW-TO-RUN.md) sections 6 and 7.5, the setup log and troubleshooting are in [WINDOWS-PODMAN-SETUP.md](docs/WINDOWS-PODMAN-SETUP.md), and the skill runbook is [windows-podman-setup.md](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-podman-setup.md). A native Windows build of the app (Visual Studio and C++) was tried first and was a red herring: it took far more setup and was slower, so do not use it. The record is in [DEPENDENCIES.md](docs/DEPENDENCIES.md) section 3.1.
+- **macOS (Apple Silicon):** Podman machine with Rosetta 2 for the `linux/amd64` Forms image. This is the original path, documented in [podman-setup-guide.md](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/podman-setup-guide.md) and [the Mac setup guide](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/podman-setup-guide.md).
+- **Windows 11 (x86-64):** everything runs inside an Ubuntu WSL2 distribution with no emulation: Podman and the containers, Python, Java 21, and the Rust app itself. This is the recommended Windows setup, and it needs no Visual Studio. Verified: Forms 14.1.2 installed; Oracle Database 23ai Free running with seeded data; the WebLogic Forms server on port 7001; the Rust app building and serving on port 7070 in WSL; **Save & launch in Oracle** converting, compiling, and opening a sample form (`ofw_demo_employees`) with live database rows; `launch_fsal.py` run from the Ubuntu shell; and the AGENTS.md gate in WSL (`cargo check` with 0 errors, `cargo test` with 120 passed and 0 failed). The ordered steps are in [the clean-clone checklist](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/clean-clone-checklist.md), the setup log and troubleshooting are in [windows-podman-status-log.md](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-podman-status-log.md), and the skill runbook is [windows-podman-setup.md](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-podman-setup.md). A native Windows build of the app (Visual Studio and C++) was tried first and was a red herring: it took far more setup and was slower, so do not use it. The record is in [DEPENDENCIES.md](DEPENDENCIES.md) section 3.1.
 
-Not yet verified on Windows: the skill's `compile_form.py` and `health_check.py` scripts, `convert_fmb.py --check`, `ofw_sales.fmb`, and the `frmbld` GUI.
+Also verified in WSL (2026-11-14): `health_check.py`, `compile_form.py`, `convert_fmb.py --check`, `ofw_sales.fmb`, the `frmbld` GUI through WSLg, and a cold stop and start with `start_testbed.py`. Artifact conversions are tested by `plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/test_conversions.py` (9 PASS, 2 BLOCKED, 1 SKIP; results in that skill's `SKILL.md`).
 
 Use database-connected compilation for PL/SQL that references schema objects. Offline compilation is an explicit option and can fail on unresolved database objects. A successful compile or launch establishes a pipeline result; visual and behavioral comparison is still required.
 
@@ -209,28 +209,29 @@ The compiled form running in the Oracle Forms desktop client with queried employ
 ├── ui/                       # Vanilla HTML/CSS/JS frontend
 ├── samples/                  # Shared fixtures and one saved XML per form
 │
-├── plugins/oracle-forms/     # APM Skills & Automation for Oracle Forms & Reports 14c
+├── plugins/oracle-forms/     # Agent skills for Oracle Forms & Reports 14c (the single source of truth for setup how-to)
 │   ├── .apm/skills/
-│   │   ├── setting-up-oracle-testbed/       # Automated Podman 23ai & Forms 14c setup
-│   │   ├── converting-oracle-artifacts/     # Forms2XML, XML2Forms, PLL, and Reports converters
-│   │   └── compiling-and-running-oracle-forms/ # Headless compiler & live desktop FSAL runner
+│   │   ├── setting-up-oracle-testbed/       # Podman, Forms 14c, database, Rust app: references/ has every setup page (start: clean-clone-checklist.md)
+│   │   ├── converting-oracle-artifacts/     # Forms2XML, XML2Forms, PLL, Reports converters; Forms XML schema extraction
+│   │   ├── compiling-and-running-oracle-forms/ # XML schema validation, headless compiler, live desktop FSAL runner
+│   │   ├── testing-forms-parity/            # Oracle 14c vs the Rust workbench: compile, servlet, query parity
+│   │   └── comparing-forms-features/        # Feature and built-in compatibility scoring
 │   └── README.md
 │
-├── oracle-reference-stack/   # Optional Oracle 12c/14c reference stack and Free DB configuration
+├── oracle-reference-stack/   # Podman image recipe, installer templates, config and provisioning scripts, seed SQL (map: references/oracle-reference-stack-map.md)
+├── tests/                    # Rust conformance tests, Python runner tests, frontend tests
+├── docs/                     # plans/ (roadmap, status, UI backlog) and screenshots/
+├── temp/                     # [GITIGNORED] Local work files, conversion test output, logs
+├── .agent/rules/             # Mandatory agent rules (read before working)
 │
-├── docs/                     # Architectural specifications & blueprints
-│   ├── NATIVE-RUST-WORKBENCH-ARCHITECTURE.md # Active system architecture & implementation status
-│   ├── DEPENDENCIES.md                       # System dependencies & Software Bill of Materials (SBOM)
-│   ├── rust-workbench-architecture.mmd       # Rust workspace architecture diagram
-│   ├── PODMAN-CONVERTER-SETUP-AND-HISTORY.md # Official Oracle 12c container setup
-│   ├── podman-architecture.mmd               # Container architecture diagram
-│   └── plans/                                # Comprehensive engineering roadmap & RFCs
-│
-├── temp/                     # [GITIGNORED] Local work files, test binaries, legacy POC
-│
-├── architecture.md           # System architecture, data pipelines, & crate boundaries
+├── start_testbed.py          # Start and confirm the containers and the Rust app: python3 start_testbed.py
+├── start-next.md             # Open work for the next session
+├── README.md                 # This file
+├── architecture.md           # Where Oracle Fusion Middleware and the Rust app run, how they fit together, repository map
 ├── AGENTS.md                 # Operational guidelines and constraints for AI agents
-└── HOW-TO-RUN.md             # Step-by-step instructions to run the server and CLI
+├── CLAUDE.md                 # Points Claude to AGENTS.md, the rules, and architecture.md
+├── DEPENDENCIES.md           # Rust toolchain and crate bill of materials (Oracle stack: the setup skill)
+└── HOW-TO-RUN.md             # Run the Rust server, the CLI, and forms live
 ```
 
 ## Preservation and current limits
@@ -254,16 +255,17 @@ Node is only used here for frontend regression tests; the native application has
 
 ## Key Documentation Links
 
+- **[Start here: clean-clone checklist](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/clean-clone-checklist.md)**: Ordered steps from a fresh `git clone` to a running testbed, on macOS and on Windows (Ubuntu WSL2).
 - **[How to Run Native Viewer & CLI](HOW-TO-RUN.md)**: Server configuration, custom ports, CLI commands, and desktop FSAL runner.
-- **[Windows Podman Setup (WSL2)](docs/WINDOWS-PODMAN-SETUP.md)**: Verified Windows path for the Oracle Forms 14c and Database 23ai reference stack, with status log and troubleshooting.
+- **[Windows status log (WSL2)](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-podman-status-log.md)**: Status log, prerequisites, memory budget, and troubleshooting log for the verified Windows path. The runbook is `windows-podman-setup.md` next to it.
 - **[Oracle Forms APM Plugin](plugins/oracle-forms/README.md)**: APM skills for setup, conversion, compilation, and live desktop execution.
-- **[Native Rust Workbench Architecture](docs/NATIVE-RUST-WORKBENCH-ARCHITECTURE.md)**: Active system architecture, delivered capabilities, and technical roadmap.
-- **[System Dependencies & SBOM](docs/DEPENDENCIES.md)**: Complete dependency audit for Rust workspace, Podman container, and host systems.
-- **[Running Official Forms Builder GUI](ORACLE-FORMS-BUILDER-GUI.md)**: Launching native Oracle Forms Builder (`frmbld`) on macOS/Linux via X11 for visual ground-truth comparison.
-- **[Forms & Reports 14c Testing Guide](docs/FORMS-AND-REPORTS-14C-TESTING-GUIDE.md)**: Full verification blueprint for Forms 14c, Reports Server, FSAL live execution, and 23ai Database integration.
+- **[Native Rust Workbench Architecture](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/native-rust-workbench-architecture.md)**: Active system architecture, delivered capabilities, and technical roadmap.
+- **[System Dependencies & SBOM](DEPENDENCIES.md)**: Complete dependency audit for Rust workspace, Podman container, and host systems.
+- **[Running Official Forms Builder GUI](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/forms-builder-gui.md)**: Launching native Oracle Forms Builder (`frmbld`) for visual ground-truth comparison: verified on Windows 11 inside WSL2 (WSLg), original method on macOS via XQuartz (12c; the 14c command is not yet verified on a Mac).
+- **[Forms & Reports 14c Testing Guide](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/forms-and-reports-testing-guide.md)**: Full verification blueprint for Forms 14c, Reports Server, FSAL live execution, and 23ai Database integration.
 - **[System Architecture](architecture.md)**: Data pipelines, crate contracts, coordinate math, and sequence diagrams.
 - **[Agent Guidelines](AGENTS.md)**: Rules and invariants for automated coding agents.
-- **[Official Oracle 12c Toolchain](docs/PODMAN-CONVERTER-SETUP-AND-HISTORY.md)**: Podman Rosetta 2 setup for certified baseline XML generation.
+- **[Setup index](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/index.md)**: Every setup, run, test, and troubleshooting page in one list.
 
 ---
 

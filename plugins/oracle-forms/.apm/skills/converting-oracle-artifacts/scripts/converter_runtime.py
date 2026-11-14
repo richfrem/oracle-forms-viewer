@@ -45,8 +45,31 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[6]
 
 
+def _dotenv_value(name: str) -> str:
+    """One KEY from the git-ignored .env at the repo root, or an empty string."""
+    env_file = repo_root() / ".env"
+    if env_file.is_file():
+        for raw in env_file.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                if key.strip() == name:
+                    return value.strip().strip('"').strip("'")
+    return ""
+
+
 def default_oracle_home() -> Optional[Path]:
-    """Oracle Home folder on the host that matches the image, if it exists."""
+    """Oracle Home folder on the host that matches the image, if it exists.
+
+    For the 14c image, OFW_ORACLE_HOME (environment, then .env) overrides the default
+    oracle-reference-stack/oracle_home_14c, so the Oracle Home can live on Ubuntu's own disk
+    (see the setup skill's references/oracle-home-location.md).
+    """
+    if IS_14C:
+        override = os.environ.get("OFW_ORACLE_HOME") or _dotenv_value("OFW_ORACLE_HOME")
+        if override:
+            path = Path(os.path.expanduser(override))
+            return path if path.is_dir() else None
     folder = "oracle_home_14c" if IS_14C else "oracle_home"
     candidate = repo_root() / "oracle-reference-stack" / folder
     return candidate if candidate.is_dir() else None

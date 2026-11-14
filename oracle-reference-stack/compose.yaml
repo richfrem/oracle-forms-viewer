@@ -37,7 +37,7 @@ services:
     platform: linux/amd64
     volumes:
       - ./installer:/installer:Z
-      - ./oracle_home_14c:/oracle_home_14c:Z
+      - ${OFW_ORACLE_HOME:-./oracle_home_14c}:/oracle_home_14c:Z
     command: >
       java -jar /installer/fmw_14.1.2.0.0_infrastructure.jar
       -silent
@@ -53,7 +53,7 @@ services:
     platform: linux/amd64
     volumes:
       - ./installer:/installer:Z
-      - ./oracle_home_14c:/oracle_home_14c:Z
+      - ${OFW_ORACLE_HOME:-./oracle_home_14c}:/oracle_home_14c:Z
     command: >
       /installer/fmw_14.1.2.0.0_fr_linux64.bin
       -silent
@@ -72,7 +72,7 @@ services:
       - "7001:7001"   # WebLogic AdminServer
       - "9001:9001"   # WLS_FORMS managed server
     volumes:
-      - ./oracle_home_14c:/oracle_home_14c:Z
+      - ${OFW_ORACLE_HOME:-./oracle_home_14c}:/oracle_home_14c:Z
       - ..:/work:Z
     environment:
       - ORACLE_HOME=/oracle_home_14c

@@ -4,7 +4,18 @@ This guide documents the complete verification blueprint for testing **Oracle Fo
 
 ---
 
+> **`$OH` below is the Oracle Home folder:** `export OH="${OFW_ORACLE_HOME:-$PWD/oracle-reference-stack/oracle_home_14c}"` (run it from the repo root, after loading `.env`). **On Windows, set `OFW_ORACLE_HOME` in `.env` to a folder on Ubuntu's own disk, for example `/home/<you>/oracle_home_14c`, BEFORE you install. Never install into the repo folder (`oracle-reference-stack/oracle_home_14c`): it is on the slow Windows drive and WebLogic takes 15 to 44 minutes to boot.** Why and how: [oracle-home-location.md](oracle-home-location.md).
+
+## Contents
+
+- [1. Environment Architecture](#1-environment-architecture)
+- [2. Testing the Oracle Forms Server (Port 7001 Dev / Port 9001 Prod)](#2-testing-the-oracle-forms-server-port-7001-dev--port-9001-prod)
+- [3. Testing the Oracle Reports Server (`WLS_REPORTS` on Port 9001)](#3-testing-the-oracle-reports-server-wls_reports-on-port-9001)
+- [4. Cross-Platform GUI Configuration](#4-cross-platform-gui-configuration)
+
 ## 1. Environment Architecture
+
+> **Oracle Home location.** The commands below use the container path `/oracle_home_14c`, which is the same wherever the folder sits on the host. On Windows the host folder defaults to `oracle-reference-stack/oracle_home_14c` on the slow Windows drive; it can instead live on Ubuntu's own disk via `OFW_ORACLE_HOME`. To test a moved or copied Oracle Home, run `provision_oracle_home.sh --verify --target PATH --against SOURCE`, then time the Forms server boot with `python3 start_testbed.py` and re-run this guide's Test 1 (servlet ping). See `plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/oracle-home-location.md`. **Not yet run.**
 
 ```mermaid
 flowchart LR
@@ -34,6 +45,27 @@ flowchart LR
 ```
 
 ---
+
+### Health check (run this first)
+
+```bash
+python3 plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/scripts/health_check.py
+```
+
+Expected output:
+
+```text
+=== Oracle Testbed Health Check ===
+[1/3] Checking Podman containers...
+  - Oracle Database 23ai: RUNNING (ok)
+  - Oracle Forms 14c Server: RUNNING (ok)
+[2/3] Checking Forms Listener Servlet (Port 7001)...
+  - Forms Listener Servlet: UP AND RUNNING (ok)
+[3/3] Checking Database Connection & Query (FREEPDB1)...
+  - Database Query test_items: SUCCESS (ok)
+
+All systems operational! Ready to compile and run Forms.
+```
 
 ## 2. Testing the Oracle Forms Server (Port 7001 Dev / Port 9001 Prod)
 
@@ -67,15 +99,15 @@ curl -I http://localhost:9001/forms/frmservlet
 ---
 
 ### Test 2: Oracle Built-in `test.fmx` via Forms Standalone Launcher (FSAL)
-Oracle bundles an official diagnostic form (`test.fmx`) with every installation. Rather than needing a legacy browser plugin, you run it natively on your Mac or Windows desktop with **Forms Standalone Launcher (FSAL)**:
+Oracle bundles an official diagnostic form (`test.fmx`) with every installation. Rather than needing a legacy browser plugin, you run it on your Mac, or on Windows from the Ubuntu WSL shell, with **Forms Standalone Launcher (FSAL)**:
 
 ```bash
 # macOS / Linux (Port 7001 for Development Mode):
-java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
+java -jar $OH/forms/java/frmsal.jar \
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=test.fmx"
 
-# Windows PowerShell:
-java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar `
+# Windows: run the macOS / Linux command above in the Ubuntu WSL shell (recommended). From Windows PowerShell it works only with Java 17 or 21 first on PATH; Windows Java 26 fails with java/applet/AppletStub:
+java -jar $OH/forms/java/frmsal.jar `
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=test.fmx"
 ```
 
@@ -92,15 +124,15 @@ Once `test.fmx` is verified, compile and run our own test form (`simple_module.f
 ```bash
 # macOS / Linux (Development Mode on Port 7001):
 # Option A: Interactive GUI Logon Prompt
-java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
+java -jar $OH/forms/java/frmsal.jar \
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx"
 
 # Option B: Pre-authenticated (Note: '#' in password MUST be URL-encoded as '%23'):
-java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
+java -jar $OH/forms/java/frmsal.jar \
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx&userid=$DB_USER/$DB_PASSWORD@FREEPDB1"
 
-# Windows PowerShell:
-java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar `
+# Windows: run the macOS / Linux command above in the Ubuntu WSL shell (recommended). From Windows PowerShell it works only with Java 17 or 21 first on PATH; Windows Java 26 fails with java/applet/AppletStub:
+java -jar $OH/forms/java/frmsal.jar `
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx&userid=$DB_USER/$DB_PASSWORD@FREEPDB1"
 ```
 
@@ -112,7 +144,7 @@ java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar `
      * **Database**: `FREEPDB1`
   3. The form authenticates against Oracle Database 23ai Free and renders the live interactive UI canvas, including menus, action toolbar, text fields, rectangular frames, lines, ellipses, and skewed polygons!
 
-![Oracle Forms 14c Native Live Canvas on macOS](screenshots/forms-14c-live-mac-canvas.jpg)
+(image: `docs/screenshots/forms-14c-live-mac-canvas.jpg` in the repo)
 
 ---
 
@@ -129,11 +161,11 @@ We authored and compiled a dedicated database-backed test form (`samples/test_db
 #### Launch Live Database Form:
 ```bash
 # macOS / Linux (Pre-authenticated to 23ai):
-java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
+java -jar $OH/forms/java/frmsal.jar \
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=test_db.fmx&userid=$DB_USER/$DB_PASSWORD@FREEPDB1"
 
-# Windows PowerShell:
-java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar `
+# Windows: run the macOS / Linux command above in the Ubuntu WSL shell (recommended). From Windows PowerShell it works only with Java 17 or 21 first on PATH; Windows Java 26 fails with java/applet/AppletStub:
+java -jar $OH/forms/java/frmsal.jar `
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=test_db.fmx&userid=$DB_USER/$DB_PASSWORD@FREEPDB1"
 ```
 
@@ -215,10 +247,10 @@ Test converting legacy binary reports to XML or text definitions using our Pytho
 
 ```bash
 # Export binary report to vendor XML definition
-python3 oracle-reference-stack/convert_rpt.py samples/invoice.rdf
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_rpt.py samples/invoice.rdf
 
 # Export binary report to human-readable ASCII text script (.rex)
-python3 oracle-reference-stack/convert_rpt.py samples/invoice.rdf --format rex
+python3 plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts/convert_rpt.py samples/invoice.rdf --format rex
 ```
 
 ---
@@ -230,7 +262,9 @@ python3 oracle-reference-stack/convert_rpt.py samples/invoice.rdf --format rex
 - Authorization: `xhost + 127.0.0.1 host.containers.internal`.
 - Display environment variable: `-e DISPLAY="host.containers.internal:0"`.
 
-### Windows 11 (WSL2 / Podman Desktop)
-- Windows 11 includes **WSLg** built-in: graphical windows render seamlessly with zero extra X-server setup.
-- Display environment variable: `-e DISPLAY=":0"`.
-- Volume mounts use PowerShell `${PWD}` syntax: `-v ${PWD}/oracle-reference-stack/oracle_home_14c:/oracle_home_14c:Z`.
+### Windows 11 (everything inside WSL2)
+- Run the containers, the Rust app, and the Forms client from the Ubuntu WSL shell, with the same commands as macOS and Linux. This is Podman inside WSL, not Podman Desktop.
+- Windows 11 includes **WSLg**: the Forms window appears on the Windows desktop with no X-server setup (`DISPLAY=:0`).
+- Volume mounts use the Linux syntax: `-v "$OH:/oracle_home_14c:Z"`.
+- Run FSAL with Java 17 or 21. WSL has OpenJDK 21. Windows Java 26 fails with `NoClassDefFoundError: java/applet/AppletStub`.
+- The full setup and troubleshooting are in `windows-podman-status-log.md` and `clean-clone-checklist.md`.
