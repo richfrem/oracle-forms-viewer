@@ -877,7 +877,7 @@
         const originalText = convertArtifactXmlBtn.textContent;
         convertArtifactXmlBtn.disabled = true;
         convertArtifactXmlBtn.textContent = 'Converting via Oracle...';
-        showBanner(`Converting ${moduleName} via Oracle 14c container...`);
+        showBanner(`Converting ${moduleName} via Oracle 14c container (saving XML/PLD next to the source file)...`);
         try {
           const res = await fetch('/api/artifacts/convert-to-xml', {
             method: 'POST',
@@ -900,8 +900,8 @@
           } else {
             await loadFullXml(moduleName);
           }
-          showBanner(`Converted ${moduleName} -> ${data.outputPath || data.outputFile || 'XML'}.`);
-          setTimeout(hideBanner, 7000);
+          showBanner(`Converted ${moduleName} — saved to: ${data.outputPath || data.outputFile || 'XML'}`);
+          setTimeout(hideBanner, 12000);
         } catch (err) {
           showBanner('Oracle conversion failed: ' + err.message);
         } finally {
