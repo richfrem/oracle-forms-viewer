@@ -4,7 +4,7 @@
 **Container architecture:** `linux/amd64`, native on an x86-64 host (no emulation)
 **Companion references:** [podman-setup-guide.md](podman-setup-guide.md) (macOS, Apple Silicon with Rosetta 2) · [docs/WINDOWS-PODMAN-SETUP.md](../../../../../../docs/WINDOWS-PODMAN-SETUP.md) (full status log, troubleshooting table, and per-step evidence)
 
-Status: **verified end to end on Windows with everything inside WSL2**: the containers, the Forms server, the Rust app, and **Save & launch in Oracle**. Section 11 is the recommended way to run the Rust app; the native Windows build (Visual Studio) is an alternative. Section 10 lists every fix a fresh Windows install needs.
+Status: **verified end to end on Windows with everything inside WSL2**: the containers, the Forms server, the Rust app, and **Save & launch in Oracle**. Section 11 is the way to run the Rust app. The native Windows build with Visual Studio and C++ was tried first and was a red herring (section 12). Section 10 lists every fix a fresh Windows install needs.
 
 ---
 
@@ -24,19 +24,19 @@ Status: **verified end to end on Windows with everything inside WSL2**: the cont
 
 Do this first. Every later step reads its values from `.env` at the repo root, which git ignores.
 
-`ash
+```bash
 cd plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed
 python3 scripts/create_env.py
-`
+```
 
 The script copies `example.env` to `.env`, then prompts for the database admin password (`ORACLE_PWD`), the test user and its password (`DB_USER`, `DB_PASSWORD`), the database service (`DB_SERVICE`), and the WebLogic admin password (`WLS_ADMIN_PASSWORD`). Passwords are entered with hidden input. Back at the repo root, load the file in an Ubuntu shell:
 
-`ash
+```bash
 cd /mnt/c/Users/<you>/source/repos/oracle-forms-workbench
 set -a; source .env; set +a
-`
+```
 
-In Windows PowerShell, .env is not read automatically. Set the variables by hand.
+In Windows PowerShell, `.env` is not read automatically. Set the variables by hand.
 
 ---
 
@@ -97,10 +97,14 @@ options = "metadata,umask=22,fmask=11"
 
 ## 3. Install Podman in Ubuntu
 
+If there is no Ubuntu distro yet, install one from PowerShell: `wsl --install -d Ubuntu-24.04`, then reopen it and create the Linux user. Then, in Ubuntu, install the tools every later step uses. The Podman install is verified (4.9.3). The other package names are what a fresh Ubuntu 24.04 needs for this setup (`python3` for the scripts, `gcc` and `make` for building Rust dependencies, `unzip` for the installers, OpenJDK 21 for FSAL); the exact Java package name was not recorded when this was first set up, so treat `openjdk-21-jre` as **not verified**:
+
 ```bash
 sudo apt-get update
-sudo apt-get install -y podman
+sudo apt-get install -y podman python3 build-essential unzip openjdk-21-jre
 podman --version
+python3 --version      # 3.12 on Ubuntu 24.04
+java -version          # 21; Windows Java 26 does not work with FSAL
 ```
 
 **Runtime directory (one-time, and again after each `wsl --shutdown`):** Rootless Podman writes its state to `/run/user/<uid>`. WSL does not create that directory, and restarting WSL clears it. Without it, every `podman run` and `podman build` fails with `RunRoot ... not writable` or `mkdir /run/user/1000: permission denied`.
@@ -246,7 +250,16 @@ The image is labelled **Oracle AI Database 26ai Free**, and `product_component_v
 
 ## 8. WebLogic domain, Forms server, and sample forms
 
-Status: **verified end-to-end on Windows.** The Employee Directory form (`ofw_demo_employees`) runs through FSAL from WSL with live rows from `$DB_USER`. The ordered recipe is in `HOW-TO-RUN.md` section 7.5. Steps marked "by hand" are not yet committed as templates.
+Status: **verified end-to-end on Windows.** The Employee Directory form (`ofw_demo_employees`) runs through FSAL from WSL with live rows from `$DB_USER`. The ordered recipe is in `HOW-TO-RUN.md` section 7.5.
+
+**One script applies every adjustment after the domain exists.** From the repo root, in WSL, with `.env` loaded:
+
+```bash
+set -a; source .env; set +a
+bash oracle-reference-stack/apply_forms14c_config.sh [--skip-samples] [--fix-perms]
+```
+
+It writes `bin/setUserOverrides.sh` and the `instances/forms1` symlink, generates `boot.properties` from `WLS_ADMIN_USER` and `WLS_ADMIN_PASSWORD` in `.env`, adds the `FREEPDB1` entry to `tnsnames.ora`, copies the `fmrweb*.res` terminal resources, builds the 16 `frmweb` libraries and `libfrmjapi.so.0`, compiles the sample `.mmx` and `.fmx`, and prints a verification summary. It is idempotent. The templates it uses are in `oracle-reference-stack/forms14c-config/` (`setUserOverrides.sh`, `tnsnames-FREEPDB1.entry`). **Status: written from the steps verified by hand below; not yet run end to end on a clean Oracle Home.** The manual steps that follow stay as the reference for what the script does.
 
 Load the demo schemas (run from `oracle-reference-stack/` or with the repo path):
 
@@ -275,7 +288,7 @@ Before the server can start, the container-created Oracle Home subfolders need r
 podman unshare chmod -R a+rX oracle_home_14c    # slow; several minutes
 ```
 
-Write the two files into the domain (`bin/setUserOverrides.sh`, `servers/AdminServer/security/boot.properties`) with LF endings and no BOM. The plan is to commit these as templates; until then, create them by hand.
+Write the two files into the domain (`bin/setUserOverrides.sh`, `servers/AdminServer/security/boot.properties`) with LF endings and no BOM. `apply_forms14c_config.sh` does this: the `setUserOverrides.sh` template is `oracle-reference-stack/forms14c-config/setUserOverrides.sh`, and `boot.properties` is generated from `.env`.
 
 Start the server:
 
@@ -375,11 +388,11 @@ The password is `$DB_PASSWORD` (the seed script's value). The testing guide's `$
 
 The FSAL needs the Oracle Home's `frmsal.jar` to be readable. If `Unable to access jarfile` appears, run `podman unshare chmod -R a+rX oracle_home_14c` from `oracle-reference-stack/`.
 
-Verified on Windows (inside WSL): `run_form.py` (through the app's **Save & launch in Oracle**), `launch_fsal.py` (run with `python3` in the Ubuntu shell), and the Rust gate (`cargo check`, `cargo test`). Not yet verified: `health_check.py`, `compile_form.py`, `convert_fmb.py --check`, `ofw_sales.fmb`, and the `frmbld` GUI. `launch_fsal.py` and the app's FSAL step need Java 17 or 21; WSL's Java 21 works.
+Verified on Windows (inside WSL): `run_form.py` (through the app's **Save & launch in Oracle**), `launch_fsal.py` (run with `python3` in the Ubuntu shell), `health_check.py`, `compile_form.py` (compiles `test_db.fmb` and `ofw_sales.fmb`), `ofw_sales.fmb` compile and open, the `frmbld` GUI through WSLg (`ORACLE-FORMS-BUILDER-GUI.md`), a cold stop and start with `start_testbed.py`, `convert_fmb.py --check`, and the Rust gate (`cargo check`, `cargo test`). `launch_fsal.py` and the app's FSAL step need Java 17 or 21; WSL's Java 21 works. Artifact conversions are verified with `converting-oracle-artifacts/scripts/test_conversions.py`; results are in that skill's `SKILL.md`.
 - `health_check.py`, `compile_form.py`, `run_form.py`, and `convert_fmb.py --check`.
 - Workbench: `cargo check` and `cargo test` from the repo root (zero warnings, AGENTS.md gate).
 
-The Rust gate has a Windows toolchain issue: `link.exe` cannot find `msvcrt.lib` unless the Visual Studio x64 build environment is loaded. Load it from a Developer PowerShell or `vcvars64.bat` before running cargo. Status: being resolved.
+The Rust gate (`cargo check`, `cargo test`) passes inside WSL with no Visual Studio. The `link.exe` and `msvcrt.lib` problem only affects the native Windows build, which was the first approach and is abandoned; see section 12.
 
 ---
 
@@ -396,7 +409,7 @@ The Rust gate has a Windows toolchain issue: `link.exe` cannot find `msvcrt.lib`
 | `touch: cannot touch ...: Permission denied` in the Oracle Home | Container UID 1000 is not the host owner | `chmod 777` the Oracle Home folder (§4) |
 | `exec container process .../fmw_14.1.2.0.0_fr_linux64.bin: Permission denied` | `.bin` lacks the execute bit after unzip | `chmod +x` the staged file (§4) |
 | `podman compose` fails: `docker-compose` not found | No compose provider installed | Use plain `podman run` commands (this guide does) |
-| `LINK : fatal error LNK1104: cannot open file 'msvcrt.lib'` (cargo) | MSVC x64 build environment not loaded | Run cargo from a Developer PowerShell or after `vcvars64.bat` |
+| `LINK : fatal error LNK1104: cannot open file 'msvcrt.lib'` (cargo) | You are building natively on Windows, which was a red herring | Do not fix it. Build and run in WSL (section 11); no Visual Studio is needed. If you must stay native, see section 12 (`vcvars64.bat` did not work on the verified install) |
 
 ---
 
@@ -481,3 +494,62 @@ cargo run -p oracle-forms-server             # http://127.0.0.1:7070
 Stop it with `Ctrl + C`. Do not run a Windows copy at the same time; both use port 7070. `python3 start_testbed.py` starts the containers and this app together. The Windows-specific code in `oracle_preview.rs` and `run_form.py` (`python`, `wsl.exe`, root `exec`, WSL Java) only applies to the native Windows build, and does nothing inside WSL except that the container `exec` runs as root, which the Windows drive needs there too.
 
 `aws-lc-sys` (the TLS dependency) compiles C during the build, and WSL already has `gcc`, so the Visual Studio work (row 15) and the Java 26 problem (row 16) do not apply here. WSL's Java is 21.
+
+
+---
+
+## 12. The first approach, abandoned: native Windows build with Visual Studio
+
+The app was first built and run as a native Windows program with Visual Studio. It worked after repairs, but it needs far more setup than running the app in WSL, so everything now runs in WSL (section 11). This section records what was tried so nobody repeats it. Use it only if you cannot run the app in WSL. The full detail is in `docs/DEPENDENCIES.md` section 3.1 and `HOW-TO-RUN.md` section 6 ("Windows: native build"); the exact `LIB` and `INCLUDE` `set` lines are in `HOW-TO-RUN.md`.
+
+**Why it needs Visual Studio.** The default Rust target on Windows is `x86_64-pc-windows-msvc`. Rust links with `link.exe` against the MSVC runtime and the Windows SDK, and the `aws-lc-sys` TLS crate compiles C with `cl.exe`, which needs the MSVC and SDK headers (`stdint.h`, `vcruntime.h`).
+
+**What went wrong, in order:**
+
+| Step | Error | Cause | Fix |
+|---|---|---|---|
+| `cargo check` | `LINK : fatal error LNK1104: cannot open file 'msvcrt.lib'` | `msvcrt.lib` is in `VC\Tools\MSVC\<ver>\lib\onecore\x64`, which the default linker path does not search; this install also had no `vcvarsall.bat`, so `vcvars64.bat` could not load the environment | Set `LIB` and `INCLUDE` to the onecore, ucrt, um, and shared folders |
+| `cargo check` | `Cannot open include file: 'stdint.h'` (compiling `aws-lc-sys`) | The Visual Studio install lacked the C/C++ headers (`vcruntime.h`) and the SDK UCRT headers | Repair the install (below) |
+| Repair | Installer exits with code 5007 | A passive or quiet installer run was not elevated from the start | Run PowerShell as Administrator |
+| Repair | Installer stalls | One package (the x86 VC++ redistributable) waits on a hidden "Please insert the disk" prompt; a Windows restart can also be needed | Dismiss the prompt, restart if asked |
+| Preview dialog | "Python 3", "Forms 14c container", "Forms servlet" shown as missing | The app ran `python3` and the Windows `podman`, but the containers are in WSL | `python` and `wsl -d <distro>` branches in `oracle_preview.rs` and `run_form.py` (`OFW_WSL_DISTRO`, default `Ubuntu`) |
+| FSAL launch | `NoClassDefFoundError: java/applet/AppletStub` | Windows Java 26 removed `java.applet` | Java 17 or 21 |
+
+**Repair command (run PowerShell as Administrator):**
+
+```powershell
+& "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify `
+  --installPath "C:\Program Files\Microsoft Visual Studio\18\Community" `
+  --add Microsoft.VisualStudio.Workload.NativeDesktop `
+  --add Microsoft.VisualStudio.Component.Windows10SDK.19041 `
+  --includeRecommended --passive --norestart
+```
+
+After the repair, confirm `vcruntime.h` exists under `VC\Tools\MSVC\<ver>\include`, then run `cargo check` and `cargo test` from the repo root.
+
+**Result:** with `rustc` 1.94.1, Windows SDK 10.0.19041.0, and MSVC 14.51.36231, `cargo check` and `cargo test` passed natively after the repair and the `LIB`/`INCLUDE` workaround. It was then replaced by the WSL route, which needs none of this (Rust 1.100.0 in Ubuntu, gcc 13.3, `cargo test` 120 passed), is faster, and uses almost the same code path as macOS. The Windows-only branches in `oracle_preview.rs` and `run_form.py` remain so the native route still works as an alternative.
+
+---
+
+## 13. How the Rust app launches Fusion Middleware, and what must be true first
+
+The Rust app does not start or manage the Forms (Fusion Middleware) server. `python3 start_testbed.py` or `podman start` starts the containers; the app only uses them. This section is the one checklist for "I clicked Preview in Oracle and nothing opened". It is written from `architecture.md` (the Preview sequence) and `HOW-TO-RUN.md` section 7 (item 5, "Windows (Podman inside WSL2): verified end-to-end"); the readiness list is what the Preview dialog reported on the verified machine.
+
+**What happens when you use Preview in Oracle (inside WSL):**
+1. The browser (Windows, `http://127.0.0.1:7070`) sends the form's XML to the Rust server (`/api/forms/oracle-preview`).
+2. The server stages the XML in an ignored job folder and runs `python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/run_form.py` with it.
+3. `run_form.py` converts the XML to an `.fmb` (Oracle's XML2Forms, run in the Forms container), compiles it to an `.fmx` (`frmcmp_batch`), and starts the FSAL launcher (`launch_fsal.py`) with the WSL Java 21.
+4. FSAL opens the form through the Forms servlet at `http://127.0.0.1:7001/forms/frmservlet`; the window appears on the Windows desktop through WSLg.
+
+**What must be true before it works** (check in this order; `GET http://127.0.0.1:7070/api/forms/oracle-preview/readiness` shows the same checks):
+1. The app runs inside WSL (section 11), with `python3`, `podman`, and Java 21 on the `PATH` there.
+2. `/run/user/<uid>` exists and `XDG_RUNTIME_DIR` points at it (checklist row 2). After `wsl --shutdown` it must be recreated.
+3. The containers are running: `oracle23ai-lite` and `forms-server-14c`. `podman ps` shows both; the database must say "DATABASE IS READY TO USE".
+4. The Forms server reached `Server state changed to RUNNING` (15 to 44 minutes after start on the Windows drive), and `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:7001/forms/frmservlet` returns `200`.
+5. The domain adjustments are in place (`apply_forms14c_config.sh`, or section 8 and checklist rows 3 to 11): `setUserOverrides.sh`, `boot.properties`, `instances/forms1`, the `FREEPDB1` alias, the `frmweb` libraries, and `libfrmjapi.so.0`.
+6. `.env` exists with `DB_USER`, `DB_PASSWORD`, and `DB_SERVICE`; the seed script ran, so the tables the form uses exist (`ORA-00942` or `must be declared` errors mean a missing table or column).
+7. WSLg works (a window opens from WSL); Java is 17 or 21, never Windows Java 26.
+
+**To test the launch without rewriting any form XML, do not click Save & launch.** Use the manual steps in `HOW-TO-RUN.md` section 7.5, or run `python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/launch_fsal.py <form>.fmx --interactive`.
+
+**Status:** verified on Windows inside WSL: Preview in Oracle converting, compiling, and opening `ofw_demo_employees` with live rows, and `launch_fsal.py`. The numbered list above is assembled from the existing docs and the verified run; I did not re-run every check in this session.

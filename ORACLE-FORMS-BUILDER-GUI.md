@@ -64,11 +64,34 @@ xhost +local:
 ```
 
 ### Windows Setup (everything inside WSL2)
-- Windows uses Podman inside Ubuntu WSL2, not Podman Desktop. See [docs/WINDOWS-PODMAN-SETUP.md](docs/WINDOWS-PODMAN-SETUP.md).
-- **Verified:** live forms through FSAL run on Windows from the Ubuntu WSL shell (see [HOW-TO-RUN.md](HOW-TO-RUN.md) section 7.5), and the FSAL window renders on the Windows desktop through WSLg (`DISPLAY=:0`). Run FSAL with Java 17 or 21; WSL's OpenJDK 21 works, Windows Java 26 does not.
-- **Not verified:** the `frmbld` Builder GUI has **not** been launched on Windows. WSLg should render it the same way, but it has not been tested.
-- On **Windows 10**, an X11 server such as VcXsrv would be needed. This has not been tested either.
 
+- Windows uses Podman inside Ubuntu WSL2, not Podman Desktop. See [docs/WINDOWS-PODMAN-SETUP.md](docs/WINDOWS-PODMAN-SETUP.md).
+- **No XQuartz.** XQuartz is the macOS X server. On Windows 11, **WSLg** is the X server and it is built in: Linux GUI programs appear on the Windows desktop with no setup. The display is `DISPLAY=:0`, and its X socket is `/mnt/wslg/.X11-unix`, which you mount into the container as `/tmp/.X11-unix`.
+- **Verified (2026-11-14):** the Forms Builder (`frmbld`, 14.1.2) runs from the `forms-converter-14c` image and opens `ofw_sales.fmb` (`/work/samples/ofw_sales.fmb`) on the Windows desktop through WSLg. Live forms through FSAL run the same way (see [HOW-TO-RUN.md](HOW-TO-RUN.md) section 7.5); use Java 17 or 21 (WSL's OpenJDK 21 works, Windows Java 26 does not).
+- On **Windows 10**, an X11 server such as VcXsrv would be needed. This has not been tested.
+
+**Run the Forms Builder 14c on Windows (Ubuntu WSL shell, repo root).** Do not run the bare `/oracle_home_14c/bin/frmbld`: it exits at once with `FRM-10039: Unable to start up the Form Builder`, because it needs the environment that Oracle's `frmbld.sh` sets (Java home, class path, instance, `TNS_ADMIN`). In this 14c install the instance scripts were never generated, so `frmbld.sh` exists only as a template with `%PLACEHOLDERS%` under `forms/templates/scripts/`. Fill them in and run it:
+
+```bash
+podman run --rm --name frmbld --platform linux/amd64 \
+  -e DISPLAY=:0 -e ORACLE_TERM=vt220 -e TERM=vt220 -e JAVA_HOME=/usr/lib/jvm/jdk-17.0.12 \
+  -e FORMS_PATH=/work/samples:/oracle_home_14c/forms \
+  -v /mnt/wslg/.X11-unix:/tmp/.X11-unix \
+  -v "$PWD/oracle-reference-stack/oracle_home_14c:/oracle_home_14c:Z" -v "$PWD:/work:Z" \
+  forms-converter-14c:latest sh -c '
+    D=/oracle_home_14c/user_projects/domains/base_domain
+    sed -e "s#%ORACLE_HOME%#/oracle_home_14c#g" \
+        -e "s#%CT_JAVA_HOME%#/usr/lib/jvm/jdk-17.0.12#g" \
+        -e "s#%TNS_ADMIN%#$D/config/fmwconfig#g" \
+        -e "s#%FORMS_INSTANCE%#$D/config/fmwconfig/components/FORMS/forms1#g" \
+        -e "s#%DOMAIN_HOME%#$D#g" \
+        /oracle_home_14c/forms/templates/scripts/frmbld.sh > /tmp/frmbld-run.sh
+    sh /tmp/frmbld-run.sh'
+```
+
+This starts a short-lived container next to the running ones and removes it when you close the Builder. The same template folder holds the other Oracle batch scripts: `frmcmp.sh`, `frmcmp_batch.sh`, `frmf2xml.sh` (FMB to XML), `frmxml2f.sh` (XML to FMB), `frmf2xlf.sh` (XLIFF), `frmxmlsg.sh`, and `frmxmlv.sh`. They are templates, not on the path. To run a conversion without filling in a template, call the Java classes directly (see the conversion notes in the setup skill's `windows-podman-setup.md`).
+
+The Option B command further down is for the 12c image (`forms-converter:latest`, `/oracle_home`, JRE 8) and is not valid for the 14c install above.
 ---
 
 ## 3. Launching Oracle Forms Builder & Live Forms

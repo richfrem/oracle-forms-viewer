@@ -1554,6 +1554,7 @@
     const mod = payload.moduleIndex;
 
     moduleBadge.textContent = `${summary.moduleName} (${summary.moduleType})`;
+    loadFullXml(summary.moduleName);
     codeTabBadge.textContent = summary.triggerCount + summary.programUnitCount;
 
     // Populate Canvas dropdown and select the canvas with the most items
@@ -5053,6 +5054,26 @@
       }
     } catch (e) {
       plsqlCodeDisplay.textContent = `Error fetching source: ${e.message}`;
+    }
+  }
+
+  // XML Source tab default: the full XML of the open form, menu, library, or report.
+  async function loadFullXml(moduleName) {
+    xmlTitle.textContent = `${moduleName} (full XML)`;
+    xmlLinesBadge.textContent = '';
+    xmlSliceDisplay.textContent = '<!-- Loading XML source... -->';
+    try {
+      const res = await fetch(`/api/module/${encodeURIComponent(moduleName)}/xml`);
+      if (!res.ok) {
+        xmlSliceDisplay.textContent = `<!-- No XML source available for ${moduleName} (binary .fmb files have no XML until converted). -->`;
+        return;
+      }
+      const data = await res.json();
+      if (currentPayload && currentPayload.summary.moduleName !== moduleName) return;
+      xmlSliceDisplay.textContent = data.xml;
+      xmlLinesBadge.textContent = `${data.endLine - data.startLine + 1} lines`;
+    } catch (e) {
+      xmlSliceDisplay.textContent = `<!-- Could not load XML source: ${e.message} -->`;
     }
   }
 

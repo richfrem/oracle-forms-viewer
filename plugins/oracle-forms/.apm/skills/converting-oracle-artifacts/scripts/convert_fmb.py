@@ -78,6 +78,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional, List
 
+import converter_runtime as rt  # shared 14c image, Oracle Home path, and Podman helper
+
 
 # -----------------------------------------------------------------------------
 # System Readiness Probe
@@ -88,41 +90,7 @@ def check_podman_readiness() -> int:
     Returns:
         int: 0 if the container environment is ready to execute conversions, 1 otherwise.
     """
-    if not shutil.which("podman"):
-        print("NOT_READY: 'podman' command not found in system PATH")
-        return 1
-
-    # On macOS, verify the virtualization VM is in RUNNING state
-    if platform.system().lower() == "darwin":
-        try:
-            res = subprocess.run(
-                ["podman", "machine", "list"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if "running" not in res.stdout.lower():
-                print("NOT_READY: Podman machine is not running. Run: podman machine start")
-                return 1
-        except Exception as err:
-            print(f"NOT_READY: Error querying podman machine: {err}")
-            return 1
-
-    try:
-        res = subprocess.run(
-            ["podman", "image", "exists", "forms-converter:latest"],
-            capture_output=True,
-            timeout=5,
-        )
-        if res.returncode != 0:
-            print("NOT_READY: Image 'forms-converter:latest' not found. Build it in oracle-reference-stack")
-            return 1
-    except Exception as err:
-        print(f"NOT_READY: Error querying podman image: {err}")
-        return 1
-
-    print("READY")
-    return 0
+    return rt.check_readiness()
 
 
 # -----------------------------------------------------------------------------
@@ -142,12 +110,7 @@ def resolve_oracle_home(custom_oracle_home: Optional[str]) -> Optional[Path]:
         if candidate.is_dir():
             return candidate
 
-    script_dir = Path(__file__).resolve().parent
-    default_home = script_dir / "oracle_home"
-    if default_home.is_dir():
-        return default_home
-
-    return None
+    return rt.default_oracle_home()
 
 
 # -----------------------------------------------------------------------------
@@ -163,45 +126,49 @@ def build_container_script(file_name: str, stem: str) -> str:
     Returns:
         str: Multi-line bash command for testing tools and running conversion.
     """
+    home = rt.HOME
+    env = (
+        f"export ORACLE_HOME={home}; "
+        f"export ORACLE_TERM=vt220; "
+        f"export TERM=vt220; "
+        f"export LD_LIBRARY_PATH={home}/lib:{home}/oracle_common/lib:$LD_LIBRARY_PATH; "
+        f"export FORMS_API_TK_BYPASS=TRUE; "
+        f"export FORMS_PATH=/work:/work/shared:$FORMS_PATH; "
+    )
     if file_name.lower().endswith(".pll"):
-        return (
-            f"export ORACLE_HOME=/oracle_home; "
-            f"export ORACLE_TERM=vt220; "
-            f"export LD_LIBRARY_PATH=/oracle_home/lib:$LD_LIBRARY_PATH; "
-            f"export FORMS_PATH=/work:/work/shared:$FORMS_PATH; "
+        # Forms 14c needs batch=yes for the PL/SQL library export (without it: PDE-PER001).
+        batch = " batch=yes" if rt.IS_14C else ""
+        return env + (
             f"cd /work; "
             f"echo 'Executing Oracle native frmcmp_batch utility to export PL/SQL library to .pld...'; "
-            f"/oracle_home/bin/frmcmp_batch Module={file_name} Module_Type=LIBRARY Script=YES Logon=NO; "
+            f"{home}/bin/frmcmp_batch module={file_name} module_type=library script=yes logon=no{batch}; "
         )
 
-    return (
-        f"export ORACLE_HOME=/oracle_home; "
-        f"export LD_LIBRARY_PATH=/oracle_home/lib:$LD_LIBRARY_PATH; "
-        f"export FORMS_PATH=/work:/work/shared:$FORMS_PATH; "
-        f"if [ -f /oracle_home/bin/frmf2xml.sh ]; then "
+    classpath = f"{home}/jlib/frmjdapi.jar:{home}/jlib/frmxmltools.jar:{home}/oracle_common/modules/oracle.xdk/xmlparserv2.jar"
+    return env + (
+        f"if [ -f {home}/bin/frmf2xml.sh ]; then "
         f"  echo 'Executing Oracle native frmf2xml.sh utility...'; "
-        f"  chmod +x /oracle_home/bin/frmf2xml.sh 2>/dev/null || true; "
-        f"  /oracle_home/bin/frmf2xml.sh OVERWRITE=YES /work/{file_name}; "
+        f"  chmod +x {home}/bin/frmf2xml.sh 2>/dev/null || true; "
+        f"  {home}/bin/frmf2xml.sh OVERWRITE=YES /work/{file_name}; "
         f"  echo 'Conversion complete.'; "
-        f"elif [ -f /oracle_home/jlib/frmxmltools.jar ]; then "
-        f"  echo 'Executing Oracle Forms 12c Forms2XML Java utility...'; "
-        f"  java -classpath /oracle_home/jlib/frmjdapi.jar:/oracle_home/jlib/frmxmltools.jar:/oracle_home/oracle_common/modules/oracle.xdk/xmlparserv2.jar "
+        f"elif [ -f {home}/jlib/frmxmltools.jar ]; then "
+        f"  echo 'Executing the Forms2XML Java utility (Forms 14c ships it as a class; frmf2xml.sh is only a template)...'; "
+        f"  java -Djava.library.path={home}/lib -classpath {classpath} "
         f"       oracle.forms.util.xmltools.Forms2XML OVERWRITE=YES /work/{file_name}; "
         f"  echo 'Conversion complete.'; "
-        f"elif [ -f /oracle_home/forms/java/frmxmltools.jar ]; then "
+        f"elif [ -f {home}/forms/java/frmxmltools.jar ]; then "
         f"  echo 'Executing Java Forms2XML directly with bundled JARs...'; "
-        f"  java -cp /oracle_home/forms/java/frmxmltools.jar:/oracle_home/forms/java/frmjdapi.jar "
+        f"  java -cp {home}/forms/java/frmxmltools.jar:{home}/forms/java/frmjdapi.jar "
         f"       oracle.forms.util.xmltools.Forms2XML OVERWRITE=YES /work/{file_name}; "
         f"  echo 'Conversion complete.'; "
         f"else "
         f"  echo 'Notice: /work/{file_name} mounted successfully inside container.'; "
-        f"  echo 'Oracle runtime binaries not yet found in /oracle_home.'; "
-        f"  echo 'To enable native frmf2xml conversion, place Oracle Forms Linux binaries or JARs'; "
-        f"  echo 'into oracle-reference-stack/oracle_home/'; "
+        f"  echo 'Oracle runtime binaries not yet found in {home}.'; "
+        f"  echo 'To enable native conversion, point --oracle-home at an Oracle Forms Linux install'; "
+        f"  echo '(oracle-reference-stack/oracle_home_14c).'; "
         f"  exit 2; "
         f"fi"
     )
-
 
 # -----------------------------------------------------------------------------
 # Custom Output File Copier
@@ -256,7 +223,7 @@ def convert_file(
 
     extra_mount: List[str] = []
     if oracle_home_path:
-        extra_mount = ["-v", f"{oracle_home_path.as_posix()}:/oracle_home:Z"]
+        extra_mount = ["-v", f"{rt.host_path(oracle_home_path)}:{rt.HOME}:Z"]
 
     print("=================================================================")
     print(" Oracle Forms Containerized Converter (Cross-Platform Python)")
@@ -267,9 +234,9 @@ def convert_file(
     if output_path_str:
         print(f" Target Output:  {output_path_str}")
     if extra_mount:
-        print(f" Oracle Home:    {oracle_home_path} (mounted to /oracle_home)")
+        print(f" Oracle Home:    {oracle_home_path} (mounted to {rt.HOME})")
     else:
-        print(" Oracle Home:    Default internal container path (/oracle_home)")
+        print(f" Oracle Home:    Default internal container path ({rt.HOME})")
     print("=================================================================")
 
     # Determine expected output filename based on module type
@@ -283,20 +250,12 @@ def convert_file(
         expected_output = target_dir / f"{input_path.stem}_fmb.xml"
 
     container_cmd = build_container_script(file_name, input_path.stem)
-    cmd = [
-        "podman",
-        "run",
-        "--rm",
-        "--platform",
-        "linux/amd64",
-        "-v",
-        f"{target_dir.as_posix()}:/work:Z",
-    ] + extra_mount + [
-        "forms-converter:latest",
-        "bash",
-        "-c",
-        container_cmd,
-    ]
+    cmd = rt.podman_cmd([
+        "run", "--rm", "--platform", "linux/amd64",
+        "-v", f"{rt.host_path(target_dir)}:/work:Z",
+        *extra_mount,
+        rt.IMAGE, "bash", "-c", container_cmd,
+    ])
 
     try:
         res = subprocess.run(cmd)

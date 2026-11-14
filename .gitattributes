@@ -1,0 +1,7 @@
+# Files that run inside Linux (WSL, containers) must keep LF line endings even when checked out on Windows
+# (core.autocrlf=true would otherwise convert them to CRLF and break them: "bash\r: No such file").
+*.sh text eol=lf
+*.rsp text eol=lf
+*.loc text eol=lf
+*.entry text eol=lf
+Containerfile* text eol=lf

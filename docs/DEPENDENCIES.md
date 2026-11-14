@@ -42,9 +42,11 @@ The repository maintains an intentional, strict boundary between its two operati
 | **WSL2** | WSL 2.x (verified: 3.0.5.0) | Linux VM that runs Podman and the containers on Windows. | Windows 11: `wsl --install`; update with `wsl --update` from an elevated PowerShell |
 | **Ubuntu WSL distro** | 24.04 (verified) | Linux shell where Podman, `podman build`, and the container commands run on Windows. | `wsl --install -d Ubuntu` |
 | **`.wslconfig`** | n/a | Sets the WSL VM memory and CPU limits. Location: `%USERPROFILE%\.wslconfig`. Applies to all distros. Changes need `wsl --shutdown` | Created by hand. Recommended `memory=12GB` (see the Windows guide) |
-| **WSLg** | Built into Windows 11 | X11 display for Linux GUI apps, including `frmbld` (not yet verified for this stack). | Included with Windows 11 WSL |
-| **Java (host, FSAL client)** | JDK 17 or 21 | Runs `frmsal.jar`, the desktop Forms Standalone Launcher. Host Java 26 is unverified with FSAL. | Windows: `winget install EclipseAdoptium.Temurin.17.JDK` (or 21). macOS: `brew install openjdk@17` |
-| **Python (host runner)** | 3.8+ | Runs the skill scripts. Windows: use `python` or `py -3` (the examples in this repo use `python3`). | Windows: `winget install Python.Python.3.12` or Python.org. macOS: Homebrew |
+| **WSLg** | Built into Windows 11 | X11 display for Linux GUI apps, including `frmbld` (verified in WSL for this stack, 2026-11-14; see `ORACLE-FORMS-BUILDER-GUI.md`). | Included with Windows 11 WSL |
+| **Java (host, FSAL client)** | JDK 17 or 21 | Runs `frmsal.jar`, the desktop Forms Standalone Launcher. **Java 26 fails** with `NoClassDefFoundError: java/applet/AppletStub` (verified on Windows). | Windows (recommended): OpenJDK 21 inside Ubuntu WSL, `sudo apt-get install -y openjdk-21-jre` (package name **not verified**; WSL's Java 21 itself is verified). Native Windows alternative: `winget install EclipseAdoptium.Temurin.21.JDK`. macOS: `brew install openjdk@17` |
+| **Python (host runner)** | 3.8+ | Runs the skill scripts. Windows (recommended): `python3` 3.12 inside Ubuntu WSL (verified); the examples in this repo use `python3`. | Ubuntu: `sudo apt-get install -y python3`. Native Windows alternative: `python` or `py -3` (`winget install Python.Python.3.12`). macOS: Homebrew |
+| **Ubuntu packages (Windows, inside WSL)** | Ubuntu 24.04 | Tools every Windows step uses: `podman` (4.9.3 verified), `python3`, `build-essential` (`gcc` 13.3 verified, `make`) for Rust dependencies, `unzip` for the Oracle installers, `curl` for `rustup`. | `sudo apt-get install -y podman python3 build-essential unzip curl openjdk-21-jre`. Packages other than `podman` and `build-essential` were **not recorded** when first installed. |
+| **Rust (Windows, inside WSL)** | `rustup`, minimal profile; 1.100.0 verified | Builds and runs the workbench in WSL. See section 3.1. | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh -s -- -y --profile minimal` |
 
 ### 2.2 Container Images
 
@@ -54,9 +56,10 @@ Built via [oracle-reference-stack/Containerfile.14c](oracle-reference-stack/Cont
 | Component / Package | Version / Source | Architectural Role |
 | :--- | :--- | :--- |
 | **Base OS** | `oraclelinux:8-slim` (`linux/amd64`) | Official Oracle Linux 8 minimal container base. |
-| **Java Runtime** | `java-17-openjdk-headless`<br/>`java-17-openjdk-devel` | Required by WebLogic Server 14.1.2 and Forms 14c. |
+| **Java Runtime** | Oracle JDK 17.0.12, from `installer/jdk-17.0.12_linux-x64_bin.tar.gz` (unpacked to `/usr/lib/jvm`, `JAVA_HOME=/usr/lib/jvm/jdk-17.0.12`) | Required by WebLogic Server 14.1.2 and Forms 14c; the Oracle installer checks the JDK vendor, so the OpenJDK packages are not used. |
 | **Motif & X11** | `motif` (`libXm.so.4`), `libXp`, `libX11`, `libXext`, `libXrender`, `libXtst`, `libXt` | Windowing and visual widget rendering libraries. |
-| **C Toolchain & Linker** | `gcc`, `binutils`, `glibc-devel`, `libnsl` | Required for Oracle `genshlib` generation of native runtime shared libraries (`libiplsn.so.0`, etc.). |
+| **C Toolchain & Linker** | `gcc`, `make`, `binutils`, `glibc-devel`, `libnsl`, `libnsl2`, `libaio` | Required for Oracle `genshlib` generation of native runtime shared libraries (`libiplsn.so.0`, etc.) and for Oracle's makefile build of `libfrmjapi.so.0`. `libnsl2` provides `libnsl.so.2` for `bin/rwconverter` (added to the Containerfile; image not yet rebuilt). |
+| **System Utilities** | `tar`, `gzip`, `shadow-utils`, `procps-ng`, `hostname`, `which` | Unpacking, the `oracle:oinstall` user (UID 1000), and process and host lookups used by WebLogic scripts. |
 | **Installed FMW Stack** | Oracle Forms 14.1.2 Enterprise (`oracle_home_14c/`) | WebLogic Server 14.1.2 (`AdminServer` on port 7001), Forms Listener Servlet, and Reports Server. |
 
 #### 2. Oracle Database 23ai Free (`oracle23ai-lite`)
@@ -76,7 +79,7 @@ Built via [oracle-reference-stack/Containerfile](oracle-reference-stack/Containe
 | **Base OS** | `oraclelinux:8-slim` (`linux/amd64`) | Official Oracle Linux 8 minimal container base. |
 | **Java Runtime** | `java-1.8.0-openjdk-headless`<br/>`java-1.8.0-openjdk` | Required by Oracle Forms2XML and Forms Builder Java GUI subsystems. |
 | **Motif & X11** | `motif` (`libXm.so.4`), `libXp`, `libX11`, `libXext`, `libXrender`, `libXtst`, `libXt` | Windowing and visual widget rendering libraries for Forms Builder GUI. |
-| **C Runtime & Linker** | `glibc-devel`, `libnsl` | Native JNI and network service linkers for Oracle binaries. |
+| **C Runtime & Linker** | `glibc-devel`, `libnsl`, `libnsl2` | Native JNI and network service linkers for Oracle binaries. `libnsl2` provides `libnsl.so.2`, which the Forms 14c Reports converter (`bin/rwconverter`) needs to start; it is listed in `Containerfile.14c` and takes effect once the image is rebuilt. |
 | **System Utilities** | `tar`, `gzip`, `shadow-utils`, `which` | Unpacking, user management (`oracle:oinstall`, UID 1000), and path lookup. |
 
 ### 2.3 Oracle Runtime Binaries (`oracle_home/` & `oracle_home_14c/`)
@@ -106,6 +109,26 @@ Gitignored. Never commit. Source: Oracle eDelivery (Oracle sign-in required) and
 
 Verified on Windows (WSL, Podman) 2026-11-13: Stage 1 (FMW Infrastructure 14.1.2.0.0) and Stage 2 (Forms & Reports 14.1.2.0.0) both logged success into `oracle_home_14c/` (2.8 GB after Stage 1). Stage 2's `.bin` needs `chmod +x` on the staged copy; the extracted zip does not keep the execute bit.
 
+### 2.4b Everything downloaded for the Windows (WSL2) setup
+
+Sizes are from the verified Windows machine, 2026-11-14. Nothing in this table is committed to git.
+
+| What | Size | Where it came from | Where it lives |
+| :--- | :--- | :--- | :--- |
+| `V1045135-01.zip` (FMW Infrastructure 14.1.2.0.0) | 2.25 GB | Oracle eDelivery (Oracle sign-in required) | `oracle-reference-stack/installer/`; unzips to `fmw_14.1.2.0.0_infrastructure.jar` (2.25 GB) |
+| `V1045121-01.zip` (Forms and Reports 14.1.2.0.0) | 1.42 GB | Oracle eDelivery (Oracle sign-in required) | `oracle-reference-stack/installer/`; unzips to `fmw_14.1.2.0.0_fr_linux64.bin` (1.42 GB) |
+| `jdk-17.0.12_linux-x64_bin.tar.gz` | 183 MB | Oracle JDK 17 archive (Linux x64) | `oracle-reference-stack/installer/`; copied into the image by `Containerfile.14c` |
+| Oracle Linux base image `container-registry.oracle.com/os/oraclelinux:8-slim` | 119 MB | Oracle Container Registry, pulled by `podman build` | Podman storage in WSL |
+| Oracle Database image `container-registry.oracle.com/database/free:latest-lite` | 1.82 GB | Oracle Container Registry (`podman run` pulls it) | Podman storage in WSL |
+| `forms-converter-14c:latest` (built locally, not downloaded) | 798 MB | Built from `Containerfile.14c`; packages come from the Oracle Linux repositories during the build | Podman storage in WSL |
+| Ubuntu 24.04 WSL distro and WSL update | not recorded | `wsl --install -d Ubuntu-24.04`, `wsl --update` | Windows |
+| Ubuntu packages: `podman` 4.9.3, `python3` 3.12.3, `build-essential` (gcc 13.3.0), `unzip`, `curl`, OpenJDK 21.0.9 | not recorded | Ubuntu apt repositories | Ubuntu WSL |
+| Rust toolchain via `rustup` (`rustc` and `cargo` 1.100.0) | `~/.rustup` 600 MB, `~/.cargo` 271 MB | `https://sh.rustup.rs` | Ubuntu home directory |
+| Rust crates (from `Cargo.lock`) and build output | `~/ofw-target` 1.5 GB | crates.io, by `cargo build` | `CARGO_TARGET_DIR=$HOME/ofw-target` |
+| Oracle Home after the two installs (the result, not a download) | 5.4 GB | Created by the silent installs | `oracle-reference-stack/oracle_home_14c/`, mounted at `/oracle_home_14c` |
+
+Total disk for this stack is roughly 20 GB. `docs/WINDOWS-PODMAN-SETUP.md` section 1 has the budget.
+
 ### 2.5 Container Image Versions (verified or pending)
 
 | Image | Tag | Status |
@@ -117,7 +140,9 @@ Verified on Windows (WSL, Podman) 2026-11-13: Stage 1 (FMW Infrastructure 14.1.2
 
 ### 2.6 Windows Filesystem Limits (verified)
 
-- The Windows drive is mounted into WSL over 9p (`/mnt/c`). Bind-mounting `oracle-reference-stack/oracle_home_14c` from `/mnt/c` **does not support `chmod +x`**. The container (UID 1000) got `Operation not permitted`. Install targets need Linux metadata (exec bits, symlinks, ownership). Options: a WSL ext4 path or a named Podman volume. The metadata mount option is not yet tested.
+- The Windows drive is mounted into WSL over 9p (`/mnt/c`). Without the `metadata` mount option, `chmod +x` fails with `Operation not permitted`. **Fix, verified:** set `[automount] options = "metadata,umask=22,fmask=11"` in `/etc/wsl.conf`, then `wsl --shutdown`. With it, the Oracle Home can stay on the Windows drive (`oracle-reference-stack/oracle_home_14c`), and both installs and the running server worked from there.
+- The container's `oracle` user (UID 1000) maps to a different host UID under rootless Podman, so it cannot write to the Windows drive. Containers that write there run as `--user root`, which maps to your Windows user. Container-created subfolders may need `podman unshare chmod -R a+rX oracle_home_14c` before the host can read them.
+- WebLogic reads the Oracle Home over this mount, so the Forms server took 15 to 44 minutes to reach RUNNING.
 
 ---
 
@@ -131,7 +156,7 @@ Verified on Windows (WSL, Podman) 2026-11-13: Stage 1 (FMW Infrastructure 14.1.2
 | **Cargo** | 1.75.0+ | Stable | Workspace manager. |
 | **C compiler** (`gcc` on Linux, macOS, and WSL) | Any recent version | Distro package | The TLS dependency `aws-lc-sys` compiles C during the build. On Ubuntu: `sudo apt-get install -y build-essential`. gcc 13.3 is verified in WSL. |
 | **Windows: build and run inside WSL** (recommended) | Ubuntu 24.04 on WSL2, Rust installed with `rustup` | Stable | **No Visual Studio and no Windows SDK needed.** Verified: `cargo check` (0 errors), `cargo test` (120 passed, 0 failed), and the app serving on port 7070 and launching forms from the Preview dialog. |
-| **MSVC linker and Windows SDK** (native Windows build only; **not needed in WSL**) | Visual Studio 2022/18 "Desktop development with C++" workload; Windows SDK 10.0.19041+ | Stable | Required by `link.exe` and `cl.exe` only if you build the app as a native Windows program. See the alternative below. |
+| **MSVC linker and Windows SDK** (native Windows build only; a red herring, **not needed in WSL**) | Visual Studio 2022/18 "Desktop development with C++" workload; Windows SDK 10.0.19041+ | Stable | Required by `link.exe` and `cl.exe` only if you build the app as a native Windows program. See the alternative below. |
 
 **Recommended on Windows: build and run in WSL.** The containers already run in WSL, so the Rust app runs there too, with almost the same code path as macOS. In the Ubuntu shell:
 
@@ -145,7 +170,7 @@ cargo check && cargo test
 
 Keep the build output (`CARGO_TARGET_DIR`) on WSL's own disk. The source can stay on the Windows drive. Rust 1.100 prints 8 manifest lint warnings (a redundant `homepage` and an unused `tracing` dependency in some `Cargo.toml` files); they are not code warnings, and Rust 1.94 prints none. The run and restart steps are in `HOW-TO-RUN.md` section 6.
 
-**Alternative (not needed): native Windows build.** Use this only if you cannot run the app in WSL. The default Rust target on Windows is `x86_64-pc-windows-msvc`. Rust links with `link.exe` and uses the MSVC C runtime and Windows SDK, and the `aws-lc-sys` crate also compiles C with `cl.exe`, which needs the MSVC and SDK headers (`stdint.h`, `vcruntime.h`). So the native build requires Visual Studio. The Preview dialog also has to reach the containers through `wsl.exe`, and FSAL needs Java 17 or 21 (Windows Java 26 fails with `java/applet/AppletStub`).
+**Native Windows build: a red herring, not needed.** It was tried first; Visual Studio and the C++ requirements took far more setup, and running everything in WSL worked much better. Use this only if you cannot run the app in WSL. The default Rust target on Windows is `x86_64-pc-windows-msvc`. Rust links with `link.exe` and uses the MSVC C runtime and Windows SDK, and the `aws-lc-sys` crate also compiles C with `cl.exe`, which needs the MSVC and SDK headers (`stdint.h`, `vcruntime.h`). So the native build requires Visual Studio. The Preview dialog also has to reach the containers through `wsl.exe`, and FSAL needs Java 17 or 21 (Windows Java 26 fails with `java/applet/AppletStub`).
 
 Verified on this machine: `rustc 1.94.1`, Windows SDK 10.0.19041.0, MSVC 14.51.36231. After the repair below and the link-environment workaround, `cargo check` and `cargo test` passed natively. `msvcrt.lib` is in `VC\Tools\MSVC\<ver>\lib\onecore\x64`, which the default linker path does not search, and the install here lacks `vcvarsall.bat`, so `vcvars64.bat` cannot load the environment. Setting `LIB` and `INCLUDE` to the onecore, ucrt, um, and shared folders fixes the link and the C compile (the exact `set` lines are in `HOW-TO-RUN.md` section 6, "Windows: native build"). Before the repair, the C compile of `aws-lc-sys` failed with `Cannot open include file: 'stdint.h'`, because the VS install was missing the C/C++ headers (`vcruntime.h`) and the SDK UCRT headers.
 

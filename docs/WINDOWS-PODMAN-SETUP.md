@@ -1,6 +1,6 @@
 # Windows Setup: Oracle Forms 14c + Oracle Database Free (Podman in WSL2)
 
-> **Status: verified end to end on Windows with everything inside WSL2: the containers, Python, Java 21, and the Rust app.** Forms 14c, the database, the WebLogic server, the Rust workbench, and **Save & launch in Oracle** all run. The native Windows build of the app (Visual Studio) is documented as an optional alternative. This guide is written from a real setup run on a Windows 11 workstation. Each step is marked with its status. A step marked **Not yet run** has not been verified, and its commands may change once it is run.
+> **Status: verified end to end on Windows with everything inside WSL2: the containers, Python, Java 21, and the Rust app.** Forms 14c, the database, the WebLogic server, the Rust workbench, and **Save & launch in Oracle** all run. The native Windows build of the app (Visual Studio) was tried first and was a red herring; it is documented only as a record. This guide is written from a real setup run on a Windows 11 workstation. Each step is marked with its status. A step marked **Not yet run** has not been verified, and its commands may change once it is run.
 
 **Architecture decision:** everything runs **inside an Ubuntu WSL2 distribution**, not as Podman for Windows and not as a native Windows app. That includes the Rust workbench. This matches the macOS/Linux instructions in [PODMAN-CONVERTER-SETUP-AND-HISTORY.md](PODMAN-CONVERTER-SETUP-AND-HISTORY.md) and uses almost the same code path as macOS. Run container commands and the Rust app from the Ubuntu shell (`wsl`). Windows is only the host: the browser opens `http://127.0.0.1:7070`, and WSLg shows the Forms window.
 
@@ -201,7 +201,21 @@ Staging into the gitignored `oracle-reference-stack/installer/` folder happens a
 
 ## 6. Later phases (done; see the status log)
 
-All of these ran and are recorded in the status log (section 0): the Forms 14c image build and both silent installs; the NTFS bind-mount check (needs `metadata` in `/etc/wsl.conf`); the WebLogic domain and boot configuration; compiling and launching a sample form with FSAL; and `cargo check` and `cargo test`, which pass inside WSL. Still not run: `health_check.py`, `compile_form.py`, `convert_fmb.py --check`, `ofw_sales.fmb`, and the `frmbld` GUI.
+All of these ran and are recorded in the status log (section 0): the Forms 14c image build and both silent installs; the NTFS bind-mount check (needs `metadata` in `/etc/wsl.conf`); the WebLogic domain and boot configuration; compiling and launching a sample form with FSAL; and `cargo check` and `cargo test`, which pass inside WSL. Also run and passing in WSL (2026-11-14): `health_check.py`, `compile_form.py` (compiles `test_db.fmb` and `ofw_sales.fmb`), `ofw_sales.fmb` compile and open, the `frmbld` GUI through WSLg, a cold stop and start with `start_testbed.py`, and `convert_fmb.py --check`.
+
+**Artifact conversions (2026-11-14, `converting-oracle-artifacts/scripts/test_conversions.py`, Forms 14.1.2 image, inside WSL):** 9 PASS, 0 FAIL, 2 BLOCKED, 1 SKIP.
+
+| Type | Path | Status |
+|---|---|---|
+| Forms | FMB to XML, XML to FMB, compile FMB to FMX | PASS |
+| Menus | MMB to XML, XML to MMB, compile MMB to MMX | PASS |
+| Libraries | PLL to PLD | PASS |
+| Libraries | PLD to PLL | BLOCKED: `frmcmp_batch` writes no `.pll` from `.pld` text; `Forms2XML` rejects libraries. Unresolved |
+| OLB | OLB to XML, XML to OLB | PASS (XML to OLB needs 14c-format XML; the 12c sample XML is rejected) |
+| Reports | XML to RDF | BLOCKED: `bin/rwconverter` needs `libnsl.so.2`; `libnsl2` is added to `Containerfile.14c`, image not yet rebuilt |
+| Reports | RDF to XML | SKIP: needs the `.rdf` from the step above |
+
+Other changes this day: the converter scripts moved from the 12c image to 14c (`converter_runtime.py`); `apply_forms14c_config.sh` and `oracle-reference-stack/forms14c-config/` capture the hand-built Fusion Middleware adjustments (written, **not yet run on a clean Oracle Home**); the XML Source tab loads the full XML by default (compiled, not seen in the running app); Save Form updates `samples/<form>_fmb.xml` in place. Every error and fix is in `plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-wsl-change-log.md`.
 
 ---
 ## 7. Troubleshooting log

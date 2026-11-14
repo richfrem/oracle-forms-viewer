@@ -20,7 +20,8 @@ Where to run it:
       Python, Java 21, and the Rust app all run inside WSL; the Rust app is built there with
       CARGO_TARGET_DIR=~/ofw-target (WSL's own disk, much faster than /mnt/c). No Visual Studio needed.
     - Windows PowerShell: `python start_testbed.py` runs Podman through `wsl.exe` and builds the Rust app
-      as a native Windows program (alternative; needs Visual Studio, see docs/DEPENDENCIES.md 3.1).
+      as a native Windows program (a red herring: needs Visual Studio and was much worse than WSL; prefer
+      the WSL shell above; see docs/DEPENDENCIES.md 3.1).
     - macOS and Linux: `python3 start_testbed.py`.
 
 Usage:
@@ -262,6 +263,15 @@ def stop_rust() -> None:
     time.sleep(1)
 
 
+def find_cargo() -> Optional[str]:
+    """Path to cargo (on PATH, or in ~/.cargo/bin, which a non-login shell may not have on PATH)."""
+    found = shutil.which("cargo")
+    if found:
+        return found
+    candidate = Path.home() / ".cargo" / "bin" / "cargo"
+    return str(candidate) if candidate.is_file() else None
+
+
 def process_running(name: str) -> bool:
     """True when a process with this image name is running (Windows, WSL, or Unix)."""
     if IS_WINDOWS or IS_WSL:
@@ -275,9 +285,10 @@ def start_rust(db_credentials: bool, build_timeout: int, restart: bool = False) 
     if not restart and http_status(f"http://127.0.0.1:{RUST_PORT}/") == 200:
         say(f"  Rust server already running at http://127.0.0.1:{RUST_PORT}/ (left as is; use --restart-rust to rebuild and restart it)")
         return True
-    cargo = shutil.which("cargo") or (str(Path.home() / ".cargo" / "bin" / "cargo") if (Path.home() / ".cargo" / "bin" / "cargo").is_file() else None)
+    cargo = find_cargo()
     if IS_WSL and not cargo:
-        # No Rust inside WSL: fall back to the Windows build (needs Visual Studio; see docs/DEPENDENCIES.md).
+        # No Rust inside WSL: fall back to the Windows build. That route needs Visual Studio and was a red
+        # herring; install Rust in WSL instead (see docs/DEPENDENCIES.md 3.1).
         extra = ["--rust-timeout", str(build_timeout)] + (["--db-credentials"] if db_credentials else [])
         return run_on_windows(extra + (["--restart-rust"] if restart else [])) == 0
     if not cargo:
@@ -386,7 +397,8 @@ def main() -> int:
         show_status(args.distro)
         return 0
     if args.stop_rust:
-        if IS_WSL:
+        if IS_WSL and not find_cargo():
+            # No Rust in WSL: the app, if any, is the Windows build.
             return run_on_windows(["--stop-rust"])
         stop_rust()
         say("Rust server stopped.")

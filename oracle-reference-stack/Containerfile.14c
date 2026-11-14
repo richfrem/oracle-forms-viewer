@@ -1,6 +1,7 @@
 FROM --platform=linux/amd64 container-registry.oracle.com/os/oraclelinux:8-slim
 
-# Oracle Fusion Middleware 14c requires Oracle JDK 17, X11/Motif libraries, libaio, and build tools for relinking
+# Oracle Fusion Middleware 14c requires Oracle JDK 17, X11/Motif libraries, libaio, and build tools for relinking.
+# libnsl2 provides libnsl.so.2, which the Oracle Reports converter (bin/rwconverter) needs to start.
 RUN microdnf install -y \
     tar \
     gzip \
@@ -14,6 +15,7 @@ RUN microdnf install -y \
     libXt \
     libXp \
     libnsl \
+    libnsl2 \
     libaio \
     motif \
     glibc-devel \

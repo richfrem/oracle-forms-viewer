@@ -42,7 +42,8 @@ CREATE TABLE &db_user..test_items (
   item_id    NUMBER(6)     CONSTRAINT test_items_pk PRIMARY KEY,
   item_name  VARCHAR2(60)  NOT NULL,
   qty        NUMBER(6)     DEFAULT 0,
-  price      NUMBER(10,2)
+  price      NUMBER(10,2),
+  amount     NUMBER(10,2)   -- the column samples/test_db.fmb reads (SELECT item_name, TO_CHAR(amount) ...)
 );
 
 -- Sample records
@@ -57,11 +58,11 @@ INSERT INTO &db_user..employees VALUES (1004, 'Mary',  'Shelley',  'mary@example
 INSERT INTO &db_user..employees VALUES (1005, 'Alan',  'Turing',   'alan@example.test', 10, DATE '2025-07-01', 131000);
 INSERT INTO &db_user..employees VALUES (1006, 'Edsger','Dijkstra', 'edsger@example.test', 20, DATE '2024-11-11', 104000);
 
-INSERT INTO &db_user..test_items VALUES (1, 'Widget',    25, 9.99);
-INSERT INTO &db_user..test_items VALUES (2, 'Gadget',     5, 49.50);
-INSERT INTO &db_user..test_items VALUES (3, 'Gizmo',     12, 19.25);
-INSERT INTO &db_user..test_items VALUES (4, 'Doohickey',  0, 3.75);
-INSERT INTO &db_user..test_items VALUES (5, 'Thingamajig', 40, 2.10);
+INSERT INTO &db_user..test_items (item_id, item_name, qty, price, amount) VALUES (1, 'Widget A',       25, 29.99, 29.99);
+INSERT INTO &db_user..test_items (item_id, item_name, qty, price, amount) VALUES (2, 'Gadget B',        5, 99.50, 99.50);
+INSERT INTO &db_user..test_items (item_id, item_name, qty, price, amount) VALUES (3, 'Super Gadget C', 12, 149.95, 149.95);
+INSERT INTO &db_user..test_items (item_id, item_name, qty, price, amount) VALUES (4, 'Doohickey',       0, 3.75, 3.75);
+INSERT INTO &db_user..test_items (item_id, item_name, qty, price, amount) VALUES (5, 'Thingamajig',    40, 2.10, 2.10);
 
 COMMIT;
 

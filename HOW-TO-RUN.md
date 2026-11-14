@@ -237,9 +237,9 @@ Stop it with `Ctrl + C`. To run it in the background: `setsid nohup cargo run -p
 
 Known cosmetic point: Rust 1.100 prints 8 manifest lint warnings (a redundant `homepage` and an unused `tracing` dependency in some `Cargo.toml` files). They are not code warnings, and Rust 1.94 prints none.
 
-### Windows: native build (alternative; not needed)
+### Windows: native build (a red herring; do not use)
 
-Kept for reference, in case you cannot use WSL for the app. The native Windows build needs Visual Studio with the C++ workload and a Windows SDK (see `docs/DEPENDENCIES.md` section 3.1), and the Preview dialog then reaches the containers through `wsl.exe`. It is slower and has more moving parts than running the app in WSL. Verified on Windows 11 with Visual Studio 2026 Community and the Windows 10 SDK 10.0.19041.0. Rust on Windows builds with the MSVC toolchain, and the build needs the include and library paths set. Run this in a `cmd` window (adjust the Visual Studio folder to your install):
+This was the first approach and it was a red herring: it took far more setup than running the app in WSL, and WSL worked much better. It is kept only as a record, in case you cannot use WSL for the app. The native Windows build needs Visual Studio with the C++ workload and a Windows SDK (see `docs/DEPENDENCIES.md` section 3.1), and the Preview dialog then reaches the containers through `wsl.exe`. It is slower and has more moving parts than running the app in WSL. Verified on Windows 11 with Visual Studio 2026 Community and the Windows 10 SDK 10.0.19041.0. Rust on Windows builds with the MSVC toolchain, and the build needs the include and library paths set. Run this in a `cmd` window (adjust the Visual Studio folder to your install):
 
 ```bat
 set "VCT=<Visual Studio folder>\VC\Tools\MSVC\<version>"

@@ -528,7 +528,10 @@ Because the container cannot convert `.fmb` files without proprietary Oracle sof
 ## 10. Oracle Reports (.rdf / .rpt) Scope & Track 2 Native Strategy
 
 ### 10.1 Why `rwconverter.sh` Is Absent in Track 1
-When executing `convert_rpt.py`, the tool reports that `rwconverter.sh` is missing:
+
+> **Applies to the 12c image only.** The Forms 14c Oracle Home (`oracle_home_14c`) includes `bin/rwconverter` and `bin/rwconverter.sh`, and `convert_rpt.py` now targets 14c by default. In 14c, `rwconverter.sh` is an unfilled template (`$$domain_home$$`), so call `bin/rwconverter` directly. It needs `libnsl.so.2`; `Containerfile.14c` lists `libnsl2` for that, but the image has not been rebuilt, so report conversion on 14c is **not verified**. See section 14.
+
+When executing `convert_rpt.py` against the 12c image, the tool reports that `rwconverter.sh` is missing:
 - **Installer Profile:** During silent installation, `oracle-reference-stack/installer/forms_silent.rsp` configured:
   ```ini
   INSTALL_TYPE=Standalone Forms Builder
@@ -701,7 +704,8 @@ podman run -d \
 Monitor startup progress:
 ```bash
 podman logs -f forms-server-14c
-# Server reaches <Server state changed to RUNNING.> in ~1.5 - 2 minutes under Rosetta 2
+# Server reaches <Server state changed to RUNNING.> in ~1.5 - 2 minutes under Rosetta 2 (macOS).
+# On Windows (WSL2, Oracle Home on the /mnt/c drive) it took 15 to 44 minutes; see section 13.
 ```
 
 Verify WebLogic Administration Console:
@@ -736,6 +740,40 @@ Windows-specific differences from macOS:
 - Build the Forms Java API library `libfrmjapi.so.0` with Oracle's makefile (`make -B -f ins_forms.mk` in `forms/lib`), not `genshlib`. Build the 16 `frmweb` libraries with `genshlib`.
 - WebLogic reads the Oracle Home from the Windows drive, so the Forms server takes 15 to 45 minutes to reach RUNNING.
 - Oracle's FSAL needs Java 17 or 21. Windows Java 26 fails (`java/applet/AppletStub`), so run FSAL from WSL.
-- The FSAL window through WSLg is verified. Display forwarding for the Forms Builder (`frmbld`) is **not yet verified** on Windows.
+- The FSAL window through WSLg is verified. Display forwarding for the Forms Builder (`frmbld`) is verified on Windows inside WSL through WSLg (2026-11-14; the exact command is in `ORACLE-FORMS-BUILDER-GUI.md`).
 
 The complete checklist of fixes, with the exact commands, is section 10 of the setup skill's `windows-podman-setup.md`.
+
+## 14. Forms 14c converters on Windows (WSL2): changes, errors, results (2026-11-14)
+
+Everything here ran inside WSL2 with the Forms 14.1.2 image (`forms-converter-14c:latest`, Oracle Home mounted at `/oracle_home_14c`). The full error and fix log is `plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-wsl-change-log.md`. macOS was not re-run.
+
+### 14.1 What changed
+
+- The converter scripts (`convert_fmb.py`, `convert_pll.py`, `convert_rpt.py`) pointed at the 12c image (`forms-converter:latest`, `/oracle_home`). They now default to 14c through a shared helper, `converter_runtime.py`. Set `OFW_CONVERTER_IMAGE=forms-converter:latest` to use 12c.
+- On Windows and WSL, `podman run` uses `--user root`: rootless Podman maps the container's `oracle` user to a UID that cannot write to `/mnt/c`.
+- 14c batch scripts (`bin/frmf2xml.sh`, `bin/frmbld.sh`, `bin/rwconverter.sh`) are templates with placeholders. The scripts call the Java classes (`oracle.forms.util.xmltools.Forms2XML` and `XML2Forms`, in `jlib/frmxmltools.jar`) and the binaries directly.
+- `frmcmp_batch` needs `batch=yes` on 14c; without it PLL to PLD fails with `PDE-PER001`.
+- `test_conversions.py` (in `converting-oracle-artifacts/scripts`) runs every path and prints a table.
+
+### 14.2 Results (`test_conversions.py`): 9 PASS, 0 FAIL, 2 BLOCKED, 1 SKIP
+
+| Type | Path | Status |
+|---|---|---|
+| Forms | FMB to XML, XML to FMB, compile FMB to FMX | PASS |
+| Menus | MMB to XML, XML to MMB, compile MMB to MMX | PASS |
+| Libraries | PLL to PLD | PASS |
+| Libraries | PLD to PLL | BLOCKED: `frmcmp_batch` writes no `.pll` from `.pld` text; `Forms2XML` rejects libraries ("must be a FormModule, ObjectLibrary or MenuModule"). Unresolved |
+| OLB | OLB to XML, XML to OLB | PASS (XML to OLB needs 14c-format XML; the 12c sample XML is rejected) |
+| Reports | XML to RDF | BLOCKED: `bin/rwconverter` needs `libnsl.so.2`, missing from the image |
+| Reports | RDF to XML | SKIP: needs the `.rdf` from the step above |
+
+### 14.3 Errors in this section
+
+| Error | Cause | Fix or status |
+|---|---|---|
+| `PDE-PER001` on PLL to PLD | `batch=yes` missing | Added to the scripts |
+| `Cannot write to file` | container `oracle` user cannot write on `/mnt/c` | `--user root` |
+| `rwconverter: error while loading shared libraries: libnsl.so.2` | image has `libnsl` (`.so.1`) only | `libnsl2` added to `Containerfile.14c`; **image not yet rebuilt** |
+| PLD to PLL produces no `.pll` | no command-line import found | Unresolved |
+| XML to OLB rejected | sample XML is a 12c version | Use 14c-format XML |
