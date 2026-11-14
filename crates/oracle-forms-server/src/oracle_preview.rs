@@ -6,6 +6,29 @@ static JOBS: OnceLock<Mutex<HashMap<String, Job>>> = OnceLock::new();
 static NEXT: AtomicU64 = AtomicU64::new(1);
 fn jobs() -> &'static Mutex<HashMap<String, Job>> { JOBS.get_or_init(|| Mutex::new(HashMap::new())) }
 
+/// Interpreter for the Python launcher: `python` on Windows (there is no `python3` command), `python3` elsewhere.
+fn python_program() -> &'static str { if cfg!(windows) { "python" } else { "python3" } }
+
+/// WSL distribution that runs Podman on Windows. Override with OFW_WSL_DISTRO.
+fn wsl_distro() -> String {
+    std::env::var("OFW_WSL_DISTRO").ok().filter(|name| !name.is_empty()).unwrap_or_else(|| "Ubuntu".into())
+}
+
+/// Builds a Podman call. On Windows, Podman runs inside WSL, so the call goes through `wsl`.
+fn podman_command(args: &[&str]) -> tokio::process::Command {
+    if cfg!(windows) {
+        let quoted: Vec<String> = args.iter().map(|arg| format!("'{}'", arg.replace('\'', "'\\''"))).collect();
+        let script = format!("export XDG_RUNTIME_DIR=/run/user/$(id -u); podman {}", quoted.join(" "));
+        let mut command = tokio::process::Command::new("wsl");
+        command.arg("-d").arg(wsl_distro()).args(["--", "bash", "-lc"]).arg(script);
+        command
+    } else {
+        let mut command = tokio::process::Command::new("podman");
+        command.args(args);
+        command
+    }
+}
+
 pub fn start(filename: &str, credentials: Option<(String, String)>) -> Result<String, String> {
     if !filename.ends_with(".xml") || !filename.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'.')) {
         return Err("Invalid saved form filename".into());
@@ -33,7 +56,13 @@ pub fn start(filename: &str, credentials: Option<(String, String)>) -> Result<St
     let log = std::env::temp_dir().join(format!("ofw-oracle-preview-{}.log", id));
     let output = fs::OpenOptions::new().write(true).create_new(true).open(&log).map_err(|e| e.to_string())?;
     let stderr = output.try_clone().map_err(|e| e.to_string())?;
-    let mut command = Command::new("python3");
+    let mut command = Command::new(python_program());
+    // Windows only: without this, each launch opens its own console window when the server has no console.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
     command.arg("-u").arg(script).arg(staged_xml).args(["--interactive", "--userid", "none"]);
     if let Some((username, password)) = credentials {
         command.arg("--compile-from-env").env("OFW_PREVIEW_DB_LOGON", format!("{}/{}@FREEPDB1", username, password));
@@ -68,13 +97,17 @@ pub async fn readiness() -> serde_json::Value {
             _ => false,
         }
     }
-    async fn container(name: &str) -> bool {
-        let mut command = tokio::process::Command::new("podman");
-        command.args(["inspect", "--format", "{{.State.Running}}", name]).kill_on_drop(true).stdin(Stdio::null());
-        match tokio::time::timeout(std::time::Duration::from_secs(4), command.output()).await {
-            Ok(Ok(output)) => output.status.success() && String::from_utf8_lossy(&output.stdout).trim() == "true",
-            _ => false,
+    /// Runs Podman (through WSL on Windows) and returns stdout when it succeeds. WSL start-up is slower, so allow more time.
+    async fn podman_output(args: &[&str]) -> Option<String> {
+        let mut command = podman_command(args);
+        command.kill_on_drop(true).stdin(Stdio::null());
+        match tokio::time::timeout(std::time::Duration::from_secs(10), command.output()).await {
+            Ok(Ok(output)) if output.status.success() => Some(String::from_utf8_lossy(&output.stdout).into_owned()),
+            _ => None,
         }
+    }
+    async fn container(name: &str) -> bool {
+        podman_output(&["inspect", "--format", "{{.State.Running}}", name]).await.is_some_and(|out| out.trim() == "true")
     }
     async fn servlet() -> bool {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -89,7 +122,7 @@ pub async fn readiness() -> serde_json::Value {
         matches!(tokio::time::timeout(std::time::Duration::from_secs(4), probe).await, Ok(Ok(true)))
     }
     let (python, java, podman, forms, database, listener) = tokio::join!(
-        command("python3", &["--version"]), command("java", &["-version"]), command("podman", &["--version"]),
+        command(python_program(), &["--version"]), command("java", &["-version"]), async { podman_output(&["--version"]).await.is_some() },
         container("forms-server-14c"), container("oracle23ai-lite"), servlet()
     );
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");

@@ -25,7 +25,7 @@ CLI Arguments:
     module                : Path to input .fmb, .mmb, or .pll file.
     -t, --type <str>      : Module type (form, menu, library; default: form).
     --offline             : Compile offline without database logon (logon=no).
-    -u, --userid <str>    : Database logon connection string (default: forms_user/Welcome123#@FREEPDB1).
+    -u, --userid <str>    : Database logon connection string (default: DB_USER/DB_PASSWORD/DB_SERVICE from .env).
 
 Input Files:
     - Target source module (.fmb, .mmb, or .pll)
@@ -61,6 +61,34 @@ from typing import List
 
 
 # Resolves the absolute path to the repository root directory.
+def _read_dotenv() -> dict:
+    """Read KEY=VALUE lines from the nearest .env at or above this script's folder (git-ignored)."""
+    here = Path(__file__).resolve()
+    for folder in [here.parent, *here.parents]:
+        candidate = folder / ".env"
+        if candidate.is_file():
+            values = {}
+            for raw in candidate.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    values[key.strip()] = value.strip().strip('"').strip("'")
+            return values
+    return {}
+
+
+_DOTENV = _read_dotenv()
+
+
+def _env(name: str, default: str = "") -> str:
+    """Environment variable first, then the .env file, then the default."""
+    return os.environ.get(name) or _DOTENV.get(name, default)
+
+
+def _default_userid() -> str:
+    """DB_USER/DB_PASSWORD@DB_SERVICE, from the environment or .env."""
+    return f"{_env('DB_USER')}/{_env('DB_PASSWORD')}@{_env('DB_SERVICE', 'FREEPDB1')}"
+
 def resolve_workspace_root() -> Path:
     """Locate the top-level repository root directory.
 
@@ -133,8 +161,11 @@ def parse_cli_args(argv: List[str]) -> argparse.Namespace:
     parser.add_argument("module", help="Path to input .fmb, .mmb, or .pll file")
     parser.add_argument("-t", "--type", default="form", choices=["form", "menu", "library"], help="Module type (default: form)")
     parser.add_argument("--offline", action="store_true", help="Compile offline without database logon (logon=no)")
-    parser.add_argument("-u", "--userid", default="forms_user/Welcome123#@FREEPDB1", help="Database logon connection string")
-    return parser.parse_args(argv)
+    parser.add_argument("-u", "--userid", default=None, help="Database logon connection string")
+    args = parser.parse_args(argv)
+    if args.userid is None:
+        args.userid = _default_userid()
+    return args
 
 
 # Main execution entry point for compile_form.py.

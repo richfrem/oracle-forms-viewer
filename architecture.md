@@ -4,7 +4,7 @@
 
 Oracle Forms Workbench connects legacy artifact inspection, XML and PL/SQL authoring, visual form editing, and execution in two environments: a native Rust runtime and an optional Oracle Fusion Middleware reference stack. The application is an authoring workbench as well as a reverse-engineering tool.
 
-The delivered form workflow is **open or create → inspect/edit → save versioned XML → run in Rust → convert/compile → launch the updated form in Oracle**. Coding agents can create and modify XML/PLSQL artifacts using the same parsers, CLI, samples, and reference automation. The UI does not currently embed an AI generation service.
+The delivered form workflow is **open or create → inspect/edit → save the form XML → run in Rust → convert/compile → launch the updated form in Oracle**. Coding agents can create and modify XML/PLSQL artifacts using the same parsers, CLI, samples, and reference automation. The UI does not currently embed an AI generation service.
 
 Employee Directory, Orders, and Sales have exercised the XML-to-Oracle pipeline. This establishes the development workflow; it does not establish exhaustive Oracle compatibility or pixel-identical rendering. Live evidence and remaining work are recorded in the [continuation status](docs/plans/10-NEXT-PHASE-SESSION-PROMPT.md) and [roadmap](docs/plans/06-IMPLEMENTATION-ROADMAP-AND-MILESTONES.md).
 
@@ -41,7 +41,7 @@ flowchart TD
 
 **Track 1, the optional reference environment**, uses Oracle tools in Podman containers for conversion, compilation, and actual Oracle execution. Python automation and host Java/FSAL are explicit optional dependencies. The server bridge invokes this tooling only for requested reference actions; it is not a prerequisite for native parsing or editing. The optional SQL*Plus testbed database driver also belongs to this integration boundary.
 
-The Track 1 stack has been validated on two hosts. On macOS, Podman runs in a machine VM with Rosetta 2 for the `linux/amd64` images. On Windows 11, Podman runs inside an Ubuntu WSL2 distribution on x86-64, with no emulation. Host Java and the FSAL launcher run on the same host as the Rust server (Windows: the launcher runs inside WSL, with WSLg for the window). See [docs/WINDOWS-PODMAN-SETUP.md](docs/WINDOWS-PODMAN-SETUP.md) for the Windows boundary.
+The Track 1 stack has been validated on two hosts. On macOS, Podman runs in a machine VM with Rosetta 2 for the `linux/amd64` images. On Windows 11, everything runs inside an Ubuntu WSL2 distribution on x86-64, with no emulation: Podman and the containers, Python, Java 21, the FSAL launcher (with WSLg for its window), and the Rust server itself, so the Windows host runs almost the same code path as macOS and Linux. The browser stays on Windows and reaches the server at `127.0.0.1:7070`. A native Windows build of the Rust server is an alternative; it reaches the containers through `wsl.exe` and needs Visual Studio. See [docs/WINDOWS-PODMAN-SETUP.md](docs/WINDOWS-PODMAN-SETUP.md) for the Windows boundary.
 
 ## Rust workspace boundaries
 
@@ -85,7 +85,7 @@ The renderer resolves coordinate units and inherited properties, handles selecte
 
 ### Two different saves
 
-- **Save Form** writes a new XML definition using `POST /api/forms/save`. Files are named `samples/<lowercase_module>_edited_<n>_fmb.xml`, created without overwriting an existing version, and synchronized to disk. Source FMB/XML files are preserved.
+- **Save Form** updates the form's one XML file, `samples/<lowercase_module>_fmb.xml`, using `POST /api/forms/save`. The write goes to a temporary file that is renamed over the target, so an interrupted save cannot leave a half-written form. If only the lossy model summary is available and the file already exists, a numbered `samples/<lowercase_module>_edited_<n>_fmb.xml` is written instead, so a complete XML is never replaced by a partial one. Binary FMB sources are never modified.
 - **Save Record** belongs to an active native runtime session and commits record changes to the selected database when writes are enabled. It does not save form design.
 
 The export mode is part of the response and user-visible result:
@@ -138,7 +138,7 @@ Database-connected compilation is the default UI choice and requires a username/
 
 Readiness probes check Python, Java 17+, Podman, the Forms container, the servlet, the FSAL JAR, and the launcher script. The local database container is also reported. These checks do not install software, start containers, validate schema privileges, or certify compiler/visual success. The Java window opens on the Rust server's host, not a remote browser user's computer.
 
-Validation status for the readiness probes: the Windows path has been run manually (container start, servlet check, FSAL launch of a sample form). The automated probes listed above have not yet been run on Windows, so their Windows results are unverified.
+Validation status for the readiness probes: on Windows with the Rust server running inside WSL, all required probes pass once the Forms servlet is up, and the Preview launch has been run end to end. The native Windows build detects `python` and reaches Podman through `wsl.exe`; that path passed the same probes.
 
 The current local development reference path uses the AdminServer Forms servlet on port **7001** with `config=standaloneapp`. Managed-server port **9001** is available when configured/running, and must not be assumed active. FSAL connects to the Forms service, which connects to the database. This is development publication to the configured reference environment, rather than a general production deployment manager.
 

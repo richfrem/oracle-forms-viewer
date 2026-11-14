@@ -38,7 +38,7 @@ plugins/oracle-forms/
         │   ├── scripts/
         │   │   ├── provision_testbed.py   # Spins up 23ai + 14c containers
         │   │   ├── relink_runtime.sh      # genshlib runner for 16 shared libraries
-        │   │   ├── init_database.sh       # Provisions forms_user, tables, & TNS entries
+        │   │   ├── init_database.sh       # Provisions $DB_USER, tables, & TNS entries
         │   │   └── health_check.py        # Probes 7001 AdminServer & frmservlet/admin
         │   └── references/
         │       ├── database-23ai-setup.md # Multi-arch DB container configuration
@@ -77,7 +77,7 @@ plugins/oracle-forms/
 * **Trigger phrases**: *"start oracle forms server"*, *"provision forms 14c container"*, *"check testbed health"*, *"relink forms runtime"*.
 * **Capabilities**:
   * Runs Podman commands to spin up `oracle23ai-lite` and `forms-server-14c`.
-  * Verifies CPU translation (Rosetta 2 on macOS, WSL2 on Windows).
+  * Verifies the container runtime (Rosetta 2 translation on Apple Silicon; native x86-64 inside WSL2 on Windows, where the Rust app runs too).
   * Executes `genshlib` inside the container if shared libraries are missing.
   * Ensures `tnsnames.ora`, `default.env`, and `setUserOverrides.sh` are synchronized.
   * Runs pre-flight health checks against `http://localhost:7001/forms/frmservlet/admin`.
@@ -87,7 +87,7 @@ plugins/oracle-forms/
 * **Capabilities**:
   * Dispatches `frmcmp_batch` inside `forms-server-14c`.
   * Automatically injects `ORACLE_TERM=vt220`, `FORMS_PATH`, and `TNS_ADMIN`.
-  * Supports offline compilation (`logon=no`) or live database compilation (`userid=forms_user/Welcome123#@FREEPDB1`).
+  * Supports offline compilation (`logon=no`) or live database compilation (`userid=$DB_USER/$DB_PASSWORD@FREEPDB1`).
   * Parses stdout and compiler logs: highlights specific compilation errors (e.g. `FRM-30174 Check Box values must be distinct`, `PLS-00201 identifier must be declared`) and suggests exact line fixes.
 
 ### Skill 3: `converting-oracle-forms-xml`

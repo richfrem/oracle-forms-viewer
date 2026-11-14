@@ -100,7 +100,7 @@ java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
 java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=ofw_sales.fmx"
 ```
-* **Logon Credentials**: `forms_user` / `Welcome123#` @ `10.88.0.93:1521/FREEPDB1` (or `FREEPDB1` via container TNS).
+* **Logon Credentials**: `$DB_USER` / `$DB_PASSWORD` @ `10.88.0.93:1521/FREEPDB1` (or `FREEPDB1` via container TNS).
 
 ### Engine B: Native Rust Workbench (Browser)
 

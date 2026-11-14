@@ -10,6 +10,27 @@
 
 ---
 
+## 0. Step 0: create the .env file
+
+Do this first. Every later step reads its values from `.env` at the repo root, which git ignores. The macOS commands use the same variable names as the Windows guide.
+
+`ash
+cd plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed
+python3 scripts/create_env.py
+cd ../../../../..
+set -a; source .env; set +a
+`
+
+The script copies `example.env` to `.env` and prompts for `ORACLE_PWD`, `DB_USER`, `DB_PASSWORD`, `DB_SERVICE`, and `WLS_ADMIN_PASSWORD`. Passwords are entered with hidden input. Containers that need the values take `--env-file .env` (for example, the WebLogic domain step).
+
+---
+
+### Restarting later
+
+After the first setup, one command from the repo root starts the stack again: `python3 start_testbed.py`. It starts the Podman machine if it is stopped, starts `oracle23ai-lite` and `forms-server-14c`, waits for the database, restarts the Rust app, and waits for the Forms server to reach RUNNING. Use `--no-forms` for the database and Rust app only, and `--status` to see what is running. It starts existing containers only.
+
+---
+
 ## 1. What It Is & Why We Need It
 
 ### Architectural Context & Primary Objective
@@ -520,10 +541,10 @@ Because the container cannot convert `.fmb` files without proprietary Oracle sof
 | `FRM-93500: unexpected error while attempting to create the runtime process` / `NullPointerException: Cannot invoke "String.indexOf(int)" because "value" is null` | Forms 14c development domain runs `formsapp` directly on `AdminServer`. When `forms.instance` system property is absent, `FormsappConfigUtils.getFormsInstanceName()` queries JMX for a `SystemComponent` attached to `AdminServer` and returns `null`. Under Java 17, `ProcessBuilder.environment().put("FORMS_INSTANCE_NAME", null)` invokes `validateValue(value)` which calls `value.indexOf('\0')` and throws NPE. | Added `EXTRA_JAVA_PROPERTIES="-Dforms.instance=forms1 ${EXTRA_JAVA_PROPERTIES}"` to `${DOMAIN_HOME}/bin/setUserOverrides.sh`. |
 | `frmweb: error while loading shared libraries: libiplsn.so.0: cannot open shared object file: No such file or directory` | Oracle ships the 16 Forms web runtime libraries (`libiplsn.a`, `libibfrmw.a`, `libiffw.a`, `libifcw.a`, etc.) as static `.a` archives in `$ORACLE_HOME/lib/` and expects GNU `gcc`, `binutils`, and `ar` to build `.so.0` shared libraries during the installation relinking step via `$ORACLE_HOME/bin/genshlib`. The slim container image omitted build tools. | Added `gcc`, `binutils`, and `make` to `Containerfile.14c`, and ran `$ORACLE_HOME/bin/genshlib` for all 16 runtime libraries. |
 | `Error opening Oracle*Terminal file fmrweb` | When launching a runtime session, `frmweb` requires the Oracle Terminal key mapping resource file (`fmrweb.res`), which was staged under `forms/templates/resource/US/` rather than the default lookup path `$ORACLE_HOME/forms/admin/resource/US/`. | Copied templates from `forms/templates/resource/` to `forms/admin/resource/` and `forms/`, and configured `ORACLE_PATH=/oracle_home_14c/forms:/oracle_home_14c/forms/admin/resource/US` in `default.env`. |
-| `Welcome to WebLogic Server 14.1.2: The original administration console is no longer supported and has been removed` | In WebLogic 14.1.2, Oracle removed the legacy in-browser `/console` web application to improve container security, replacing it with the desktop **WebLogic Remote Console** (or Hosted WebLogic Remote Console). | Download the desktop app from [oracle/weblogic-remote-console Releases](https://github.com/oracle/weblogic-remote-console/releases) (official macOS `.dmg` available for Apple Silicon and Intel). Connect to `http://localhost:7001` with `weblogic` / `Welcome123#`. For direct Forms listener status checks, use `http://localhost:7001/forms/frmservlet/admin`. |
+| `Welcome to WebLogic Server 14.1.2: The original administration console is no longer supported and has been removed` | In WebLogic 14.1.2, Oracle removed the legacy in-browser `/console` web application to improve container security, replacing it with the desktop **WebLogic Remote Console** (or Hosted WebLogic Remote Console). | Download the desktop app from [oracle/weblogic-remote-console Releases](https://github.com/oracle/weblogic-remote-console/releases) (official macOS `.dmg` available for Apple Silicon and Intel). Connect to `http://localhost:7001` with `weblogic` / `$WLS_ADMIN_PASSWORD`. For direct Forms listener status checks, use `http://localhost:7001/forms/frmservlet/admin`. |
 | `Unexpected end of file from server` when launching FSAL on port 9001 | In our streamlined single-container development environment, the Forms application is deployed directly to the WebLogic `AdminServer` running on port **7001**. Port `9001` is reserved for dedicated `WLS_FORMS` managed server clusters. | Connect FSAL to port 7001: `-url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx"`. |
 | `FRM-30174: Checked and Unchecked check box values must be distinct` during `frmcmp_batch` build | In `simple_module_fmb.xml`, item `CHECK_BOX286` had no `CheckedValue` or `UncheckedValue` specified, causing compiler validation to fail. | Added `CheckedValue="Y" UncheckedValue="N"` to `CHECK_BOX286` in `simple_module_fmb.xml`, regenerated the `.fmb` via `XML2Forms`, and compiled cleanly to `simple_module.fmx`. |
-| Native Oracle Forms **Logon** dialog appears when launching form | If the form is invoked without pre-supplied `userid` or if the TNS network identifier is unresolved from the client, the Forms runtime engine displays the native GUI database authentication dialog. | Enter `forms_user` for Username, `Welcome123#` for Password, and `10.88.0.93:1521/FREEPDB1` (the 23ai container IP) for Database. |
+| Native Oracle Forms **Logon** dialog appears when launching form | If the form is invoked without pre-supplied `userid` or if the TNS network identifier is unresolved from the client, the Forms runtime engine displays the native GUI database authentication dialog. | Enter `$DB_USER` for Username, `$DB_PASSWORD` for Password, and `10.88.0.93:1521/FREEPDB1` (the 23ai container IP) for Database. |
 
 ---
 
@@ -560,14 +581,14 @@ Because Oracle publishes official native `linux/arm64` container images for 23ai
 podman run -d \
   --name oracle23ai-lite \
   -p 1521:1521 \
-  -e ORACLE_PWD=Welcome1 \
+  -e ORACLE_PWD=$ORACLE_PWD \
   container-registry.oracle.com/database/free:latest-lite
 ```
 
 ### 11.2 Initial Verification & Test Schema Setup
 1. **Container Health**: Container `oracle23ai-lite` initialized in < 45 seconds, mounting pluggable database `FREEPDB1`.
 2. **Tablespace Creation**: Created dedicated `USERS` tablespace (`users01.dbf`) and assigned it as the database default.
-3. **Developer Account**: Created `forms_user` / `Welcome123#` with `CONNECT`, `RESOURCE`, and `DBA` roles.
+3. **Developer Account**: Created `$DB_USER` / `$DB_PASSWORD` with `CONNECT`, `RESOURCE`, and `DBA` roles.
 4. **Table Verification**: Created `test_items (item_id, item_name, amount, created_at)` and successfully inserted and committed test records.
 5. **Interactive & Automated Testing**: Added `test_db.sh` and `DATABASE-TEST-GUIDE.md` under `temp/` (gitignored).
 
@@ -636,7 +657,7 @@ Oracle provides **`forms_development_template.jar`** specifically for standalone
   readTemplate('/oracle_home_14c/wlserver/common/templates/wls/wls.jar')
   addTemplate('/oracle_home_14c/forms/common/templates/wls/forms_development_template.jar')
   cd('/Security/base_domain/User/weblogic')
-  cmo.setPassword('Welcome123#')
+  cmo.setPassword('$WLS_ADMIN_PASSWORD')
   setOption('OverwriteDomain', 'true')
   writeDomain('/oracle_home_14c/user_projects/domains/base_domain')
   closeTemplate()
@@ -661,7 +682,7 @@ To boot without interactive credential prompts and avoid native library linking 
    mkdir -p oracle-reference-stack/oracle_home_14c/user_projects/domains/base_domain/servers/AdminServer/security/
    cat << 'EOF' > oracle-reference-stack/oracle_home_14c/user_projects/domains/base_domain/servers/AdminServer/security/boot.properties
    username=weblogic
-   password=Welcome123#
+   password=$DB_PASSWORD
    EOF
    ```
    *(WebLogic automatically encrypts these plaintext credentials using DemoTrust / DemoIdentity keystores upon first boot).*
@@ -748,7 +769,7 @@ Run from the repository root in PowerShell:
 podman run -d `
   --name oracle23ai-lite `
   -p 1521:1521 `
-  -e ORACLE_PWD=Welcome1 `
+  -e ORACLE_PWD=$ORACLE_PWD `
   container-registry.oracle.com/database/free:latest-lite
 
 # 2. Build the Forms 14c image

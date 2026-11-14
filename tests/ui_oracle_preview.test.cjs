@@ -56,7 +56,7 @@ test('connected preview requires its own password before saving or starting a jo
   const h = setup(() => { started = true; });
   vm.runInContext("resetOraclePreview('EMPLOYEE')", h.context);
   h.get('oracleCompileMode').value = 'connected';
-  h.get('oracleCompileUser').value = 'forms_user';
+  h.get('oracleCompileUser').value = 'test_user';
   h.get('oracleCompilePassword').value = '';
   await h.get('launchOraclePreviewBtn').handlers.click({ target: h.get('launchOraclePreviewBtn') });
   assert.equal(started, false);

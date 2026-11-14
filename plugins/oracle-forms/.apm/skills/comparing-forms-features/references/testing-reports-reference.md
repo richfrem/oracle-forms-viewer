@@ -34,10 +34,10 @@ cargo run -p oracle-forms-cli -- report <REPORT_XML> [OPTIONS]
 ### Examples:
 ```bash
 # Evaluate Customer Orders Summary report against live Oracle 23ai:
-OFW_DB_USER=forms_user OFW_DB_PASSWORD=Welcome123# cargo run -p oracle-forms-cli -- report samples/orders_summary_report.xml --backend oracle-thin -o orders_summary.html
+OFW_DB_USER=$DB_USER OFW_DB_PASSWORD=$DB_PASSWORD cargo run -p oracle-forms-cli -- report samples/orders_summary_report.xml --backend oracle-thin -o orders_summary.html
 
 # Evaluate Department Salaries master-detail report:
-OFW_DB_USER=forms_user OFW_DB_PASSWORD=Welcome123# cargo run -p oracle-forms-cli -- report samples/department_salaries_report.xml --backend oracle-thin -o dept_salaries.html
+OFW_DB_USER=$DB_USER OFW_DB_PASSWORD=$DB_PASSWORD cargo run -p oracle-forms-cli -- report samples/department_salaries_report.xml --backend oracle-thin -o dept_salaries.html
 ```
 
 Open the generated report in any browser:
@@ -53,7 +53,7 @@ The native Rust web interface (`http://127.0.0.1:7070`) features an integrated *
 
 1. **Start Server**:
    ```bash
-   OFW_SERVER_ENV_CREDENTIALS=1 OFW_DB_USER=forms_user OFW_DB_PASSWORD=Welcome123# cargo run -p oracle-forms-server
+   OFW_SERVER_ENV_CREDENTIALS=1 OFW_DB_USER=$DB_USER OFW_DB_PASSWORD=$DB_PASSWORD cargo run -p oracle-forms-server
    ```
 2. **Navigate**: Open [http://127.0.0.1:7070](http://127.0.0.1:7070) in your browser.
 3. **Switch Tab**: Click the **Reports Engine** tab in the main tab bar (next to *Visual Canvas Preview*, *PL/SQL Viewer*, *Raw XML Slice*, *Form Diff Tool*).

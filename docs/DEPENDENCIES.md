@@ -111,8 +111,8 @@ Verified on Windows (WSL, Podman) 2026-11-13: Stage 1 (FMW Infrastructure 14.1.2
 | Image | Tag | Status |
 | :--- | :--- | :--- |
 | `forms-converter-14c:latest` (built here) | Local build from `Containerfile.14c` | Built on Windows WSL (798 MB). Stage 1 and Stage 2 installs ran in containers from this image |
-| `container-registry.oracle.com/database/free` | `latest-lite` | Verified on Windows WSL (2026-11-13): starts, `forms_user` schema and sample queries work on port 1521. The banner says "Oracle AI Database 26ai Free", version `23.0.0.0.0`. The repo docs say 23ai. Needs `XDG_RUNTIME_DIR` and `containers/networks` (see WINDOWS-PODMAN-SETUP §3) |
-| `oracle-reference-stack/sql/seed_forms_user.sql` | Committed | Creates `forms_user` (dev password `Welcome1`), tablespace `FORMS_DATA`, tables and sample rows |
+| `container-registry.oracle.com/database/free` | `latest-lite` | Verified on Windows WSL (2026-11-13): starts, `$DB_USER` schema and sample queries work on port 1521. The banner says "Oracle AI Database 26ai Free", version `23.0.0.0.0`. The repo docs say 23ai. Needs `XDG_RUNTIME_DIR` and `containers/networks` (see WINDOWS-PODMAN-SETUP §3) |
+| `oracle-reference-stack/sql/seed_test_schema.sql` | Committed | Creates `$DB_USER` (dev password `$DB_PASSWORD`), tablespace `FORMS_DATA`, tables and sample rows |
 | `container-registry.oracle.com/os/oraclelinux` | `8-slim` | Base image for both Containerfiles |
 
 ### 2.6 Windows Filesystem Limits (verified)
@@ -127,13 +127,27 @@ Verified on Windows (WSL, Podman) 2026-11-13: Stage 1 (FMW Infrastructure 14.1.2
 
 | Tool | Minimum Version | Channel | Invariant Rule |
 | :--- | :--- | :--- | :--- |
-| **Rust Compiler (`rustc`)** | 1.75.0+ | Stable (Edition 2021) | **Zero JVM, zero Node.js, zero Oracle Client runtime required.** |
+| **Rust Compiler (`rustc`)** | 1.75.0+ | Stable (Edition 2021) | **Zero JVM, zero Node.js, zero Oracle Client runtime required.** Verified with 1.94.1 (native Windows) and 1.100.0 (WSL Ubuntu). |
 | **Cargo** | 1.75.0+ | Stable | Workspace manager. |
-| **MSVC linker and Windows SDK** (Windows only) | Visual Studio 2022/18 "Desktop development with C++" workload; Windows SDK 10.0.19041+ | Stable | Required by `link.exe` for build scripts. Verified on this machine: `rustc 1.94.1`, Windows SDK 10.0.19041.0, MSVC 14.51.36231. `msvcrt.lib` is in `VC\Tools\MSVC\<ver>\lib\onecore\x64`, which the default linker path does not search. The install here lacks `vcvarsall.bat`, so `vcvars64.bat` cannot load the environment. Setting `LIB` to the onecore, ucrt, and um x64 folders fixes the link (see below). |
+| **C compiler** (`gcc` on Linux, macOS, and WSL) | Any recent version | Distro package | The TLS dependency `aws-lc-sys` compiles C during the build. On Ubuntu: `sudo apt-get install -y build-essential`. gcc 13.3 is verified in WSL. |
+| **Windows: build and run inside WSL** (recommended) | Ubuntu 24.04 on WSL2, Rust installed with `rustup` | Stable | **No Visual Studio and no Windows SDK needed.** Verified: `cargo check` (0 errors), `cargo test` (120 passed, 0 failed), and the app serving on port 7070 and launching forms from the Preview dialog. |
+| **MSVC linker and Windows SDK** (native Windows build only; **not needed in WSL**) | Visual Studio 2022/18 "Desktop development with C++" workload; Windows SDK 10.0.19041+ | Stable | Required by `link.exe` and `cl.exe` only if you build the app as a native Windows program. See the alternative below. |
 
-Windows link-environment workaround: set `LIB` to `...\VC\Tools\MSVC\<ver>\lib\onecore\x64;...\Windows Kits\10\Lib\<sdk>\ucrt\x64;...\Windows Kits\10\Lib\<sdk>\um\x64`. With that set, the link succeeds, but the C compile of `aws-lc-sys` (jitterentropy) fails with `Cannot open include file: 'stdint.h'`. The VS install is also missing the C/C++ headers (`vcruntime.h` is not under `VC\Tools\MSVC\<ver>\include`) and the SDK UCRT headers (`Windows Kits\10\Include\<sdk>\ucrt\stdint.h` is absent). Environment variables cannot fix that. Repair the install in Visual Studio Installer ("Modify" → "Desktop development with C++" plus a Windows 11 SDK component), then rerun `cargo check` and `cargo test` from a clean `vcvars64.bat` environment. Status: **blocked on the VS repair**, pending the elevated repair below.
+**Recommended on Windows: build and run in WSL.** The containers already run in WSL, so the Rust app runs there too, with almost the same code path as macOS. In the Ubuntu shell:
 
-**Why the Windows build needs Visual Studio.** The default Rust target on Windows is `x86_64-pc-windows-msvc`. Rust links with `link.exe` and uses the MSVC C runtime and Windows SDK. The `aws-lc-sys` crate (pulled in by the TLS stack) also compiles C code with `cl.exe`, which needs the MSVC and SDK headers (`stdint.h`, `vcruntime.h`). Visual Studio is therefore required for the native Windows build. The alternative that avoids it is building inside WSL Ubuntu with a Linux Rust toolchain (rustup), which has gcc already installed.
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+. "$HOME/.cargo/env"
+cd /mnt/c/Users/<user>/source/repos/oracle-forms-workbench
+export CARGO_TARGET_DIR=$HOME/ofw-target    # build output on WSL's own disk: much faster than /mnt/c
+cargo check && cargo test
+```
+
+Keep the build output (`CARGO_TARGET_DIR`) on WSL's own disk. The source can stay on the Windows drive. Rust 1.100 prints 8 manifest lint warnings (a redundant `homepage` and an unused `tracing` dependency in some `Cargo.toml` files); they are not code warnings, and Rust 1.94 prints none. The run and restart steps are in `HOW-TO-RUN.md` section 6.
+
+**Alternative (not needed): native Windows build.** Use this only if you cannot run the app in WSL. The default Rust target on Windows is `x86_64-pc-windows-msvc`. Rust links with `link.exe` and uses the MSVC C runtime and Windows SDK, and the `aws-lc-sys` crate also compiles C with `cl.exe`, which needs the MSVC and SDK headers (`stdint.h`, `vcruntime.h`). So the native build requires Visual Studio. The Preview dialog also has to reach the containers through `wsl.exe`, and FSAL needs Java 17 or 21 (Windows Java 26 fails with `java/applet/AppletStub`).
+
+Verified on this machine: `rustc 1.94.1`, Windows SDK 10.0.19041.0, MSVC 14.51.36231. After the repair below and the link-environment workaround, `cargo check` and `cargo test` passed natively. `msvcrt.lib` is in `VC\Tools\MSVC\<ver>\lib\onecore\x64`, which the default linker path does not search, and the install here lacks `vcvarsall.bat`, so `vcvars64.bat` cannot load the environment. Setting `LIB` and `INCLUDE` to the onecore, ucrt, um, and shared folders fixes the link and the C compile (the exact `set` lines are in `HOW-TO-RUN.md` section 6, "Windows: native build"). Before the repair, the C compile of `aws-lc-sys` failed with `Cannot open include file: 'stdint.h'`, because the VS install was missing the C/C++ headers (`vcruntime.h`) and the SDK UCRT headers.
 
 **Repair command (run PowerShell as Administrator).** A passive or quiet installer run must be elevated from the start. Running it unelevated exits with code 5007:
 
@@ -145,18 +159,7 @@ Windows link-environment workaround: set `LIB` to `...\VC\Tools\MSVC\<ver>\lib\o
   --includeRecommended --passive --norestart
 ```
 
-After the repair, confirm `stdint.h` exists under the SDK `ucrt` include folder and `vcruntime.h` under `VC\Tools\MSVC\<ver>\include`, then run `cargo check` and `cargo test` from the repo root.
-
-**WSL alternative (no admin rights, no Visual Studio):**
-
-```bash
-curl https://sh.rustup.rs -sSf | sh -s -- -y
-source "$HOME/.cargo/env"
-cd /mnt/c/Users/<user>/source/repos/oracle-forms-workbench && cargo check && cargo test
-```
-
-The first build is slow. Use a clone under the WSL home directory if `/mnt/c` builds are slow.
-
+The installer can need a Windows restart, and one package (the x86 VC++ redistributable) can stall on a hidden "Please insert the disk" prompt. After the repair, confirm `vcruntime.h` exists under `VC\Tools\MSVC\<ver>\include`, then run `cargo check` and `cargo test` from the repo root.
 ### 3.2 Cargo Dependency Bill of Materials
 
 All Rust workspace dependencies are defined in `Cargo.toml` and vendorable via `cargo vendor`:

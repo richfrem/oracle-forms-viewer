@@ -1,18 +1,50 @@
 [
   {
-    "query": "I need help using the setting-up-oracle-testbed skill",
-    "should_trigger": true
+    "should_trigger": true,
+    "query": "I need help using the setting-up-oracle-testbed skill"
   },
   {
-    "query": "Can you use the setting-up-oracle-testbed skill for me?",
-    "should_trigger": true
+    "should_trigger": true,
+    "query": "Can you use the setting-up-oracle-testbed skill for me?"
   },
   {
-    "query": "What time is it in New York?",
-    "should_trigger": false
+    "should_trigger": true,
+    "query": "Set up the Oracle Forms 14c and Database Free testbed on my Windows 11 machine with WSL2"
   },
   {
-    "query": "How do I boil an egg?",
-    "should_trigger": false
+    "should_trigger": true,
+    "query": "I rebooted Windows and the Oracle containers and the Forms server are down. How do I bring everything back?"
+  },
+  {
+    "should_trigger": true,
+    "query": "XML2Forms fails with 'libfrmjapi.so.0: undefined symbol: __gxx_personality_v0' in the Forms container"
+  },
+  {
+    "should_trigger": true,
+    "query": "Forms logon fails with ORA-12154 cannot find alias FREEPDB1 in the domain tnsnames.ora"
+  },
+  {
+    "should_trigger": true,
+    "query": "Run the Rust workbench next to the Oracle testbed on Windows without installing Visual Studio"
+  },
+  {
+    "should_trigger": true,
+    "query": "WebLogic takes 40 minutes to reach RUNNING after podman start on Windows. Is that normal?"
+  },
+  {
+    "should_trigger": true,
+    "query": "Create the .env file with the database and WebLogic passwords for the testbed"
+  },
+  {
+    "should_trigger": false,
+    "query": "What time is it in New York?"
+  },
+  {
+    "should_trigger": false,
+    "query": "How do I boil an egg?"
+  },
+  {
+    "should_trigger": false,
+    "query": "Migrate this SharePoint list view to a modern page"
   }
 ]

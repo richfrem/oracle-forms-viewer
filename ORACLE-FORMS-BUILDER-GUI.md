@@ -63,9 +63,10 @@ On native Linux (X11 / Xorg), display authorization is straightforward:
 xhost +local:
 ```
 
-### Windows Setup (Podman inside WSL2)
+### Windows Setup (everything inside WSL2)
 - Windows uses Podman inside Ubuntu WSL2, not Podman Desktop. See [docs/WINDOWS-PODMAN-SETUP.md](docs/WINDOWS-PODMAN-SETUP.md).
-- **Status: not verified.** Live forms through FSAL work on Windows (see [HOW-TO-RUN.md](HOW-TO-RUN.md) section 7.5). The `frmbld` GUI has **not** been launched on Windows. WSLg should provide `DISPLAY=:0`, and the FSAL window does render through WSLg, but the Builder itself has not been tested.
+- **Verified:** live forms through FSAL run on Windows from the Ubuntu WSL shell (see [HOW-TO-RUN.md](HOW-TO-RUN.md) section 7.5), and the FSAL window renders on the Windows desktop through WSLg (`DISPLAY=:0`). Run FSAL with Java 17 or 21; WSL's OpenJDK 21 works, Windows Java 26 does not.
+- **Not verified:** the `frmbld` Builder GUI has **not** been launched on Windows. WSLg should render it the same way, but it has not been tested.
 - On **Windows 10**, an X11 server such as VcXsrv would be needed. This has not been tested either.
 
 ---

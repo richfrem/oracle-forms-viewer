@@ -49,10 +49,40 @@ import sys
 import subprocess
 import urllib.request
 import urllib.error
+import os
+from pathlib import Path
 from typing import List
 
 
 # Verifies that both required Podman containers are currently in running status.
+def _read_dotenv() -> dict:
+    """Read KEY=VALUE lines from the nearest .env at or above this script's folder (git-ignored)."""
+    here = Path(__file__).resolve()
+    for folder in [here.parent, *here.parents]:
+        candidate = folder / ".env"
+        if candidate.is_file():
+            values = {}
+            for raw in candidate.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    values[key.strip()] = value.strip().strip('"').strip("'")
+            return values
+    return {}
+
+
+_DOTENV = _read_dotenv()
+
+
+def _env(name: str, default: str = "") -> str:
+    """Environment variable first, then the .env file, then the default."""
+    return os.environ.get(name) or _DOTENV.get(name, default)
+
+
+def _default_userid() -> str:
+    """DB_USER/DB_PASSWORD@DB_SERVICE, from the environment or .env."""
+    return f"{_env('DB_USER')}/{_env('DB_PASSWORD')}@{_env('DB_SERVICE', 'FREEPDB1')}"
+
 def check_containers() -> bool:
     """Query Podman for running container instances of 23ai DB and Forms 14c.
 
@@ -100,7 +130,7 @@ def check_forms_listener() -> bool:
 
 # Tests end-to-end database connectivity by executing a live SQL*Plus query inside 23ai.
 def check_database_query() -> bool:
-    """Execute a query against forms_user.test_items in FREEPDB1 via SQL*Plus.
+    """Execute a query against the DB_USER test_items table in DB_SERVICE via SQL*Plus (credentials from .env).
 
     Returns:
         True if query succeeds and returns valid count, False otherwise.
@@ -108,7 +138,7 @@ def check_database_query() -> bool:
     print("[3/3] Checking Database Connection & Query (FREEPDB1)...")
     cmd: List[str] = [
         "podman", "exec", "-i", "oracle23ai-lite",
-        "sqlplus", "-s", "forms_user/Welcome123#@localhost:1521/FREEPDB1"
+        "sqlplus", "-s", f"{_env('DB_USER')}/{_env('DB_PASSWORD')}@localhost:1521/{_env('DB_SERVICE', 'FREEPDB1')}"
     ]
     query = "SELECT COUNT(*) FROM test_items; EXIT;\n"
     try:
