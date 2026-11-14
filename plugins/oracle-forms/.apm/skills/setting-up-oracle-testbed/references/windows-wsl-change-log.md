@@ -47,12 +47,12 @@ The checked-in Windows branches in `oracle_preview.rs` and `run_form.py` remain,
 | `.../converting-oracle-artifacts/scripts/converter_runtime.py` (new) | Shared 14c image name, Oracle Home path, Podman command for macOS, WSL, and Windows, and the `--check` probe |
 | `.../scripts/convert_fmb.py`, `convert_pll.py`, `convert_rpt.py` | Moved to the 14c image and `/oracle_home_14c`; `batch=yes` on 14c; Forms2XML as a Java class with `-Djava.library.path` and `FORMS_API_TK_BYPASS=TRUE`; direct `rwconverter` call |
 | `.../scripts/test_conversions.py` (new) | Runs every conversion path for the five types and prints a PASS, FAIL, BLOCKED, SKIP table |
-| `crates/oracle-forms-server/src/service.rs` | Save Form updates `samples/<form>_fmb.xml` in place (temp file plus rename); summary-only fallback writes a numbered copy |
+| `crates/oracle-forms-server/src/service.rs` | Save Form updates `samples/<form>_fmb.xml` in place (temp file plus rename); summary-only fallback writes a numbered copy; `get_sample_list` now includes `.pll` and `.rdf` alongside `.xml`, `.fmb`, `.mmb`, `.olb`, `.pld`; `load_module` and `load_report` register report XMLs under `<report name>` so **XML Source** displays `_report.xml` files |
 | `crates/oracle-forms-server/src/oracle_preview.rs` | `python_program()`, `wsl_distro()`, `podman_command()` (Windows through `wsl.exe`), `CREATE_NO_WINDOW` on Windows; non-Windows behavior unchanged |
-| `crates/oracle-forms-server/src/routes.rs`, `ui/app.js` | XML Source tab loads the full XML for the open form, menu, library, or report; selecting a tree node still shows that node's slice. **Not verified in the running app** (not restarted); `cargo check` passes |
+| `crates/oracle-forms-server/src/routes.rs`, `ui/app.js`, `ui/index.html` | XML Source tab loads the full XML for the open form, menu, library, or report (verified via `/api/module/DEMO_EMPLOYEES/xml`); selecting a tree node still shows that node's slice; removed the redundant inner **Triggers & Program Units** sidebar (`code-list-sidebar`) from PL/SQL Studio |
 | `oracle-reference-stack/sql/seed_test_schema.sql` (renamed from `seed_forms_user.sql`) | Uses `&db_user` and `&db_password`; `test_items` has an `amount` column and five rows |
-| `oracle-reference-stack/Containerfile.14c` | Adds `libnsl2` (needed by `rwconverter`). **Not rebuilt yet** |
-| `oracle-reference-stack/apply_forms14c_config.sh`, `oracle-reference-stack/forms14c-config/` (new) | The reapply script and its templates |
+| `oracle-reference-stack/Containerfile.14c` | Adds `libnsl2` (needed by `rwconverter`). Rebuilt as `localhost/forms-converter-14c:new` (`f46f911db007`), verified with `test_conversions.py` (12 PASS) and `health_check.py`, then retagged to `:latest` (`:backup-20261114` kept for rollback) |
+| `oracle-reference-stack/apply_forms14c_config.sh`, `oracle-reference-stack/forms14c-config/` | The reapply script and its templates; step 5b added for Reports `tools/admin/prefs.ora`, `guicommon/tk/admin/uiprint.txt`, `uiscreenprint.txt` |
 | `example.env`, `scripts/create_env.py`, `.gitignore` | Credentials live in the git-ignored `.env`; no usernames or passwords in docs, scripts, SQL, or tests |
 | `ORACLE-FORMS-BUILDER-GUI.md` | Windows section: `frmbld` works through WSLg; exact 14c command that fills the `frmbld.sh` template placeholders |
 | Docs and skill | `HOW-TO-RUN.md`, `AGENTS.md`, `README.md`, `architecture.md`, `docs/*`, the setup skill, and the converting skill updated for all-in-WSL |
@@ -95,12 +95,15 @@ The checked-in Windows branches in `oracle_preview.rs` and `run_form.py` remain,
 | 19 | A Python console window popped up | App started detached without a console | `CREATE_NO_WINDOW` in `oracle_preview.rs` |
 | 20 | `PDE-PER001` on PLL to PLD | `frmcmp_batch` on 14c needs `batch=yes` | Added to `convert_pll.py` and `convert_fmb.py` |
 | 21 | Converters pointed at the 12c image | Hard-coded `forms-converter:latest` and `/oracle_home` | `converter_runtime.py` defaults to 14c; `OFW_CONVERTER_IMAGE` overrides |
-| 22 | `rwconverter: error while loading shared libraries: libnsl.so.2` | Image lacks `libnsl2` | Added to `Containerfile.14c`; **rebuild not done yet** |
-| 23 | PLD to PLL: `frmcmp_batch` writes no `.pll` (earlier run reported `FRM-10043`) | No command-line import from `.pld` found; `Forms2XML` rejects libraries | **Unresolved**; recorded as a known limit |
+| 22 | `rwconverter: error while loading shared libraries: libnsl.so.2` | Image lacked `libnsl2` | Rebuilt `Containerfile.14c` (`f46f911db007`), verified and retagged to `:latest` |
+| 23 | PLD to PLL: `frmcmp_batch` wrote no `.pll` with `script=no compile_all=yes` | `frmcmp_batch` needs `parse=yes` and `output_file=<name>.pll` to import `.pld` text | Updated `convert_pll.py` and `test_conversions.py` to pass `parse=yes output_file=<stem>.pll`; verified `lib.pll` (8,208 bytes) |
 | 24 | XML to OLB rejected | Sample XML was a 12c version | 14c-format XML (from OLB to XML) converts back fine |
 | 25 | XML Source tab blank until a tree node was picked | The tab only loaded node slices | Loads the full file by default (**not verified in the running app**) |
 | 26 | Selecting one item in XML Source shows two lines | Start line appears one too early | **Open**; not investigated |
 | 27 | Variables not expanded in `wsl bash -lc '...'` from PowerShell; PowerShell here-strings corrupted edits | Quoting layers | Write the commands to a script file and run `wsl -d Ubuntu -- bash <script>`; use single-quoted here-strings |
+| 28 | `rwconverter` `REP-0158: The command line keyword logon is unknown` / `help is unknown` | `logon=no` is a `frmcmp_batch` keyword, not `rwconverter` | Removed `logon=no` from `test_conversions.py` |
+| 29 | `rwconverter` `exit 139` (segfault) / `REP-0003` / `REP-0004` / `uiprint.txt` / `uiscreenprint.txt` / `EXIT:134` | `rwconverter.sh` is an unfilled template in 14c; calling `rwconverter` directly lacked `reports.sh` env vars, `prefs.ora`, `uiprint.txt`/`uiscreenprint.txt`, and X11 `DISPLAY` | Added `tools/admin/prefs.ora`, `guicommon/tk/admin/uiprint.txt` and `uiscreenprint.txt` (in `apply_forms14c_config.sh` step 5b), `reports.sh` env vars + `HOME=/tmp` + WSLg `DISPLAY=:0` in `convert_rpt.py` and `test_conversions.py` |
+| 30 | `rwconverter` `REP-0504` / `ORA-00942` / `REP-6106` on Reports XML -> RDF | `XML -> RDF` validates SQL against DB and requires `DTDVersion` on `<report>`; `orders_summary_report.xml` references `ORDERS` (not in `seed_test_schema.sql`), and `parameterized_items_report.xml` lacked `DTDVersion` | Updated `test_conversions.py` to use `parameterized_items_report.xml` (injecting `DTDVersion="9.0.4.0.0"` in the temp copy) with `--network oracle-net` and `userid` from `.env`; `RDF -> XML` via `convert_rpt.py` works offline with no `userid`. Full `test_conversions.py` suite: **12 PASS, 0 FAIL, 0 BLOCKED, 0 SKIP** |
 
 ## 4b. Documentation gaps found and fixed (2026-11-14)
 
@@ -124,9 +127,8 @@ Gaps found when reviewing `windows-podman-setup.md` against what the setup neede
 
 ## 5. Open items and unverified claims
 
-- `apply_forms14c_config.sh` has not been run on a clean Oracle Home.
-- The image has not been rebuilt with `libnsl2`; report conversion (XML to RDF, RDF to XML) is untested.
-- PLD to PLL has no working path on 14c.
+- `apply_forms14c_config.sh` has not been run end to end on a clean Oracle Home.
+- `forms-server-14c` is still running on the previous image (`backup-20261114`) until the owner chooses to recreate it.
 - XML Source tab change was compiled (`cargo check`) but not seen in the running app.
 - Two-lines-per-selected-item bug in XML Source is open.
 - Whether the `--user root` rule is needed inside WSL is not verified.

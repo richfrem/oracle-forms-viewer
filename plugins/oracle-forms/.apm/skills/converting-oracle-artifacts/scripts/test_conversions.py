@@ -172,17 +172,7 @@ def test_libraries() -> None:
         return skip("Libraries", "PLD -> PLL", "needs PLL -> PLD")
     shutil.copy(case / "lib.pld", case / "back" / "lib.pld")
     rc, log = run_script(SCRIPTS / "convert_pll.py", [str(case / "back" / "lib.pld"), "--compile"])
-    # Verified on Forms 14c: frmcmp_batch prints nothing and writes no .pll when given a .pld text file, and
-    # Forms2XML/XML2Forms reject libraries ("must be a FormModule, ObjectLibrary or MenuModule"). Reported as a
-    # known limitation (BLOCKED), not a regression, unless frmcmp_batch starts producing the file.
-    hint = ("", "known 14c limitation: frmcmp_batch makes no .pll from .pld text, and PLL <-> XML is not supported")
-    produced = case / "back" / "lib.pll"
-    if produced.is_file() and produced.stat().st_size > 0:
-        record("Libraries", "PLD -> PLL", "PASS", f"{produced.name}, {produced.stat().st_size} bytes")
-    elif "FRM-" in log or "ORA-" in log or "PDE-" in log:
-        record("Libraries", "PLD -> PLL", "FAIL", f"exit {rc}: {tail(log)}")
-    else:
-        record("Libraries", "PLD -> PLL", "BLOCKED", hint[1])
+    check_output("Libraries", "PLD -> PLL", case / "back" / "lib.pll", rc, log)
 
 
 # ---- 4. OLB -------------------------------------------------------------------------------------
@@ -201,18 +191,63 @@ def test_olb() -> None:
     check_output("OLB", "XML -> OLB", case / "back" / "r.olb", rc, log)
 
 
+def _db_userid() -> str:
+    """Returns user/password@FREEPDB1 from environment or .env without logging credentials."""
+    import os
+    user = os.environ.get("OFW_DB_USER", "")
+    pwd = os.environ.get("OFW_DB_PASSWORD", "")
+    env_file = ROOT / ".env"
+    if (not user or not pwd) and env_file.is_file():
+        for line in env_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            v = v.strip().strip('"').strip("'")
+            if k.strip() == "OFW_DB_USER" and not user:
+                user = v
+            elif k.strip() == "OFW_DB_PASSWORD" and not pwd:
+                pwd = v
+    return f"{user}/{pwd}@FREEPDB1" if user and pwd else ""
+
+
 # ---- 5. Reports ---------------------------------------------------------------------------------
-def test_reports() -> None:
+def test_reports(offline: bool = False) -> None:
     print("\n5. Reports")
-    src = SAMPLES / "orders_summary_report.xml"
+    src = SAMPLES / "parameterized_items_report.xml"
     if not src.is_file():
         return skip("Reports", "all paths", f"{src.name} not found")
+    userid = "" if offline else _db_userid()
+    if not userid:
+        return skip("Reports", "XML -> RDF", "needs OFW_DB_USER / OFW_DB_PASSWORD (skipped in --offline)")
     case = fresh("reports")
-    shutil.copy(src, case / "r.xml")
-    # Oracle's bin/rwconverter.sh is an unfilled template, so the binary is called directly.
-    rw = f"export REPORTS_PATH=/repo/{case.relative_to(ROOT).as_posix()}; {H}/bin/rwconverter"
+    xml_text = src.read_text(encoding="utf-8")
+    if "DTDVersion=" not in xml_text:
+        xml_text = xml_text.replace("<report name=", '<report DTDVersion="9.0.4.0.0" name=', 1)
+    (case / "r.xml").write_text(xml_text, encoding="utf-8")
+    rel = case.relative_to(ROOT).as_posix()
+    wslg = ["-v", "/mnt/wslg/.X11-unix:/tmp/.X11-unix", "-e", "DISPLAY=:0"] if Path("/mnt/wslg/.X11-unix").is_dir() else []
+    rw_env = (
+        f"export HOME=/tmp; mkdir -p /tmp/US; touch /tmp/prefs.ora; "
+        f"export ORACLE_HOME={H} DOMAIN_HOME={H}/user_projects/domains/base_domain RW={H}/reports "
+        f"REPORTS_TMP=/tmp REPORTS_NO_DUMMY_PRINTER=TRUE REPORTS_DEFAULT_DISPLAY=NO TK_PRINT_STATUS=echo "
+        f"NLS_LANG=AMERICAN_AMERICA.WE8ISO8859P1 TK_ICON={H}/reports/plugins/resource "
+        f"TNS_ADMIN={H}/user_projects/domains/base_domain/config/fmwconfig "
+        f"REPORTS_CLASSPATH={H}/reports/jlib/rwbuilder.jar:{H}/reports/jlib/rwrun.jar:{H}/jlib/zrclient.jar "
+        f"LD_LIBRARY_PATH={H}/lib:{H}/oracle_common/lib:/usr/lib/jvm/jdk-17.0.12/lib:/usr/lib/jvm/jdk-17.0.12/lib/server "
+        f"REPORTS_PATH=/repo/{rel}:{H}/reports/templates:{H}/reports/printers; "
+    )
+    cmd = rt.podman_cmd([
+        "run", "--rm", "--platform", "linux/amd64", "--network", "oracle-net",
+        "-v", f"{rt.host_path(ORACLE_HOME)}:{H}:Z",
+        "-v", f"{rt.host_path(ROOT)}:/repo:Z",
+        *wslg,
+        rt.IMAGE, "bash", "-c",
+        f"{rw_env} cd /repo/{rel}; {H}/bin/rwconverter stype=xmlfile source=r.xml dtype=rdffile dest=r.rdf userid={userid} batch=yes overwrite=yes",
+    ])
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    rc, log = res.returncode, (res.stdout or "") + (res.stderr or "")
     hint = ("libnsl.so.2", "image lacks libnsl.so.2 (add libnsl2 to Containerfile.14c and rebuild the image)")
-    rc, log = run_container(f"{rw} stype=xmlfile source=r.xml dtype=rdffile dest=r.rdf batch=yes overwrite=yes logon=no", case)
     if not check_output("Reports", "XML -> RDF", case / "r.rdf", rc, log, hint):
         return skip("Reports", "RDF -> XML", "needs XML -> RDF")
     shutil.copy(case / "r.rdf", case / "back" / "r.rdf")
@@ -253,7 +288,7 @@ def main() -> int:
         "menus": test_menus,
         "libraries": test_libraries,
         "olb": test_olb,
-        "reports": test_reports,
+        "reports": lambda: test_reports(args.offline),
     }
     for kind in TYPES:
         if kind in selected:

@@ -132,7 +132,13 @@ def build_container_script(file_name: str, stem: str, is_compile: bool) -> str:
     # Forms 14c needs batch=yes for the PL/SQL library step (without it: PDE-PER001).
     batch = " batch=yes" if rt.IS_14C else ""
     if is_compile:
-        # Compiles .pld text script into binary .pll or compiles .pll to executable .plx
+        # Parses .pld text script into binary .pll, or compiles .pll to executable .plx
+        if file_name.lower().endswith(".pld"):
+            return env + (
+                f"cd /work; "
+                f"echo 'Executing Oracle frmcmp_batch to parse .pld into library {stem}.pll...'; "
+                f"{home}/bin/frmcmp_batch module={file_name} output_file={stem}.pll module_type=library parse=yes logon=no{batch}; "
+            )
         return env + (
             f"cd /work; "
             f"echo 'Executing Oracle frmcmp_batch to compile library {file_name}...'; "

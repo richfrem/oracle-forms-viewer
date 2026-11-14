@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<report DTDVersion="9.0.4.0.0" name="DEMO_EMPLOYEES" title="Demo Employees Report" unitOfMeasurement="inch">
+  <data>
+    <dataSource name="Q_EMP">
+      <select>SELECT EMP_ID, FIRST_NAME, LAST_NAME, JOB_TITLE, DEPARTMENT, SALARY, HIRE_DATE FROM OFW_DEMO_EMPLOYEES ORDER BY LAST_NAME</select>
+      <group name="G_EMP">
+        <dataItem name="EMP_ID" datatype="number" width="10" />
+        <dataItem name="FIRST_NAME" datatype="character" width="40" />
+        <dataItem name="LAST_NAME" datatype="character" width="40" />
+        <dataItem name="JOB_TITLE" datatype="character" width="60" />
+        <dataItem name="DEPARTMENT" datatype="character" width="40" />
+        <dataItem name="SALARY" datatype="number" width="12" />
+        <dataItem name="HIRE_DATE" datatype="date" width="12" />
+      </group>
+    </dataSource>
+  </data>
+  <layout>
+    <section name="MAIN">
+      <body>
+        <repeatingFrame name="R_EMP" source="G_EMP" printDirection="down">
+          <field name="F_EMP_ID" source="EMP_ID"><geometryInfo x="0.0" y="0.0" width="0.8" height="0.25" /></field>
+          <field name="F_FIRST_NAME" source="FIRST_NAME"><geometryInfo x="0.9" y="0.0" width="1.2" height="0.25" /></field>
+          <field name="F_LAST_NAME" source="LAST_NAME"><geometryInfo x="2.2" y="0.0" width="1.2" height="0.25" /></field>
+          <field name="F_JOB_TITLE" source="JOB_TITLE"><geometryInfo x="3.5" y="0.0" width="1.6" height="0.25" /></field>
+          <field name="F_DEPARTMENT" source="DEPARTMENT"><geometryInfo x="5.2" y="0.0" width="1.0" height="0.25" /></field>
+          <field name="F_SALARY" source="SALARY" formatMask="$#,##0.00"><geometryInfo x="6.3" y="0.0" width="1.0" height="0.25" /></field>
+        </repeatingFrame>
+      </body>
+    </section>
+  </layout>
+</report>
