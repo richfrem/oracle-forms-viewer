@@ -890,14 +890,18 @@
             return;
           }
           await loadSampleList();
-          if (data.outputFile) {
-            await loadSample(data.outputFile);
+          if (data.payload) {
+            setModulePayload(data.payload);
+            switchTab('xmlTab');
+            await loadFullXml(data.payload.summary?.moduleName || moduleName);
+          } else if (data.outputFile) {
+            await loadFullXml(moduleName);
             switchTab('xmlTab');
           } else {
             await loadFullXml(moduleName);
           }
-          showBanner(`Converted ${moduleName} -> ${data.outputFile || 'XML'}.`);
-          setTimeout(hideBanner, 5000);
+          showBanner(`Converted ${moduleName} -> ${data.outputPath || data.outputFile || 'XML'}.`);
+          setTimeout(hideBanner, 7000);
         } catch (err) {
           showBanner('Oracle conversion failed: ' + err.message);
         } finally {

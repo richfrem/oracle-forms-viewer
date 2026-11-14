@@ -569,10 +569,12 @@ async fn convert_artifact_to_xml(
                 .and_then(|n| n.to_str())
                 .unwrap_or("")
                 .to_string();
-            let _ = service.load_module(&output_path);
+            let loaded_payload = service.load_module(&output_path).ok();
             Json(serde_json::json!({
                 "ok": true,
                 "outputFile": output_file,
+                "outputPath": output_path.to_string_lossy(),
+                "payload": loaded_payload,
                 "log": log,
             }))
             .into_response()
