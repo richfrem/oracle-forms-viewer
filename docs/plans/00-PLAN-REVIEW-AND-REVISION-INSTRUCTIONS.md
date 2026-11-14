@@ -34,7 +34,7 @@ The current state on `main`:
 - `crates/oracle-forms-db/src/oracle.rs`
   - `test_connection` only opens a TCP socket to `host:1521`. It proves the listener is up, not that the login works.
   - `query` runs `podman exec -i oracle23ai-lite sqlplus -s user/pass@SERVICE`. It pastes the SQL into a script wrapped in `SELECT json_object(*) FROM (<sql>)` and parses what sqlplus prints.
-  - `oracle.rs:39` falls back to the password `Welcome123#` when none is configured (and to the user `forms_user`).
+  - `oracle.rs:39` falls back to a hard-coded password and username when none is configured. The fallback was removed from the Rust sources. The Python skill scripts read credentials from `.env` (see `example.env`), and the Rust server reads `OFW_DB_USER` and `OFW_DB_PASSWORD` from the environment, so load `.env` in the shell first (`set -a; source .env; set +a`).
 - `crates/oracle-forms-db/src/driver.rs`: `async fn query(&self, sql: &str)` has **no bind parameter argument**, so nothing can be bound.
 - `crates/oracle-forms-db/src/generator.rs`:
   - falls back to `SELECT *` when no column is found
@@ -49,7 +49,7 @@ The current state on `main`:
    - Doc comment and UI label: "Uses the local Podman testbed's sqlplus. Requires container `oracle23ai-lite`. Not a native driver."
    - Make the container name configurable (env `OFW_TESTBED_DB_CONTAINER`, default `oracle23ai-lite`).
    - Change the UI backend selector to: `Oracle (testbed sqlplus)`, `SQLite`, `Mock`.
-2. **Remove the default credentials from the code.** If no username or password is supplied, return `DbError::ConfigError("username/password required")`. Credentials may come from the request or from env vars (`OFW_DB_USER`, `OFW_DB_PASSWORD`). Never log them; check the `tracing` calls.
+2. **Remove the default credentials from the code.** If no username or password is supplied, return `DbError::ConfigError("username/password required")`. Credentials may come from the request or from env vars (`OFW_DB_USER`, `OFW_DB_PASSWORD`). The Rust server does not read `.env` itself. Local development exports them from the git-ignored `.env` (copy `example.env`) before running the server or CLI. Never log them; check the `tracing` calls.
 3. **Don't put the password on a command line.** `podman exec ... sqlplus -s user/pass@svc` makes the password visible in `ps`. Send `CONNECT user/pass@svc` as the first line of stdin instead and run `sqlplus -s /nolog`.
 4. **Make `test_connection` actually log in.** For the testbed driver, run `SELECT 1 FROM DUAL` and only then report success. Report the listener-only check separately as "listener reachable".
 5. **Add bind parameters to the driver trait now**, before anything else depends on the trait:
@@ -75,7 +75,7 @@ The current state on `main`:
 8. **Correct the record.** Edit the PR #3 description, or add a follow-up note to the CHANGELOG/README: the Oracle path currently goes through the testbed's sqlplus and is not native.
 
 ### Part 1 checklist
-- [ ] No string literal password or username anywhere under `crates/` (`grep -rn "Welcome123" crates/` returns nothing)
+- [ ] No string literal password or username anywhere under `crates/` (a grep for the known dev passwords and usernames under `crates/` returns nothing, using the values from `.env`)
 - [ ] The driver trait takes `BoundSql`; all three drivers compile against it
 - [ ] Generator tests cover: ROWID present (Oracle), no `SELECT *`, `:BLOCK.ITEM` in WhereClause becomes a bind, a literal `':not_a_bind'` is left alone, QBE `LIKE` with bound value
 - [ ] UI and docs label the Oracle backend as "testbed sqlplus"

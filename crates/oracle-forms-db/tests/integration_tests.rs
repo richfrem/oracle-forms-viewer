@@ -236,7 +236,7 @@ async fn oracle_drivers_fail_fast_without_credentials() {
 #[tokio::test]
 async fn testbed_driver_rejects_script_injection_in_credentials() {
     let config = DbConfig {
-        username: Some("forms_user".to_string()),
+        username: Some("test_user".to_string()),
         password: Some("pw\nHOST id".to_string()),
         ..DbConfig::oracle_default()
     };

@@ -126,6 +126,34 @@ SUPPORTED_ITEM_TYPES = {
 }
 
 
+def _read_dotenv() -> dict:
+    """Read KEY=VALUE lines from the nearest .env at or above this script's folder (git-ignored)."""
+    here = Path(__file__).resolve()
+    for folder in [here.parent, *here.parents]:
+        candidate = folder / ".env"
+        if candidate.is_file():
+            values = {}
+            for raw in candidate.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    values[key.strip()] = value.strip().strip('"').strip("'")
+            return values
+    return {}
+
+
+_DOTENV = _read_dotenv()
+
+
+def _env(name: str, default: str = "") -> str:
+    """Environment variable first, then the .env file, then the default."""
+    return os.environ.get(name) or _DOTENV.get(name, default)
+
+
+def _default_userid() -> str:
+    """DB_USER/DB_PASSWORD@DB_SERVICE, from the environment or .env."""
+    return f"{_env('DB_USER')}/{_env('DB_PASSWORD')}@{_env('DB_SERVICE', 'FREEPDB1')}"
+
 def resolve_workspace_root() -> Path:
     return Path(__file__).resolve().parents[6]
 
@@ -358,8 +386,8 @@ def print_cli_summary(audit: Dict[str, Any], file_name: str):
 def run_latency_benchmark(repo_root: Path, file_path: Path, block: Optional[str] = None):
     print("[*] Running Live Query Latency Benchmark...")
     env = os.environ.copy()
-    env["OFW_DB_USER"] = "forms_user"
-    env["OFW_DB_PASSWORD"] = "Welcome123#"
+    env["OFW_DB_USER"] = _env("DB_USER")
+    env["OFW_DB_PASSWORD"] = _env("DB_PASSWORD")
     
     cmd = [
         "cargo", "run", "-q", "-p", "oracle-forms-cli", "--",

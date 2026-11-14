@@ -62,7 +62,7 @@ curl -I http://localhost:9001/forms/frmservlet
 > **Note on WebLogic 14.1.2 Administration (`/console`)**:  
 > In WebLogic 14.1.2, Oracle completely removed the legacy in-browser WebLogic Administration Console (`/console`). Navigating to `http://localhost:7001/console` displays the welcome page directing administrators to download the desktop **WebLogic Remote Console** (or deploy the Hosted WebLogic Remote Console).  
 > - **GitHub Releases**: [https://github.com/oracle/weblogic-remote-console/releases](https://github.com/oracle/weblogic-remote-console/releases)  
-> - **macOS Installer**: Download the `.dmg` asset (e.g., `weblogic-remote-console-*.dmg` or `arm64.dmg` / `x64.dmg`), mount the DMG, drag to Applications, and connect to `http://localhost:7001` using credentials `weblogic` / `Welcome123#`.
+> - **macOS Installer**: Download the `.dmg` asset (e.g., `weblogic-remote-console-*.dmg` or `arm64.dmg` / `x64.dmg`), mount the DMG, drag to Applications, and connect to `http://localhost:7001` using credentials `weblogic` / `$WLS_ADMIN_PASSWORD`.
 
 ---
 
@@ -84,7 +84,7 @@ java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar `
 ---
 
 ### Test 3: Live Form Connected to Our 23ai Database Container
-Once `test.fmx` is verified, compile and run our own test form (`simple_module.fmb` $\rightarrow$ `simple_module.fmx`) connected directly to the `forms_user` schema in our 23ai database:
+Once `test.fmx` is verified, compile and run our own test form (`simple_module.fmb` $\rightarrow$ `simple_module.fmx`) connected directly to the `$DB_USER` schema in our 23ai database:
 
 > [!IMPORTANT] Port Usage Note
 > In development mode, Forms is hosted on AdminServer port **`7001`**. Attempting to connect to port `9001` when managed servers are not spun up will return `Unexpected end of file from server`. Always use port `7001` for the development container.
@@ -97,18 +97,18 @@ java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
 
 # Option B: Pre-authenticated (Note: '#' in password MUST be URL-encoded as '%23'):
 java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
-  -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx&userid=forms_user/Welcome123%23@FREEPDB1"
+  -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx&userid=$DB_USER/$DB_PASSWORD@FREEPDB1"
 
 # Windows PowerShell:
 java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar `
-  -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx&userid=forms_user/Welcome123%23@FREEPDB1"
+  -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=simple_module.fmx&userid=$DB_USER/$DB_PASSWORD@FREEPDB1"
 ```
 
 * **What you see**:
   1. The Oracle Forms 14c splash banner: **"Version: 14.1.2.0.0 Successfully installed"**.
   2. If using Option A, the native Oracle Forms **Logon** dialog appears. Enter:
-     * **Username**: `forms_user`
-     * **Password**: `Welcome123#`
+     * **Username**: `$DB_USER`
+     * **Password**: `$DB_PASSWORD`
      * **Database**: `FREEPDB1`
   3. The form authenticates against Oracle Database 23ai Free and renders the live interactive UI canvas, including menus, action toolbar, text fields, rectangular frames, lines, ellipses, and skewed polygons!
 
@@ -118,7 +118,7 @@ java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar `
 
 ### Test 3.1: Live Form Querying Oracle 23ai Database (`test_db.fmx`)
 
-We authored and compiled a dedicated database-backed test form (`samples/test_db.fmx`) containing live PL/SQL triggers wired to the `forms_user.test_items` table in 23ai:
+We authored and compiled a dedicated database-backed test form (`samples/test_db.fmx`) containing live PL/SQL triggers wired to the `$DB_USER.test_items` table in 23ai:
 
 * **Startup Trigger (`WHEN-NEW-FORM-INSTANCE`)**:
   Executes `SELECT item_name, TO_CHAR(amount) INTO :BLOCK5.TEXT_ITEM4, :BLOCK5.TEXT_ITEM284 FROM test_items WHERE item_id = 1;`
@@ -130,11 +130,11 @@ We authored and compiled a dedicated database-backed test form (`samples/test_db
 ```bash
 # macOS / Linux (Pre-authenticated to 23ai):
 java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
-  -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=test_db.fmx&userid=forms_user/Welcome123%23@FREEPDB1"
+  -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=test_db.fmx&userid=$DB_USER/$DB_PASSWORD@FREEPDB1"
 
 # Windows PowerShell:
 java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar `
-  -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=test_db.fmx&userid=forms_user/Welcome123%23@FREEPDB1"
+  -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=test_db.fmx&userid=$DB_USER/$DB_PASSWORD@FREEPDB1"
 ```
 
 ---
@@ -203,7 +203,7 @@ curl http://localhost:9001/reports/rwservlet/showjobs
 ### Test 3: Run a Live Test Report Directly to PDF in the Browser
 Open this URL in your web browser:
 ```text
-http://localhost:9001/reports/rwservlet?report=test.rdf&destype=cache&desformat=pdf&userid=forms_user/Welcome123#@oracle-db-23ai:1521/FREEPDB1
+http://localhost:9001/reports/rwservlet?report=test.rdf&destype=cache&desformat=pdf&userid=$DB_USER/$DB_PASSWORD@oracle-db-23ai:1521/FREEPDB1
 ```
 
 * **What happens**: The Reports Server queries the `test_items` table in 23ai DB, renders the tabular layout, compiles it to PDF in server memory, and streams the PDF document directly into your browser tab.

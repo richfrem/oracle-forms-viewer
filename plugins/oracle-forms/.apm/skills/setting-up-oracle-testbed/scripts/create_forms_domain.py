@@ -51,9 +51,11 @@ readTemplate(oracle_home + '/wlserver/common/templates/wls/wls.jar')
 print("=== 2. Adding Oracle Forms Development Template ===")
 addTemplate(oracle_home + '/forms/common/templates/wls/forms_development_template.jar')
 
+if not os.environ.get('WLS_ADMIN_PASSWORD'):
+    raise SystemExit('Set WLS_ADMIN_PASSWORD (for example: podman run --env-file .env ...) before running this script.')
 print("=== 3. Setting Administrator Credentials ===")
 cd('/Security/base_domain/User/weblogic')
-cmo.setPassword('Welcome123#')
+cmo.setPassword(os.environ['WLS_ADMIN_PASSWORD'])
 
 print("=== 4. Setting AdminServer Listen Port ===")
 cd('/Server/AdminServer')

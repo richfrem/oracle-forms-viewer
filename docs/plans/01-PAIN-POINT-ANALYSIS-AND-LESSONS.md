@@ -31,7 +31,7 @@ During the implementation of Track 1 (Forms 14c + WebLogic container testbed), w
 
 ### 1.4 Client Runtime Friction (Java FSAL & Applets)
 - **Host Java Requirement**: Even with the container running, the developer must have Java installed on the client machine to launch `frmsal.jar`.
-- **URL Encoding Fragment Bugs**: Passing database credentials like `userid=forms_user/Welcome123#@FREEPDB1` via URL causes Java to truncate the URL at `#` (interpreting it as an HTTP fragment identifier), resulting in `FRM-40007: Invalid user identifier or password`.
+- **URL Encoding Fragment Bugs**: Passing database credentials like `userid=$DB_USER/$DB_PASSWORD@FREEPDB1` via URL causes Java to truncate the URL at `#` when the password contains one (URL-encode it as `%23`) (interpreting it as an HTTP fragment identifier), resulting in `FRM-40007: Invalid user identifier or password`.
 - **Aesthetic Obsolescence**: The Java client renders with Swing/AWT components designed for 1024x768 CRT monitors from 1998, failing high-DPI modern displays and lacking responsive accessibility.
 
 ---

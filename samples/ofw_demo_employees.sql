@@ -1,6 +1,6 @@
 -- Demo table for samples/ofw_demo_employees_fmb.xml (Oracle Forms Workbench).
--- Run as the forms test user, e.g. inside the reference stack:
---   podman exec -i oracle23ai-lite sqlplus forms_user@localhost:1521/FREEPDB1 @- < samples/ofw_demo_employees.sql
+-- Run as the DB_USER from .env, e.g. inside the reference stack:
+--   podman exec -i oracle23ai-lite sqlplus $DB_USER/$DB_PASSWORD@localhost:1521/FREEPDB1 @- < samples/ofw_demo_employees.sql
 CREATE TABLE ofw_demo_employees (
   emp_id      NUMBER(6)     PRIMARY KEY,
   first_name  VARCHAR2(30)  NOT NULL,

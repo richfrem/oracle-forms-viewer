@@ -10,7 +10,7 @@ The native workbench requires **no JVM, Node.js, Oracle Forms installation, or O
 
 1. **Open and understand.** Browse samples or upload artifacts. Inspect the object navigator, form canvas, properties, XML, triggers, program units, menus, libraries, and report definitions. Use official converters when a fuller XML representation is needed than direct binary extraction provides.
 2. **Create or modify.** Use the Data Block & Layout Wizard to create a named form or add/replace a block, discover database table columns, and generate form or tabular layouts. Edit supported geometry, labels, colors, and properties in Layout mode. Author XML and PL/SQL directly with your editor or an AI coding agent.
-3. **Save the definition.** **Save Form** writes a new `samples/<module>_edited_<n>_fmb.xml`. Original source files are preserved. **Save Record** is a separate database action during runtime.
+3. **Save the definition.** **Save Form** updates the form's one XML file, `samples/<module>_fmb.xml`, in place. Binary `.fmb` sources are never modified. **Save Record** is a separate database action during runtime.
 4. **Run in Rust.** Start a native session using Oracle Thin, SQLite, or Mock. Exercise supported PL/SQL triggers, navigation, queries, validation, master-detail behavior, and record operations. Sessions start read-only; database writes require explicit opt-in.
 5. **Publish to the local Oracle reference environment.** Choose **Preview in Oracle → Save & launch in Oracle**. The workbench saves current edits, stages XML, converts it to FMB, compiles FMX, makes it available to the configured local Forms server, and launches the Oracle desktop client through FSAL. The dialog shows setup checks, compilation credentials, progress, and diagnostics.
 6. **Compare and iterate.** Compare a baseline with multiple forms or uploaded versions in Form Diff, review structural and layout changes, and compare the Rust preview with the real Oracle window.
@@ -20,7 +20,7 @@ flowchart LR
     A["Existing Forms / Menus / Libraries"] --> B["Native inspection or official XML conversion"]
     B --> C["XML + PL/SQL"]
     AI["AI-assisted authoring"] --> C
-    C --> D["Rust designer + versioned Save Form"]
+    C --> D["Rust designer + Save Form"]
     D --> E["Native Rust runtime + database"]
     D --> F["Optional Oracle XML2Forms → FMB → FMX"]
     F --> G["Fusion Middleware + FSAL desktop client"]
@@ -30,7 +30,7 @@ flowchart LR
 
 | Area | Available workflow |
 |---|---|
-| Forms (`.fmb`, Forms2XML `.xml`) | Direct binary extraction or XML parsing; SVG preview, property/layout editing, wizard authoring, versioned XML saves, native execution, and optional Oracle compilation/launch. |
+| Forms (`.fmb`, Forms2XML `.xml`) | Direct binary extraction or XML parsing; SVG preview, property/layout editing, wizard authoring, XML saves, native execution, and optional Oracle compilation/launch. |
 | Menus (`.mmb`, menu XML) | Inspect extracted structure and PL/SQL; attach menu modules to forms; official XML conversion. A dedicated standalone menu canvas remains outstanding. |
 | Object libraries (`.olb`, object-library XML) | Native extraction/inspection and modeled previews; official XML conversion. Editing coverage depends on the extracted model. |
 | PL/SQL libraries (`.pld`, `.pll`) | Native PLD parsing and source inspection; supported library routines in native sessions. Official tooling handles PLL/PLD conversion. |
@@ -49,7 +49,7 @@ From the repository root, with Rust and Cargo installed:
 cargo run -p oracle-forms-server
 ```
 
-Open **[http://127.0.0.1:7070](http://127.0.0.1:7070)**. Use **Browse / Open** to select `ofw_demo_employees_fmb.xml`, `orders_fmb.xml`, or your own artifact. Enter **Layout** mode to edit, or open **Wizard** to generate a form/block. Click **Save Form** to retain a new XML version.
+Open **[http://127.0.0.1:7070](http://127.0.0.1:7070)**. Use **Browse / Open** to select `ofw_demo_employees_fmb.xml`, `orders_fmb.xml`, or your own artifact. Enter **Layout** mode to edit, or open **Wizard** to generate a form/block. Click **Save Form** to update the form's XML file.
 
 To exercise the form, click **Run**, choose a backend, and use **Connect & Run**. SQLite and Mock support offline work. Oracle Thin connects directly to your database; the local reference database uses `localhost:1521/FREEPDB1`. Supply your database credentials in the login dialog. Database-connected compilation in the Oracle preview dialog has separate credential fields.
 
@@ -64,9 +64,9 @@ This optional path needs Python 3, Podman, a provisioned and running Forms 14c/W
 **Validated platforms.** The reference stack has been run on two hosts:
 
 - **macOS (Apple Silicon):** Podman machine with Rosetta 2 for the `linux/amd64` Forms image. This is the original path, documented in [PODMAN-CONVERTER-SETUP-AND-HISTORY.md](docs/PODMAN-CONVERTER-SETUP-AND-HISTORY.md) and [the Mac setup guide](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/podman-setup-guide.md).
-- **Windows 11 (x86-64):** Podman inside an Ubuntu WSL2 distribution, with no emulation. Verified: Forms 14.1.2 installed, Oracle Database 23ai Free running with seeded data, the WebLogic Forms server running on port 7001, and a sample form (`ofw_demo_employees`) opened through FSAL from WSL with live database rows. The ordered steps are in [HOW-TO-RUN.md](HOW-TO-RUN.md) section 7.5, the setup log is in [WINDOWS-PODMAN-SETUP.md](docs/WINDOWS-PODMAN-SETUP.md), and the skill runbook is [windows-podman-setup.md](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-podman-setup.md).
+- **Windows 11 (x86-64):** everything runs inside an Ubuntu WSL2 distribution with no emulation: Podman and the containers, Python, Java 21, and the Rust app itself. This is the recommended Windows setup, and it needs no Visual Studio. Verified: Forms 14.1.2 installed; Oracle Database 23ai Free running with seeded data; the WebLogic Forms server on port 7001; the Rust app building and serving on port 7070 in WSL; **Save & launch in Oracle** converting, compiling, and opening a sample form (`ofw_demo_employees`) with live database rows; `launch_fsal.py` run from the Ubuntu shell; and the AGENTS.md gate in WSL (`cargo check` with 0 errors, `cargo test` with 120 passed and 0 failed). The ordered steps are in [HOW-TO-RUN.md](HOW-TO-RUN.md) sections 6 and 7.5, the setup log and troubleshooting are in [WINDOWS-PODMAN-SETUP.md](docs/WINDOWS-PODMAN-SETUP.md), and the skill runbook is [windows-podman-setup.md](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-podman-setup.md). A native Windows build of the app is also documented as an alternative, but it needs Visual Studio and is slower.
 
-Not yet verified on Windows: the **Preview in Oracle** dialog, the skill's `run_form.py`, `compile_form.py`, `launch_fsal.py`, and `health_check.py` scripts, `convert_fmb.py --check`, and the Rust gate (`cargo check` and `cargo test`), which is blocked by a Visual Studio install missing C headers.
+Not yet verified on Windows: the skill's `compile_form.py` and `health_check.py` scripts, `convert_fmb.py --check`, `ofw_sales.fmb`, and the `frmbld` GUI.
 
 Use database-connected compilation for PL/SQL that references schema objects. Offline compilation is an explicit option and can fail on unresolved database objects. A successful compile or launch establishes a pipeline result; visual and behavioral comparison is still required.
 
@@ -207,7 +207,7 @@ The compiled form running in the Oracle Forms desktop client with queried employ
 │   ├── oracle-forms-cli/     # Inspect, export, diff, query, and reports CLI
 │   └── oracle-forms-server/  # Axum APIs, editing/saving, sessions, optional Oracle bridge
 ├── ui/                       # Vanilla HTML/CSS/JS frontend
-├── samples/                  # Shared fixtures and versioned XML form saves
+├── samples/                  # Shared fixtures and one saved XML per form
 │
 ├── plugins/oracle-forms/     # APM Skills & Automation for Oracle Forms & Reports 14c
 │   ├── .apm/skills/
@@ -235,7 +235,7 @@ The compiled form running in the Oracle Forms desktop client with queried employ
 
 ## Preservation and current limits
 
-Save Form writes new XML versions rather than overwriting the source XML or binary. Item edits can patch the original XML while retaining unmodeled content (`patchedOriginal`); newly authored forms, structural regeneration, and binary-derived exports may use a potentially lossy model summary (`summary`). The Oracle launcher stages its own copy and logs compatibility adjustments before conversion. Generated FMB/FMX staging files remain under ignored `temp/`.
+Save Form updates the form's one XML file in place and never modifies a binary `.fmb`. If only the lossy model summary is available and the XML file already exists, it writes a numbered `_edited_<n>_fmb.xml` instead, so a complete XML is never replaced by a partial one. Item edits can patch the original XML while retaining unmodeled content (`patchedOriginal`); newly authored forms, structural regeneration, and binary-derived exports may use a potentially lossy model summary (`summary`). The Oracle launcher stages its own copy and logs compatibility adjustments before conversion. Generated FMB/FMX staging files remain under ignored `temp/`.
 
 Remaining work includes exact Oracle font/theme/zoom/DPI parity, persistence of UI-only font edits, broader built-in and dependency coverage, complex tab/overlay behavior, a dedicated menu inspector, and full report layout round trips. See the [roadmap](docs/plans/06-IMPLEMENTATION-ROADMAP-AND-MILESTONES.md) and [continuation status](docs/plans/10-NEXT-PHASE-SESSION-PROMPT.md) for completed, partial, and unverified work.
 

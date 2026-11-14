@@ -1,8 +1,12 @@
 # Windows Setup: Oracle Forms 14c + Oracle Database Free (Podman in WSL2)
 
-> **Status: Forms 14c runs on Windows (WSL2 Podman) with a live sample form. Other steps are marked below.** This guide is written from a real setup run on a Windows 11 workstation. Each step is marked with its status. A step marked **Not yet run** has not been verified, and its commands may change once it is run.
+> **Status: verified end to end on Windows with everything inside WSL2: the containers, Python, Java 21, and the Rust app.** Forms 14c, the database, the WebLogic server, the Rust workbench, and **Save & launch in Oracle** all run. The native Windows build of the app (Visual Studio) is documented as an optional alternative. This guide is written from a real setup run on a Windows 11 workstation. Each step is marked with its status. A step marked **Not yet run** has not been verified, and its commands may change once it is run.
 
-**Architecture decision:** Podman runs **inside an Ubuntu WSL2 distribution**, not as Podman for Windows. This matches the macOS/Linux instructions in [PODMAN-CONVERTER-SETUP-AND-HISTORY.md](PODMAN-CONVERTER-SETUP-AND-HISTORY.md). Run container commands from the Ubuntu shell (`wsl`). Windows is used only for the FSAL desktop client and the Rust workbench.
+**Architecture decision:** everything runs **inside an Ubuntu WSL2 distribution**, not as Podman for Windows and not as a native Windows app. That includes the Rust workbench. This matches the macOS/Linux instructions in [PODMAN-CONVERTER-SETUP-AND-HISTORY.md](PODMAN-CONVERTER-SETUP-AND-HISTORY.md) and uses almost the same code path as macOS. Run container commands and the Rust app from the Ubuntu shell (`wsl`). Windows is only the host: the browser opens `http://127.0.0.1:7070`, and WSLg shows the Forms window.
+
+**What was a red herring:** the first attempts built the Rust app as a native Windows program, which needed Visual Studio, the C++ workload, the Windows SDK, `LIB`/`INCLUDE` settings, `python` instead of `python3`, Podman through `wsl.exe`, and a Java 26 workaround. None of that is needed when the app runs in WSL, and WSL was much smoother. One thing is still applied in WSL: container commands that write staged files run as `root`, because the repo is on the Windows drive (`/mnt/c`). That rule was added before the WSL launch was first tried, so whether WSL needs it has not been tested. Those notes are kept below and in `DEPENDENCIES.md` section 3.1 as an alternative.
+
+**Quick path (verified):** install Rust in WSL with `rustup`, then follow [HOW-TO-RUN.md](../HOW-TO-RUN.md) section 6 ("Windows: run everything inside WSL") and section 7.5. The full list of fixes a fresh Windows install needs is the checklist in the setup skill, [windows-podman-setup.md](../plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-podman-setup.md), section 10.
 
 **Why not the Podman-for-Windows path:** Podman for Windows created a separate Podman machine with its own VM, memory, and port handling. It conflicted with an earlier local Oracle 23ai install (port 1521 already in use). WSL-only keeps one Linux engine and one set of commands.
 
@@ -40,14 +44,14 @@
 | 2026-11-13 | Oracle Database Free: `podman pull container-registry.oracle.com/database/free:latest-lite` in WSL | Done | Image runs as "Oracle AI Database 26ai Free", product version `23.0.0.0.0`. The repo's docs say 23ai; treat the banner as the source of truth |
 | 2026-11-13 | Runtime dirs: `sudo mkdir -p /run/user/$(id -u)` (user), then `mkdir -p /run/user/$(id -u)/containers/networks` (no sudo) | Done | `networks` is required for `--network`. Without it: `IPAM error: failed to open database .../containers/networks/ipam.db` |
 | 2026-11-13 | `XDG_RUNTIME_DIR` mismatch: login shells set `/mnt/wslg/runtime-dir`; the IPAM and exec steps failed until it was exported as `/run/user/<uid>` | Done | `export XDG_RUNTIME_DIR=/run/user/$(id -u)` before `podman run --network` or `podman exec` |
-| 2026-11-13 | Started `oracle23ai-lite` on `oracle-net`, port 1521, `ORACLE_PWD=Welcome1` | Done | Container is `Up`. Log line `DATABASE IS READY TO USE!` after about 6 minutes on first start |
-| 2026-11-13 | Seed schema: `oracle-reference-stack/sql/seed_forms_user.sql` run through `podman exec -i ... sqlplus` | Done | Created tablespace `FORMS_DATA` (no `USERS` tablespace exists in FREEPDB1), user `forms_user`, tables `departments` (3 rows), `employees` (6), `test_items` (5). Four queries returned expected rows. First-run `DROP USER` error is expected |
-| 2026-11-13 | Login as `forms_user` in the container; host TCP to port 1521 | Done | `SELECT USER FROM dual` returns `FORMS_USER`; `count(*) test_items` = 5. Windows `TcpClient` to `127.0.0.1:1521` succeeded. `Test-NetConnection localhost` tried `::1` first and reported failure, then the IPv4 check passed |
-| 2026-11-13 | Rust gate: `cargo check` and `cargo test` | **Blocked** | Link fixed with `LIB`. C compile of `aws-lc-sys` fails: `stdint.h` and `vcruntime.h` missing. The repair needs an elevated PowerShell (`vs_installer.exe modify ... --passive` exits 5007 otherwise). Commands are in `DEPENDENCIES.md` §3.1. The WSL Rust route (rustup, no Visual Studio) is the alternative |
-| 2026-11-13 | Loaded sample demo data as `forms_user`: `samples/ofw_demo_employees.sql` (8 employees) and `samples/ofw_demo_sales.sql` (40 customers, 20 products, 140 orders, 420 order lines) | Done | `ofw_demo_sales.sql` prints `ORA-00942` for its four `DROP TABLE` lines on the first run. Expected, because the tables don't exist yet. Run the file as `sqlplus forms_user/Welcome1@localhost/FREEPDB1` (the file's header comment shows a password-less form, which prompts) |
+| 2026-11-13 | Started `oracle23ai-lite` on `oracle-net`, port 1521, `ORACLE_PWD=$ORACLE_PWD` | Done | Container is `Up`. Log line `DATABASE IS READY TO USE!` after about 6 minutes on first start |
+| 2026-11-13 | Seed schema: `oracle-reference-stack/sql/seed_test_schema.sql` run through `podman exec -i ... sqlplus` | Done | Created tablespace `FORMS_DATA` (no `USERS` tablespace exists in FREEPDB1), user `$DB_USER`, tables `departments` (3 rows), `employees` (6), `test_items` (5). Four queries returned expected rows. First-run `DROP USER` error is expected |
+| 2026-11-13 | Login as `$DB_USER` in the container; host TCP to port 1521 | Done | `SELECT USER FROM dual` returns the `DB_USER` value; `count(*) test_items` = 5. Windows `TcpClient` to `127.0.0.1:1521` succeeded. `Test-NetConnection localhost` tried `::1` first and reported failure, then the IPv4 check passed |
+| 2026-11-13 | Rust gate: `cargo check` and `cargo test` on the native Windows build | Superseded | Native Windows needed the Visual Studio repair and `LIB`/`INCLUDE` settings (`DEPENDENCIES.md` §3.1, alternative). It passed natively after the repair. **Not needed**: see the 2026-11-14 WSL rows below |
+| 2026-11-13 | Loaded sample demo data as `$DB_USER`: `samples/ofw_demo_employees.sql` (8 employees) and `samples/ofw_demo_sales.sql` (40 customers, 20 products, 140 orders, 420 order lines) | Done | `ofw_demo_sales.sql` prints `ORA-00942` for its four `DROP TABLE` lines on the first run. Expected, because the tables don't exist yet. Run the file as `sqlplus $DB_USER/$DB_PASSWORD@localhost/FREEPDB1` (the file's header comment shows a password-less form, which prompts) |
 | 2026-11-13 | WebLogic domain created with `wlst.sh create_forms_domain.py` in a throwaway `forms-converter-14c` container | Done | Output ends with "Domain Creation Complete". Domain at `oracle-reference-stack/oracle_home_14c/user_projects/domains/base_domain`. Run with `--network oracle-net` and both Oracle Home and repo mounts |
 | 2026-11-13 | Oracle Home subfolders created by the container (owned by subordinate UID 100999) were unreadable from WSL. `frmsal.jar` and the domain folder returned `Permission denied` | Fixed | `podman unshare chmod -R a+rX oracle_home_14c` (run from `oracle-reference-stack/`; slow, several minutes) |
-| 2026-11-13 | `boot.properties` (`weblogic` / `Welcome123#`) and `bin/setUserOverrides.sh` (LD_LIBRARY_PATH, FORMS_PATH, `-Dforms.instance=forms1`) written into the domain | Done (by hand) | Not yet committed as templates. Written LF with no BOM |
+| 2026-11-13 | `boot.properties` (`weblogic` / `$WLS_ADMIN_PASSWORD`) and `bin/setUserOverrides.sh` (LD_LIBRARY_PATH, FORMS_PATH, `-Dforms.instance=forms1`) written into the domain | Done (by hand) | Not yet committed as templates. Written LF with no BOM |
 | 2026-11-13 | Started `forms-server-14c` from `base_domain/bin/startWebLogic.sh`, on `oracle-net`, ports 7001 and 9001 | Starting | Log shows the WebLogic launch line. Confirm `RUNNING` before FSAL |
 | 2026-11-13 | `boot.properties` unreadable by the container (`BEA-090066 ... Permission denied`) because files written from Windows are owned by the host user | Fixed | `chmod -R a+rwX` on the `security` folder and `boot.properties` (run from WSL against the `/mnt/c` path). Restart the container after |
 | 2026-11-13 | Server stayed in STARTING for about 18 minutes. A thread dump showed an execute thread in `com.oracle.cie.gdr` file-existence checks on the 9p-mounted Oracle Home, while Coherence threads were idle | Observed | Slow file I/O on `/mnt/c` is the likely cause. Reached RUNNING at 10:14 UTC. Moving the domain to the WSL ext4 filesystem may shorten this; not tested |
@@ -57,8 +61,24 @@
 | 2026-11-13 | `frmcmp_batch` with `output_file=` into `/oracle_home_14c/forms` or `/tmp/job` fails with `FRM-10044: Cannot create file`. Copying the `.fmb` into `/tmp/job` and compiling there with no `output_file=` works | Workaround | Compile from a copy in a job directory; the output lands next to the copy. Keep compile output out of `/work` |
 | 2026-11-13 | FSAL with `form=ofw_demo_employees.fmx` after the compile: the Forms window opens. The launcher was stopped by its 120-second timeout (exit 124) while the form was still running | Observed | Confirm on screen. Visual result is the user's to check || 2026-11-13 | `ORA-12154: Cannot find alias FREEPDB1 in .../config/fmwconfig/tnsnames.ora`. The domain's `tnsnames.ora` is the stock template with no entries | Fixed | Appended a `FREEPDB1` entry pointing at host `oracle-db-23ai` (the database container's network alias, resolvable from the server container on `oracle-net`), port 1521, service `FREEPDB1` |
 | 2026-11-13 | `FRM-10221: Cannot read file OFW_EMP_MENU.mmx`. The shipped `.mmx` was stale | Fixed | Compiled `ofw_emp_menu.mmb` with `frmcmp_batch module_type=menu` in a job directory and copied the `.mmx` into the Oracle Home `forms/` folder |
-| 2026-11-13 | `ORA-01017: invalid credential` at logon. The docs gave `Welcome123#` for `forms_user`, but the seed script sets `Welcome1` | Fixed | `HOW-TO-RUN.md` now says `Welcome1` for `forms_user`. `Welcome123#` stays the WebLogic admin password |
-| 2026-11-13 | FSAL relaunch with `ofw_demo_employees.fmx`: the form window stayed open until the launcher's timeout, with no error in the log | Observed | Confirm on screen || 2026-11-13 | **Milestone: Employee Directory form runs on Windows.** FSAL from WSL with `ofw_demo_employees.fmx` (recompiled), `forms_user` / `Welcome1` / `FREEPDB1`, live rows displayed | Done | Full ordered recipe in `HOW-TO-RUN.md` section 7.5 and `references/windows-podman-setup.md` section 8 || 2026-11-13 | `forms-server-14c` reached RUNNING; `http://127.0.0.1:7001/forms/frmservlet` returns 200 | Done | |
+| 2026-11-13 | `ORA-01017: invalid credential` at logon. The docs gave the WebLogic admin password for the database logon, but the seed script sets the `DB_PASSWORD` value | Fixed | `HOW-TO-RUN.md` now says `$DB_PASSWORD` for `$DB_USER`. `$WLS_ADMIN_PASSWORD` stays the WebLogic admin password |
+| 2026-11-13 | FSAL relaunch with `ofw_demo_employees.fmx`: the form window stayed open until the launcher's timeout, with no error in the log | Observed | Confirm on screen |
+| 2026-11-13 | Credentials moved out of the docs into a git-ignored `.env` at the repo root. `example.env` (variable names only) is committed. `scripts/create_env.py` creates `.env` during setup and prompts for passwords with hidden input. Python scripts and the seed SQL read the same values | Done | `.gitignore` lists `.env`. Passwords are not in the docs or scripts now. The seed SQL takes the schema owner and password from `&db_user` and `&db_password`, passed in from `.env`. `compose.yaml` still sets `ORACLE_PWD` inline (not yet changed) |
+| 2026-11-13 | Added `start_testbed.py` at the repo root: starts the database and Forms server containers and rebuilds and restarts the Rust app, with `--no-forms`, `--no-wait-forms`, `--no-rust`, `--status`, and `--stop-rust` | Done | Tested here with `--no-containers` (Rust restart) and `--no-wait-forms` (database already running, Forms container started, Rust app rebuilt and restarted). The WSL runtime-directory step (sudo) was not exercised, because `/run/user/1000` already existed. The Forms server wait was not run to completion |
+| 2026-11-14 | Save & launch in Oracle (Rust app) on Windows: the app now detects `python` and WSL Podman, so the readiness checklist passes once the Forms servlet is up | Done | Changes: `oracle_preview.rs` (python name, Podman through `wsl`) and `run_form.py` (`podman_cmd`). macOS behavior unchanged |
+| 2026-11-14 | Launch failed: `XML2Forms ... File /work/temporacle-preview... does not exist` | Fixed | Container paths in `run_form.py` use forward slashes (`as_posix()`) |
+| 2026-11-14 | Launch failed: `Error initialising the Forms Jdapi: no frmjapi in java.library.path` | Fixed | `libfrmjapi.so` pointed at a missing `libfrmjapi.so.0`. Built it with `genshlib frmjapi 0` |
+| 2026-11-14 | Launch failed: `libfrmjapi.so.0: undefined symbol: __intel_sse2_strncat`, then `__gxx_personality_v0` | Fixed | `genshlib` cannot build this library. Built it with Oracle's makefile (`make -B -f ins_forms.mk` in `forms/lib`) after adding unversioned links for `libaio`, `libX11`, `libXm`, `libXt`, `libXext`, `libXp`, and `libstdc++`. XML2Forms test into `/tmp` in the container prints `Module saved as ...ofw_demo_employees.fmb`. The launch from the app is not yet confirmed. Commands: setup skill `windows-podman-setup.md` section 10 |
+| 2026-11-14 | Save & launch (Rust app) on Windows: XML to FMB and compile now succeed; the form XML is updated in place (`samples/<form>_fmb.xml`, no `_edited_N` copy). Fixed along the way: container write permission on the Windows drive (exec runs as root on Windows) and the saved-form naming | Done | `run_form.py` (`podman_cmd` runs `exec` as root on Windows), `service.rs` (`write_form_file`) |
+| 2026-11-14 | FSAL launch from the app failed: `NoClassDefFoundError: java/applet/AppletStub` with host Java 26 | Fixed (launch not yet confirmed) | `run_form.py` runs FSAL with the WSL Java (OpenJDK 21) on Windows. FSAL needs Java 17 or 21 |
+| 2026-11-14 | Installed Rust in the Ubuntu WSL distro with `rustup` (minimal profile): `cargo`/`rustc` 1.100.0, gcc 13.3 already present | Done | No Visual Studio, no Windows SDK, no `LIB`/`INCLUDE`. Adds `~/.cargo` and `~/.rustup` only |
+| 2026-11-14 | Ran the Rust app inside WSL (`cargo run -p oracle-forms-server` with `CARGO_TARGET_DIR=$HOME/ofw-target`): serves port 7070, reachable from the Windows browser | Done | User report: much faster and smoother than the native Windows build, and consistent with the Mac setup. The Preview dialog's readiness checks all pass (Python, Java, Podman, both containers, the servlet) |
+| 2026-11-14 | **Save & launch in Oracle** from the WSL-hosted app: XML to FMB, compile, and the Forms client opens the form with live rows | Done | Needed the `libfrmjapi` build and write-permission fixes recorded above. Updates the one file `samples/<form>_fmb.xml`, no copies |
+| 2026-11-14 | AGENTS.md gate inside WSL (`CARGO_TARGET_DIR=$HOME/ofw-target-gate`): `cargo check` and `cargo test` | Done | `cargo check`: 0 errors. `cargo test`: 120 passed, 0 failed. Rust 1.100 prints 8 manifest lint warnings (redundant `homepage`, unused `tracing` in some `Cargo.toml`); they are not code warnings and Rust 1.94 prints none |
+| 2026-11-14 | `launch_fsal.py` (the original command) run with `python3` in the Ubuntu shell | Done | Opens the form with WSL's Java 21. Fails from Windows PowerShell with Java 26 (`java/applet/AppletStub`) |
+| 2026-11-14 | `start_testbed.py` run from the Ubuntu shell builds and starts the Rust app inside WSL, and leaves a running app alone unless `--restart-rust` is passed | Done (the "leave it alone" path tested; a cold build and start through the script was not rerun) | In WSL it uses `~/ofw-target`; from Windows PowerShell it falls back to the native Windows build |
+| 2026-11-13 | **Milestone: Employee Directory form runs on Windows.** FSAL from WSL with `ofw_demo_employees.fmx` (recompiled), `$DB_USER` / `$DB_PASSWORD` / `FREEPDB1`, live rows displayed | Done | Full ordered recipe in `HOW-TO-RUN.md` section 7.5 and `references/windows-podman-setup.md` section 8
+| 2026-11-13 | `forms-server-14c` reached RUNNING; `http://127.0.0.1:7001/forms/frmservlet` returns 200 | Done | |
 | 2026-11-13 | FSAL from WSL (OpenJDK 21.0.9): `frmsal.jar` runs and connects to the server, then stops with `FRM-93131: Cannot find base HTML file basesaa.txt` | **Blocked** | `basesaa.txt` exists at `config/fmwconfig/components/FORMS/forms1/server/`. No `formsweb.cfg` exists in the domain, and no `standaloneapp` config section was found. A minimal `formsweb.cfg` with `[standaloneapp]` written by hand did not change the error. Needs the Forms web-app configuration, which the domain template should have created |
 | Not yet run | Configure `.wslconfig` memory limit | Pending | Requires `wsl --shutdown`, which stops the Ubuntu distro. Needs user approval |
 
@@ -73,7 +93,7 @@
 | Ubuntu distro | Installed, version 2 | Ubuntu, WSL 2 |
 | Host RAM | 16 GB+ (32 GB recommended) | 31.6 GB |
 | Free disk | About 25 GB (installers, Oracle Home, images, DB) | About 88 GB free on C: |
-| Java (FSAL client) | JDK 17 or 21 on Windows | Host has Java 26. Not yet verified with FSAL |
+| Java (FSAL client) | JDK 17 or 21 | Windows Java 26 does not work with FSAL (`java/applet/AppletStub`). WSL's OpenJDK 21 works, so run FSAL from WSL |
 
 ---
 
@@ -102,7 +122,7 @@ Apply with `wsl --shutdown` from PowerShell. **This stops all WSL distributions,
 
 ## 3. Install Podman inside Ubuntu WSL
 
-Status: **Not yet run.** Commands below are the planned steps and may need adjustment.
+Status: **Done** (Podman 4.9.3 in Ubuntu 24.04; it runs the database, the Forms server, and the app's container commands).
 
 From PowerShell:
 
@@ -138,7 +158,7 @@ export XDG_RUNTIME_DIR=/run/user/$(id -u)
 mkdir -p /run/user/$(id -u)/containers/networks
 podman network create oracle-net          # skip if it exists
 podman run -d --name oracle23ai-lite --network oracle-net --network-alias oracle-db-23ai \
-  -p 1521:1521 -e ORACLE_PWD=Welcome1 \
+  -p 1521:1521 -e ORACLE_PWD=$ORACLE_PWD \
   container-registry.oracle.com/database/free:latest-lite
 podman logs -f oracle23ai-lite            # wait for "DATABASE IS READY TO USE!" (about 6 minutes on first start)
 ```
@@ -146,20 +166,20 @@ podman logs -f oracle23ai-lite            # wait for "DATABASE IS READY TO USE!"
 Seed the test schema (run from `oracle-reference-stack/`):
 
 ```bash
-podman exec -i oracle23ai-lite sqlplus -s system/Welcome1@localhost/FREEPDB1 < sql/seed_forms_user.sql
+(printf 'DEFINE db_user=%s\nDEFINE db_password=%s\n' "$DB_USER" "$DB_PASSWORD"; cat sql/seed_test_schema.sql) | podman exec -i oracle23ai-lite sqlplus -s system/$ORACLE_PWD@localhost/FREEPDB1
 ```
 
-The script creates tablespace `FORMS_DATA`, user `forms_user`, and the tables `departments`, `employees`, and `test_items`. It loads sample rows and runs four queries. The first-run `ORA-01918` from `DROP USER` is expected.
+The script creates tablespace `FORMS_DATA`, user `$DB_USER`, and the tables `departments`, `employees`, and `test_items`. It loads sample rows and runs four queries. The first-run `ORA-01918` from `DROP USER` is expected.
 
 Verify:
 
 ```bash
-printf "SELECT USER FROM dual;\nSELECT COUNT(*) FROM test_items;\nEXIT\n" | podman exec -i oracle23ai-lite sqlplus -s forms_user/Welcome1@localhost/FREEPDB1
+printf "SELECT USER FROM dual;\nSELECT COUNT(*) FROM test_items;\nEXIT\n" | podman exec -i oracle23ai-lite sqlplus -s $DB_USER/$DB_PASSWORD@localhost/FREEPDB1
 ```
 
 From PowerShell, `Test-NetConnection 127.0.0.1 -Port 1521` should report `TcpTestSucceeded : True`. Use `127.0.0.1` rather than `localhost`, which tries IPv6 `::1` first.
 
-`Welcome1` is a documented local-development default. Change it for anything beyond a throwaway container.
+`$DB_PASSWORD` is a documented local-development default. Change it for anything beyond a throwaway container.
 
 **Image version:** the registry labels this image **Oracle AI Database 26ai Free**. `product_component_version` reports `Oracle AI Database 26ai Free`, version `23.0.0.0.0`. The repo's SQL and connection docs were written for 23ai. The connection and SQL here work with this image; the version label is a documentation difference, not a blocker.
 
@@ -179,16 +199,11 @@ Staging into the gitignored `oracle-reference-stack/installer/` folder happens a
 
 ---
 
-## 6. Later phases (not yet run)
+## 6. Later phases (done; see the status log)
 
-- Build the Forms 14c image and run both silent installs (`Containerfile.14c`, `compose.yaml`).
-- Check NTFS bind-mount behavior for `oracle_home_14c` (symlinks, execute bits, ownership) before the full install.
-- Create the WebLogic domain and boot configuration.
-- Run `health_check.py`, then compile and launch a sample form with FSAL.
-- Run `cargo check` and `cargo test` from the repo root.
+All of these ran and are recorded in the status log (section 0): the Forms 14c image build and both silent installs; the NTFS bind-mount check (needs `metadata` in `/etc/wsl.conf`); the WebLogic domain and boot configuration; compiling and launching a sample form with FSAL; and `cargo check` and `cargo test`, which pass inside WSL. Still not run: `health_check.py`, `compile_form.py`, `convert_fmb.py --check`, `ofw_sales.fmb`, and the `frmbld` GUI.
 
 ---
-
 ## 7. Troubleshooting log
 
 | Symptom | Cause | Resolution |

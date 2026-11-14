@@ -25,7 +25,7 @@ Supported Object Types:
 CLI Arguments:
     form_path             : Path to input .fmx, .fmb, or .xml file.
     -p, --port <int>      : WebLogic AdminServer port (default: 7001).
-    -u, --userid <str>    : Database logon connection string (default: forms_user/Welcome123#@FREEPDB1).
+    -u, --userid <str>    : Database logon connection string (default: DB_USER/DB_PASSWORD/DB_SERVICE from .env).
     --interactive         : Omit credentials and prompt via native GUI Logon dialog.
     --offline             : Compile offline without database verification (logon=no).
 
@@ -59,6 +59,7 @@ Consumed by:
 
 import sys
 import os
+import platform
 import argparse
 import subprocess
 import shlex
@@ -70,6 +71,64 @@ from typing import List, Optional
 
 
 # Resolves the absolute path to the repository root directory.
+def _read_dotenv() -> dict:
+    """Read KEY=VALUE lines from the nearest .env at or above this script's folder (git-ignored)."""
+    here = Path(__file__).resolve()
+    for folder in [here.parent, *here.parents]:
+        candidate = folder / ".env"
+        if candidate.is_file():
+            values = {}
+            for raw in candidate.read_text(encoding="utf-8").splitlines():
+                line = raw.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    values[key.strip()] = value.strip().strip('"').strip("'")
+            return values
+    return {}
+
+
+_DOTENV = _read_dotenv()
+
+
+def _env(name: str, default: str = "") -> str:
+    """Environment variable first, then the .env file, then the default."""
+    return os.environ.get(name) or _DOTENV.get(name, default)
+
+
+def _default_userid() -> str:
+    """DB_USER/DB_PASSWORD@DB_SERVICE, from the environment or .env."""
+    return f"{_env('DB_USER')}/{_env('DB_PASSWORD')}@{_env('DB_SERVICE', 'FREEPDB1')}"
+
+# Running inside WSL (Linux on a Windows machine): Podman is local, but the repo is on the Windows drive.
+IS_WSL = platform.system() == "Linux" and "microsoft" in platform.uname().release.lower()
+
+
+def podman_cmd(args: List[str]) -> List[str]:
+    """Podman command line.
+
+    Windows: Podman runs inside WSL, so the call goes through `wsl -d <distro>` (OFW_WSL_DISTRO, default Ubuntu).
+    WSL: Podman is local; its runtime directory must be /run/user/<uid>.
+    macOS and Linux: plain `podman`, unchanged.
+    """
+    on_windows = platform.system() == "Windows"
+    if on_windows or IS_WSL:
+        # Files on the Windows drive belong to the Windows user, which rootless Podman maps to container
+        # root. The container's "oracle" user cannot write the staged job folders, so run exec as root.
+        if args and args[0] == "exec":
+            rest = list(args[1:])
+            if "-u" in rest and rest.index("-u") + 1 < len(rest):
+                rest[rest.index("-u") + 1] = "root"
+            else:
+                rest[:0] = ["-u", "root"]
+            args = ["exec", *rest]
+    if on_windows:
+        distro = os.environ.get("OFW_WSL_DISTRO") or "Ubuntu"
+        script = "export XDG_RUNTIME_DIR=/run/user/$(id -u); podman " + " ".join(shlex.quote(a) for a in args)
+        return ["wsl", "-d", distro, "--", "bash", "-lc", script]
+    if IS_WSL:
+        return ["env", f"XDG_RUNTIME_DIR=/run/user/{os.getuid()}", "podman", *args]
+    return ["podman", *args]
+
 def resolve_workspace_root() -> Path:
     """Locate the top-level repository root directory.
 
@@ -160,12 +219,12 @@ def convert_xml_to_fmb(xml_path: Path, repo_root: Path) -> Path:
     """
     xml_path = prepare_oracle_preview_xml(xml_path)
     rel_path = xml_path.resolve().relative_to(repo_root)
-    container_xml = f"/work/{rel_path}"
+    container_xml = f"/work/{rel_path.as_posix()}"
     # XML2Forms strips the Forms2XML _fmb suffix when naming its binary output.
     stem = xml_path.stem[:-4] if xml_path.stem.lower().endswith("_fmb") else xml_path.stem
     output_fmb = xml_path.resolve().with_name(stem + ".fmb")
     rel_fmb = output_fmb.relative_to(repo_root)
-    container_fmb = f"/work/{rel_fmb}"
+    container_fmb = f"/work/{rel_fmb.as_posix()}"
 
     print(f"[1/3] Converting XML definition {xml_path.name} to binary FMB...")
     cmd = (
@@ -177,11 +236,11 @@ def convert_xml_to_fmb(xml_path: Path, repo_root: Path) -> Path:
         f"-classpath /oracle_home_14c/jlib/frmjdapi.jar:/oracle_home_14c/jlib/frmxmltools.jar:/oracle_home_14c/oracle_common/modules/oracle.xdk/xmlparserv2.jar "
         f"oracle.forms.util.xmltools.XML2Forms "
         f"OVERWRITE=YES "
-        f"OUTPUTDIR=/work/{rel_fmb.parent} "
+        f"OUTPUTDIR=/work/{rel_fmb.parent.as_posix()} "
         f"{container_xml}"
     )
 
-    res = subprocess.run(["podman", "exec", "forms-server-14c", "/bin/sh", "-c", cmd],
+    res = subprocess.run(podman_cmd(["exec", "forms-server-14c", "/bin/sh", "-c", cmd]),
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if "Module saved as" not in res.stdout and res.returncode != 0:
         raise RuntimeError(f"XML2Forms failed:\n{res.stdout}")
@@ -209,7 +268,7 @@ def compile_fmb_to_fmx(fmb_path: Path, repo_root: Path, userid: str, offline: bo
         RuntimeError: If compilation fails.
     """
     rel_path = fmb_path.resolve().relative_to(repo_root)
-    container_fmb = f"/work/{rel_path}"
+    container_fmb = f"/work/{rel_path.as_posix()}"
     fmx_path = fmb_path.resolve().with_suffix(".fmx")
     logon_param = "logon=no" if offline else "userid=" + shlex.quote(userid)
 
@@ -228,7 +287,7 @@ def compile_fmb_to_fmx(fmb_path: Path, repo_root: Path, userid: str, offline: bo
         f"compile_all=yes"
     )
 
-    res = subprocess.run(["podman", "exec", "-i", "-u", "oracle", "forms-server-14c", "/bin/sh", "-s"],
+    res = subprocess.run(podman_cmd(["exec", "-i", "-u", "oracle", "forms-server-14c", "/bin/sh", "-s"]),
                          input=cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if not offline:
         res.stdout = res.stdout.replace(userid, "<redacted>")
@@ -240,7 +299,7 @@ def compile_fmb_to_fmx(fmb_path: Path, repo_root: Path, userid: str, offline: bo
 
     # Ensure the compiled form is mirrored into container forms deployment directory
     copy_cmd = f"cp {container_fmb.rsplit('.', 1)[0]}.fmx /oracle_home_14c/forms/{fmx_path.name}"
-    subprocess.run(["podman", "exec", "forms-server-14c", "/bin/sh", "-c", copy_cmd], check=True)
+    subprocess.run(podman_cmd(["exec", "forms-server-14c", "/bin/sh", "-c", copy_cmd]), check=True)
 
     print(f"  - Successfully compiled: {fmx_path.name}")
     return fmx_path
@@ -280,6 +339,16 @@ def launch_fsal_desktop(fmx_path: Path, repo_root: Path, port: int, userid: str,
     print(f"  Credentials: {'Interactive GUI Prompt' if interactive else 'Pre-authenticated via SQL*Net'}")
 
     cmd = ["java", "-jar", str(frmsal_jar), "-url", url]
+    if platform.system() == "Windows":
+        # FSAL needs Java 17 or 21: Java 26 removed java.applet (NoClassDefFoundError: java/applet/AppletStub).
+        # Use the Java inside WSL; the window shows through WSLg.
+        distro = os.environ.get("OFW_WSL_DISTRO") or "Ubuntu"
+        converted = subprocess.run(["wsl", "-d", distro, "--", "wslpath", "-u", str(frmsal_jar)], capture_output=True, text=True)
+        wsl_jar = converted.stdout.strip()
+        if converted.returncode != 0 or not wsl_jar:
+            print("Error: could not convert the frmsal.jar path for WSL", file=sys.stderr)
+            return 1
+        cmd = ["wsl", "-d", distro, "--", "bash", "-lc", f"exec java -jar {shlex.quote(wsl_jar)} -url {shlex.quote(url)}"]
     try:
         return subprocess.call(cmd)
     except KeyboardInterrupt:
@@ -302,11 +371,14 @@ def parse_cli_args(argv: List[str]) -> argparse.Namespace:
     )
     parser.add_argument("form_path", help="Path to input .fmx, .fmb, or .xml module file")
     parser.add_argument("-p", "--port", type=int, default=7001, help="WebLogic AdminServer port (default: 7001)")
-    parser.add_argument("-u", "--userid", default="forms_user/Welcome123#@FREEPDB1", help="Database connect string")
+    parser.add_argument("-u", "--userid", default=None, help="Database connect string")
     parser.add_argument("--interactive", action="store_true", help="Prompt for credentials via native GUI Logon dialog")
     parser.add_argument("--compile-from-env", action="store_true", help="Read compile logon from OFW_PREVIEW_DB_LOGON (FSAL remains interactive)")
     parser.add_argument("--offline", action="store_true", help="Compile without database connection (logon=no)")
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.userid is None:
+        args.userid = _default_userid()
+    return args
 
 
 # Main execution entry point for run_form.py.
@@ -340,8 +412,8 @@ def main() -> int:
             fmx_file = input_file
             # Copy into container forms path to guarantee availability
             rel_fmx = fmx_file.relative_to(repo_root)
-            cmd = f"cp /work/{rel_fmx} /oracle_home_14c/forms/{fmx_file.name}"
-            subprocess.run(["podman", "exec", "forms-server-14c", "/bin/sh", "-c", cmd], check=True)
+            cmd = f"cp /work/{rel_fmx.as_posix()} /oracle_home_14c/forms/{fmx_file.name}"
+            subprocess.run(podman_cmd(["exec", "forms-server-14c", "/bin/sh", "-c", cmd]), check=True)
         else:
             print(f"Error: Unsupported file format '{suffix}'. Expected .xml, .fmb, or .fmx", file=sys.stderr)
             return 1

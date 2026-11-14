@@ -1,6 +1,9 @@
 # Podman Oracle Forms Container Environment (12c & 14c + 23ai Database)
 
-An on-demand, containerized environment hosting official **Oracle Forms 12c and 14c installations** alongside **Oracle Database 23ai Free** on **macOS Apple Silicon (ARM64)** and Linux using Podman.
+An on-demand, containerized environment hosting official **Oracle Forms 12c and 14c installations** alongside **Oracle Database 23ai Free** on **macOS Apple Silicon (ARM64)**, Linux, and **Windows 11 (inside WSL2, x86-64)** using Podman.
+
+> [!TIP]
+> **Windows:** run everything inside an Ubuntu WSL2 distro: Podman and these containers, Python, Java 21, and the Rust workbench (`cargo run -p oracle-forms-server`), with the build output on WSL's own disk (`CARGO_TARGET_DIR=$HOME/ofw-target`). No Visual Studio is needed. See [docs/WINDOWS-PODMAN-SETUP.md](../docs/WINDOWS-PODMAN-SETUP.md) and the setup skill's `windows-podman-setup.md` (section 10 lists every fix a fresh install needs). Credentials come from the git-ignored `.env` (copy `example.env`); the setup skill creates it. `python3 start_testbed.py` (repo root) starts the containers and the Rust app.
 
 > [!NOTE]
 > All container scripts have been refactored and packaged into **APM Skills** under `plugins/oracle-forms/.apm/skills/`. They follow universal coding conventions (type hints, standardized headers, dual-layer docstrings) and can be invoked directly from the CLI or autonomously by AI agents.
@@ -184,15 +187,15 @@ The container environment connects directly with the pure-native Rust toolchain:
 
 ## 7. Oracle Database 23ai Free & Forms 14c Runtime
 
-### Running Oracle Database 23ai Free (Native ARM64)
-Oracle Database 23ai Free runs as a native ARM64 container on Apple Silicon:
+### Running Oracle Database 23ai Free (native image architecture)
+Oracle Database 23ai Free runs as a native container for the host architecture: ARM64 on Apple Silicon, amd64 on x86-64 (including Windows inside WSL2):
 
 ```bash
 # Start 23ai Free Lite (runs on port 1521)
 podman run -d \
   --name oracle23ai-lite \
   -p 1521:1521 \
-  -e ORACLE_PWD=Welcome1 \
+  -e ORACLE_PWD=$ORACLE_PWD \
   container-registry.oracle.com/database/free:latest-lite
 
 # Check startup logs
@@ -203,7 +206,7 @@ Connecting to the database:
 - **Host**: `localhost` (or `host.containers.internal` inside containers)
 - **Port**: `1521`
 - **Service Name**: `FREEPDB1`
-- **User**: `system` / **Password**: `Welcome1`
+- **User**: `system` / **Password**: `$DB_PASSWORD`
 
 ### Installing Oracle Forms 14c (Two-Stage Silent Install)
 

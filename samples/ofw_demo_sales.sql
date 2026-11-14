@@ -1,7 +1,7 @@
 -- Demo schema for samples/ofw_sales_fmb.xml ("Customer Orders Inquiry").
 -- Customers -> Orders -> Order lines, plus a product catalogue.
--- Run as forms_user against FREEPDB1, e.g.:
---   podman exec -i oracle23ai-lite sqlplus -s forms_user/"<password>"@localhost:1521/FREEPDB1 < samples/ofw_demo_sales.sql
+-- Run as DB_USER from .env against FREEPDB1, e.g.:
+--   podman exec -i oracle23ai-lite sqlplus -s "$DB_USER/$DB_PASSWORD"@localhost:1521/FREEPDB1 < samples/ofw_demo_sales.sql
 -- Safe to re-run: drops and recreates the four OFW_ tables.
 
 WHENEVER SQLERROR CONTINUE

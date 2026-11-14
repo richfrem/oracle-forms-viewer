@@ -653,7 +653,12 @@ impl FormsService {
         Ok((Self::summary_xml(&module), ExportMode::Summary))
     }
 
-    /// Writes a new XML version; existing source artifacts are never overwritten.
+    /// Saves the form by updating its one XML file, `<form>_fmb.xml`, in place (no copy per edit).
+    ///
+    /// The write goes to a temporary file that is then renamed over the target, so an interrupted
+    /// save cannot leave a half-written form. If the export is only the lossy model summary and the
+    /// file already exists, a new `_edited_N_fmb.xml` version is written instead, so a complete XML is
+    /// never replaced by a partial one. Binary `.fmb` sources are never touched.
     pub fn save_form_file(&self, module_name: &str) -> Result<(String, ExportMode)> {
         let module = self.get_or_load_module(module_name)?;
         if module.key.module_type != ModuleType::Form {
@@ -664,9 +669,31 @@ impl FormsService {
             return Err(FormsError::InvalidFormat("Form names must contain letters, digits or underscores".into()));
         }
         let (xml, mode) = self.export_xml(module_name)?;
-        Self::write_form_version(&Self::samples_dir(), &stem, &xml)?
+        let summary_only = matches!(mode, ExportMode::Summary);
+        Self::write_form_file(&Self::samples_dir(), &stem, &xml, summary_only)?
             .map(|name| (name, mode))
             .ok_or_else(|| FormsError::Internal("No available version filename".into()))
+    }
+
+    /// Updates `<stem>_fmb.xml` in place via a temporary file and a rename.
+    /// Falls back to a new numbered version when only the lossy summary is available and the file exists.
+    fn write_form_file(directory: &Path, stem: &str, xml: &str, summary_only: bool) -> Result<Option<String>> {
+        use std::io::Write;
+        fs::create_dir_all(directory)?;
+        let name = format!("{}_fmb.xml", stem);
+        let path = directory.join(&name);
+        if summary_only && path.exists() {
+            return Self::write_form_version(directory, stem, xml);
+        }
+        let temp = directory.join(format!(".{}.saving", name));
+        let result = fs::File::create(&temp)
+            .and_then(|mut file| file.write_all(xml.as_bytes()).and_then(|_| file.sync_all()))
+            .and_then(|_| fs::rename(&temp, &path));
+        if let Err(error) = result {
+            let _ = fs::remove_file(&temp);
+            return Err(error.into());
+        }
+        Ok(Some(name))
     }
 
     fn write_form_version(directory: &Path, stem: &str, xml: &str) -> Result<Option<String>> {

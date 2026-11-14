@@ -18,7 +18,7 @@ podman start oracle23ai-lite forms-server-14c
 Database connection details:
 - **Host / Port**: `localhost:1521` (Host) or `10.88.0.93:1521` (Container network)
 - **Service / PDB**: `FREEPDB1`
-- **Developer User**: `forms_user` / `Welcome123#`
+- **Developer User**: `$DB_USER` / `$DB_PASSWORD`
 
 ---
 
@@ -26,8 +26,8 @@ Database connection details:
 
 ### Step 1: Seed Schema in Oracle 23ai
 ```bash
-podman exec -i oracle23ai-lite sqlplus -s forms_user/Welcome123#@localhost:1521/FREEPDB1 < samples/ofw_demo_employees.sql
-podman exec -i oracle23ai-lite sqlplus -s forms_user/Welcome123#@localhost:1521/FREEPDB1 < samples/ofw_demo_sales.sql
+podman exec -i oracle23ai-lite sqlplus -s $DB_USER/$DB_PASSWORD@localhost:1521/FREEPDB1 < samples/ofw_demo_employees.sql
+podman exec -i oracle23ai-lite sqlplus -s $DB_USER/$DB_PASSWORD@localhost:1521/FREEPDB1 < samples/ofw_demo_sales.sql
 ```
 
 ### Step 2: Headless Compilation (.xml -> .fmb -> .fmx)
@@ -64,7 +64,7 @@ java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
 java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
   -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=ofw_sales.fmx"
 ```
-Logon prompt: `forms_user` / `Welcome123#` @ `10.88.0.93:1521/FREEPDB1`
+Logon prompt: `$DB_USER` / `$DB_PASSWORD` @ `10.88.0.93:1521/FREEPDB1`
 
 ---
 
@@ -73,7 +73,7 @@ Logon prompt: `forms_user` / `Welcome123#` @ `10.88.0.93:1521/FREEPDB1`
 ### Method A: Browser UI (Interactive Live Session)
 1. Launch the server with live database credentials:
    ```bash
-   OFW_SERVER_ENV_CREDENTIALS=1 OFW_DB_USER=forms_user OFW_DB_PASSWORD=Welcome123# cargo run -p oracle-forms-server
+   OFW_SERVER_ENV_CREDENTIALS=1 OFW_DB_USER=$DB_USER OFW_DB_PASSWORD=$DB_PASSWORD cargo run -p oracle-forms-server
    ```
 2. Open in browser: `http://127.0.0.1:7070`
 3. Select the target form in the **Sample** dropdown:
@@ -97,7 +97,7 @@ cargo run -p oracle-forms-cli -- inspect samples/ofw_demo_employees_fmb.xml
 
 Execute direct database query over pure-Rust wire protocol:
 ```bash
-OFW_DB_USER=forms_user OFW_DB_PASSWORD=Welcome123# cargo run -p oracle-forms-cli -- query samples/ofw_demo_employees_fmb.xml --block EMP --backend oracle-thin
+OFW_DB_USER=$DB_USER OFW_DB_PASSWORD=$DB_PASSWORD cargo run -p oracle-forms-cli -- query samples/ofw_demo_employees_fmb.xml --block EMP --backend oracle-thin
 ```
 
 ---

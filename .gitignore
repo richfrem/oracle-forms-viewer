@@ -16,4 +16,4 @@ context/
 __pycache__/
 *.pyc
 .worktrees/
-
+.env

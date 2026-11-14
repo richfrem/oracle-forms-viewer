@@ -8,7 +8,7 @@ flowchart TB
     classDef oracleStorage fill:#fff1f2,stroke:#e11d48,stroke-width:2.5px,color:#881337;
     classDef execution fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#4c1d95;
 
-    subgraph Host["Host Machine (macOS ARM64 / Windows 11 / Linux)"]
+    subgraph Host["Host Machine (macOS ARM64 / Linux / Windows 11: on Windows the host tools, the Rust app, and the Forms client run inside WSL2 Ubuntu, next to the containers)"]
         direction TB
         
         subgraph HostTools["APM Skills & CLI Runners (plugins/oracle-forms/)"]
@@ -47,7 +47,7 @@ flowchart TB
             DB_ENGINE["Oracle Database 23ai Free Engine"]:::db
             LISTENER["TNS Listener (Port 1521)"]:::db
             PDB["Pluggable Database: FREEPDB1"]:::db
-            USER_SCHEMA["Test Schema: forms_user / test_items"]:::db
+            USER_SCHEMA["Test Schema: DB_USER / test_items"]:::db
         end
     end
 
