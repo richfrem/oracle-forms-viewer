@@ -93,7 +93,7 @@ impl FormsService {
                 if path.is_file() {
                     if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                         let ext_lower = ext.to_ascii_lowercase();
-                        if matches!(ext_lower.as_str(), "xml" | "fmb" | "pld" | "mmb" | "olb") {
+                        if matches!(ext_lower.as_str(), "xml" | "fmb" | "mmb" | "olb" | "pll" | "pld" | "rdf") {
                             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                                 list.insert(name.to_string());
                             }
@@ -170,7 +170,10 @@ impl FormsService {
         let mut st = self.state.write().unwrap();
         let key_name = key.name.to_ascii_uppercase();
         st.modules.insert(key_name.clone(), index.clone());
-        st.converted_files.insert(key_name.clone(), effective_path);
+        st.converted_files.insert(key_name.clone(), effective_path.clone());
+        if let Some(base) = lower_name.strip_suffix("_report.xml") {
+            st.converted_files.insert(base.to_ascii_uppercase(), effective_path);
+        }
         st.cache_dirs.insert(key_name, target_cache_dir);
 
         Ok(index)
@@ -777,7 +780,10 @@ frmf2xml for a complete export. -->\n";
         for candidate in &candidates {
             if let Some(path) = safe_join(&samples_dir, candidate) {
                 if path.is_file() {
-                    return oracle_forms_xml::ReportsXmlParser::parse_file(&path);
+                    let report = oracle_forms_xml::ReportsXmlParser::parse_file(&path)?;
+                    let mut st = self.state.write().unwrap();
+                    st.converted_files.insert(report.name.to_ascii_uppercase(), path);
+                    return Ok(report);
                 }
             }
         }

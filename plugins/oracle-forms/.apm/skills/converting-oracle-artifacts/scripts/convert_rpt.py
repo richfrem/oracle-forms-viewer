@@ -120,19 +120,21 @@ def resolve_oracle_home(custom_oracle_home: Optional[str]) -> Optional[Path]:
 # -----------------------------------------------------------------------------
 # Checks whether rwconverter.sh exists in the resolved Oracle Home
 def check_reports_runtime(oracle_home_path: Optional[Path]) -> bool:
-    """Verifies if the Oracle Reports batch converter binary (rwconverter.sh) is installed.
+    """Verifies if the Oracle Reports batch converter binary (rwconverter) is installed.
 
     Args:
         oracle_home_path: Resolved path to the Oracle Home directory.
 
     Returns:
-        bool: True if rwconverter.sh is present, False otherwise.
+        bool: True if rwconverter or rwconverter.sh is present, False otherwise.
     """
     if not oracle_home_path:
         return False
 
-    rwconverter = oracle_home_path / "bin" / "rwconverter.sh"
-    return rwconverter.is_file()
+    return (
+        (oracle_home_path / "bin" / "rwconverter").is_file()
+        or (oracle_home_path / "bin" / "rwconverter.sh").is_file()
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -153,21 +155,38 @@ def build_container_script(file_name: str, stem: str, out_ext: str, dtype: str) 
     """
     dest_name = f"{stem}{out_ext}"
     home = rt.HOME
+    lower = file_name.lower()
+    stype = "rexfile" if lower.endswith(".rex") else ("xmlfile" if lower.endswith(".xml") else "rdffile")
     return (
+        f"export HOME=/tmp; mkdir -p /tmp/US; touch /tmp/prefs.ora; "
         f"export ORACLE_HOME={home}; "
+        f"export DOMAIN_HOME={home}/user_projects/domains/base_domain; "
+        f"export RW={home}/reports; "
+        f"export REPORTS_TMP=/tmp; "
+        f"export REPORTS_NO_DUMMY_PRINTER=TRUE; "
+        f"export REPORTS_DEFAULT_DISPLAY=NO; "
+        f"export TK_PRINT_STATUS=echo; "
+        f"export NLS_LANG=AMERICAN_AMERICA.WE8ISO8859P1; "
+        f"export REPORTS_CLASSPATH={home}/reports/jlib/rwbuilder.jar:{home}/reports/jlib/rwrun.jar:{home}/jlib/zrclient.jar; "
+        f"export TK_ICON={home}/reports/plugins/resource; "
+        f"export TNS_ADMIN={home}/user_projects/domains/base_domain/config/fmwconfig; "
         f"export ORACLE_TERM=vt220; "
         f"export TERM=vt220; "
-        f"export LD_LIBRARY_PATH={home}/lib:{home}/oracle_common/lib:$LD_LIBRARY_PATH; "
-        f"export REPORTS_PATH=/work:/work/shared:$REPORTS_PATH; "
+        f"export LD_LIBRARY_PATH={home}/lib:{home}/oracle_common/lib:/usr/lib/jvm/jdk-17.0.12/lib:/usr/lib/jvm/jdk-17.0.12/lib/server:$LD_LIBRARY_PATH; "
+        f"export REPORTS_PATH=/work:/work/shared:{home}/reports/templates:{home}/reports/printers:$REPORTS_PATH; "
         f"cd /work; "
-        f"if [ -f {home}/bin/rwconverter.sh ]; then "
+        f"if [ -x {home}/bin/rwconverter ]; then "
+        f"  echo 'Executing Oracle native rwconverter utility...'; "
+        f"  {home}/bin/rwconverter stype={stype} source={file_name} dtype={dtype} dest={dest_name} batch=yes overwrite=yes; "
+        f"  echo 'Conversion complete: /work/{dest_name} generated.'; "
+        f"elif [ -f {home}/bin/rwconverter.sh ]; then "
         f"  echo 'Executing Oracle native rwconverter.sh utility...'; "
         f"  chmod +x {home}/bin/rwconverter.sh 2>/dev/null || true; "
-        f"  {home}/bin/rwconverter.sh stype=rdffile source={file_name} dtype={dtype} dest={dest_name} batch=yes overwrite=yes; "
+        f"  {home}/bin/rwconverter.sh stype={stype} source={file_name} dtype={dtype} dest={dest_name} batch=yes overwrite=yes; "
         f"  echo 'Conversion complete: /work/{dest_name} generated.'; "
         f"else "
         f"  echo 'Notice: /work/{file_name} mounted successfully inside container.'; "
-        f"  echo 'Error: Oracle Reports converter (rwconverter.sh) is not installed in {home}/bin.'; "
+        f"  echo 'Error: Oracle Reports converter (rwconverter) is not installed in {home}/bin.'; "
         f"  echo ''; "
         f"  echo 'Use an Oracle Home that includes Oracle Reports (Forms & Reports 14c install), or the'; "
         f"  echo 'pure-native Rust tool, which needs no Oracle runtime:'; "
@@ -260,11 +279,16 @@ def convert_report(
         print(f" Oracle Home:    Default internal container path ({rt.HOME})")
     print("=================================================================")
 
+    wslg_args: List[str] = []
+    if Path("/mnt/wslg/.X11-unix").is_dir():
+        wslg_args = ["-v", "/mnt/wslg/.X11-unix:/tmp/.X11-unix", "-e", "DISPLAY=:0"]
+
     container_cmd = build_container_script(file_name, input_path.stem, out_ext, dtype)
     cmd = rt.podman_cmd([
         "run", "--rm", "--platform", "linux/amd64",
         "-v", f"{rt.host_path(target_dir)}:/work:Z",
         *extra_mount,
+        *wslg_args,
         rt.IMAGE, "bash", "-c", container_cmd,
     ])
 

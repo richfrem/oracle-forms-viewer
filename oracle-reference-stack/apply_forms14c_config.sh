@@ -128,6 +128,16 @@ if [ "$SKIP_SAMPLES" -eq 0 ]; then
     cp ofw_emp_menu.mmx ofw_demo_employees.fmx /oracle_home_14c/forms/'
 fi
 
+step "5b. Oracle Reports preference and printer config files (rwconverter)"
+mkdir -p "$OH/tools/admin/US"
+touch "$OH/tools/admin/prefs.ora"
+if [ ! -f "$OH/guicommon/tk/admin/uiprint.txt" ]; then
+  printf "dummy:PostScript:2:Dummy PostScript Printer:a_pnt518.ppd:\n" > "$OH/guicommon/tk/admin/uiprint.txt"
+fi
+if [ ! -f "$OH/guicommon/tk/admin/uiscreenprint.txt" ]; then
+  printf "screenprinter:PostScript:2:ScreenPrinter:a_pnt518.ppd:\n" > "$OH/guicommon/tk/admin/uiscreenprint.txt"
+fi
+
 step "6. Verification"
 FAIL=0
 check() { if eval "$2"; then echo "OK   $1"; else echo "FAIL $1"; FAIL=1; fi; }
@@ -136,6 +146,9 @@ check "boot.properties present" "[ -f '$DOMAIN/servers/AdminServer/security/boot
 check "instances/forms1 symlink" "[ -L '$FORMS_COMP/instances/forms1' ]"
 check "tnsnames FREEPDB1" "grep -q '^FREEPDB1' '$TNS'"
 check "libfrmjapi.so.0 built" "[ -s '$OH/lib/libfrmjapi.so.0' ]"
+check "Reports prefs.ora present" "[ -f '$OH/tools/admin/prefs.ora' ]"
+check "Reports uiprint.txt present" "[ -f '$OH/guicommon/tk/admin/uiprint.txt' ]"
+check "Reports uiscreenprint.txt present" "[ -f '$OH/guicommon/tk/admin/uiscreenprint.txt' ]"
 MISSING="$(in_container 'export LD_LIBRARY_PATH=/oracle_home_14c/lib:/oracle_home_14c/oracle_common/lib; ldd /oracle_home_14c/bin/frmweb | grep -c "not found" || true' | tail -1)"
 check "frmweb has no missing libraries (count=$MISSING)" "[ '${MISSING:-1}' = '0' ]"
 [ "$FAIL" -eq 0 ] && echo "All adjustments applied." || { echo "Some checks failed."; exit 1; }
