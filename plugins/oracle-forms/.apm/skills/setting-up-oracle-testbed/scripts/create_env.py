@@ -4,7 +4,8 @@ create_env.py: create the git-ignored .env file for the Oracle testbed.
 Purpose:
     Copies example.env (repo root) to .env, then prompts for each value that is
     still empty. Passwords are read with hidden input and are never printed or
-    written anywhere except .env.
+    written anywhere except .env. Optional settings (OFW_ORACLE_HOME, the Oracle
+    Home folder) show a hint, and pressing Enter keeps the default.
 
 Usage:
     python3 scripts/create_env.py            # create .env, prompt for empty values
@@ -26,6 +27,16 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 PASSWORD_KEYS = {"ORACLE_PWD", "DB_PASSWORD", "OFW_DB_PASSWORD", "WLS_ADMIN_PASSWORD"}
+
+# Optional settings: shown with a hint, and an empty answer is valid (the default is used).
+OPTIONAL_HINTS = {
+    "OFW_ORACLE_HOME": (
+        "Optional: host folder holding the Forms 14c Oracle Home. Press Enter to use the default "
+        "(oracle-reference-stack/oracle_home_14c). Windows: after provision_oracle_home.sh has copied and "
+        "verified the Oracle Home onto Ubuntu's disk, enter an absolute path such as /home/<you>/oracle_home_14c. "
+        "Do not set it before that folder exists."
+    ),
+}
 
 
 def find_repo_root(start: Path) -> Path:
@@ -86,11 +97,15 @@ def main(argv: Optional[List[str]] = None) -> int:
     for index, (key, value) in enumerate(rows):
         if key is None or value:
             continue
+        if key in OPTIONAL_HINTS:
+            print(OPTIONAL_HINTS[key])
         prompt = f"{key}: "
         entered = getpass.getpass(prompt) if key in PASSWORD_KEYS else input(prompt)
         if entered:
             rows[index] = (key, entered)
             filled += 1
+        elif key in OPTIONAL_HINTS:
+            print(f"  {key} left empty: the default is used.")
         else:
             print(f"  {key} left empty. Set it in .env before using the commands that need it.")
 

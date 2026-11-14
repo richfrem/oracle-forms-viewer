@@ -21,7 +21,7 @@
 #   --skip-samples  do not compile the sample .fmx/.mmx
 #   --fix-perms     also run `podman unshare chmod -R a+rX` on the Oracle Home (slow; several minutes)
 #
-# Requires: the Oracle Home at oracle-reference-stack/oracle_home_14c with the domain created, the
+# Requires: the Oracle Home (default oracle-reference-stack/oracle_home_14c, or $OFW_ORACLE_HOME) with the domain created, the
 # forms-converter-14c image, and WLS_ADMIN_USER / WLS_ADMIN_PASSWORD in the environment (from .env).
 # Nothing here starts, stops, or replaces a container. Library and compile steps use throwaway containers.
 #
@@ -42,7 +42,10 @@ done
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STACK="$REPO/oracle-reference-stack"
-OH="$STACK/oracle_home_14c"
+# The Oracle Home folder on the host. OFW_ORACLE_HOME (from .env or the environment) overrides the default, so it
+# can live on Ubuntu's own disk (see provision_oracle_home.sh and the setup skill's oracle-home-location.md).
+OH="${OFW_ORACLE_HOME:-$STACK/oracle_home_14c}"
+OH="${OH/#\~/$HOME}"
 DOMAIN="$OH/user_projects/domains/base_domain"
 CFG="$STACK/forms14c-config"
 IMAGE="${OFW_CONVERTER_IMAGE:-forms-converter-14c:latest}"
@@ -63,7 +66,7 @@ in_container() {
 
 if [ "$FIX_PERMS" -eq 1 ]; then
   step "0. Make container-created folders readable for the host user (slow)"
-  (cd "$STACK" && podman unshare chmod -R a+rX oracle_home_14c)
+  podman unshare chmod -R a+rX "$OH"
 fi
 
 step "1. Domain hooks"

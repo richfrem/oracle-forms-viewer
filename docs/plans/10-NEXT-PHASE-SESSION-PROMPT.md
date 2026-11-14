@@ -99,7 +99,7 @@ saved source during XML2Forms, then reported off-canvas geometry after the schem
 
 The reference runner now prepares a separate oracle_compatible/ preview copy only when known
 compatibility changes are needed. It normalizes the version for 14c, maps parameter/column names
-against docs/forms-14c.xsd, omits only the exact FutureUnknownElement parser-test marker, and
+against forms-14c.xsd (now in the skills' assets/), omits only the exact FutureUnknownElement parser-test marker, and
 makes the native viewer's Point / 800x600 defaults explicit where metadata is missing. Explicit
 coordinates/dimensions, attached libraries, code, and other unknown elements are preserved.
 Conflicting alias values stop conversion. Original/saved XML is unchanged; each adjustment is

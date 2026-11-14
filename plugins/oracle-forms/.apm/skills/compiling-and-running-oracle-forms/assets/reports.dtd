@@ -1,0 +1,1688 @@
+<!ELEMENT report (
+  xmlSettings       |
+  comment?          |
+  reportHtmlEscapes |
+  data              |
+  layout            |
+  parameterForm     |
+  programUnits      |
+  attachedLibrary   |
+  destination*      |
+  customize         |
+  webSource         |
+  colorPalette      |
+  reportPrivate     |
+  accessibility     |
+  documentTaxonomy  |
+  userStyle         |
+  reportWebSettings |
+  characterMode
+  )* >
+  <!ATTLIST report
+    DTDVersion                          CDATA   #REQUIRED
+    name                                CDATA   #IMPLIED
+    title                               CDATA   #IMPLIED
+    beforeParameterFormTrigger          CDATA   #IMPLIED
+    afterParameterFormTrigger           CDATA   #IMPLIED
+    beforeReportTrigger                 CDATA   #IMPLIED
+    betweenPagesTrigger                 CDATA   #IMPLIED
+    afterReportTrigger                  CDATA   #IMPLIED
+    unitOfMeasurement                  (inch | centimeter | point) #IMPLIED
+    previewerTitle                      CDATA   #IMPLIED
+    designInCharacterUnits              (yes | no) "no"
+    xmlTag                              CDATA   #IMPLIED
+    xmlTagAttrs                         CDATA   #IMPLIED
+    xmlPrologType                       CDATA   #IMPLIED
+    xmlPrologValue                      CDATA   #IMPLIED
+    xmlPrologText                       CDATA   #IMPLIED
+    xmlPrologFile                       CDATA   #IMPLIED
+    author                              CDATA   #IMPLIED
+    >
+
+<!ELEMENT data (
+  dataSource       |
+  crossProduct     |
+  userParameter    |
+  systemParameter  |
+  summary          |
+  formula          |
+  placeholder      |
+  link
+  )* >
+
+<!ELEMENT summary (
+ comment?, xmlSettings?, displayInfo?
+ ) >
+  <!ATTLIST summary
+    name                              CDATA   #REQUIRED
+    source                            CDATA   #IMPLIED
+    function                          (sum             |
+                                       average         |
+                                       median          |
+                                       minimum         |
+                                       maximum         |
+                                       count           |
+                                       first           |
+                                       last            |
+                                       percentOfTotal  |
+                                       percentile      |
+                                       stdDeviation    |
+                                       variance) "sum"
+    width                             CDATA   "10"
+    scale                             CDATA   "0"
+    precision                         CDATA   "0"
+    compute                           CDATA   #IMPLIED
+    reset                             CDATA   #IMPLIED
+    productOrder                      CDATA   #IMPLIED
+    valueIfNull                       CDATA   #IMPLIED
+    valueIfNullFormatMask             CDATA   #IMPLIED
+    readFromFile                      (yes | no) "no"
+    fileFormat                        (text          |
+                                       image         |
+                                       cgm           |
+                                       oracleDrawing |
+                                       oracleImage   |
+                                       sound         |
+                                       video         |
+                                       ole2          |
+                                       imageURL) "text"
+    nullval                           CDATA   #IMPLIED
+    defaultWidth                      CDATA   #IMPLIED
+    defaultHeight                     CDATA   #IMPLIED
+    columnFlags                       CDATA   #IMPLIED
+    defaultLabel                      CDATA   #IMPLIED
+   >
+
+<!ELEMENT reportHtmlEscapes (
+  beforeReportHtmlEscape |
+  afterReportHtmlEscape  |
+  beforeFormHtmlEscape   |
+  afterFormHtmlEscape    |
+  beforePageHtmlEscape   |
+  afterPageHtmlEscape    |
+  pageNavigationHtmlEscape
+  )* >
+
+<!ELEMENT pageNavigationHtmlEscape (#PCDATA) >
+  <!ATTLIST pageNavigationHtmlEscape
+    type                             CDATA   #IMPLIED
+    file                             CDATA   #IMPLIED
+  >
+
+<!ELEMENT beforePageHtmlEscape (#PCDATA) >
+  <!ATTLIST beforePageHtmlEscape
+    type                           CDATA   #IMPLIED
+    file                           CDATA   #IMPLIED
+  >
+
+<!ELEMENT afterPageHtmlEscape (#PCDATA) >
+  <!ATTLIST afterPageHtmlEscape
+    type                           CDATA   #IMPLIED
+    file                           CDATA   #IMPLIED
+  >
+
+<!ELEMENT beforeFormHtmlEscape (#PCDATA) >
+  <!ATTLIST beforeFormHtmlEscape
+    type                           CDATA   #IMPLIED
+    file                           CDATA   #IMPLIED
+  >
+
+<!ELEMENT afterFormHtmlEscape (#PCDATA) >
+  <!ATTLIST afterFormHtmlEscape
+    type                           CDATA   #IMPLIED
+    file                           CDATA   #IMPLIED
+  >
+
+<!ELEMENT beforeReportHtmlEscape (#PCDATA) >
+  <!ATTLIST beforeReportHtmlEscape
+    type                           CDATA   #IMPLIED
+    file                           CDATA   #IMPLIED
+  >
+
+<!ELEMENT afterReportHtmlEscape (#PCDATA) >
+  <!ATTLIST afterReportHtmlEscape
+    type                           CDATA   #IMPLIED
+    file                           CDATA   #IMPLIED
+  >
+
+<!ELEMENT validValue EMPTY>
+  <!ATTLIST validValue
+    value                           CDATA   #IMPLIED
+  >
+
+<!ELEMENT staticValues (
+  validValue*
+  ) >
+
+<!ELEMENT selectStatement (#PCDATA)>
+  <!ATTLIST selectStatement
+    hideFirstColumn                 (yes | no) "no"
+  >
+
+<!ELEMENT listOfValues (
+  staticValues |
+  selectStatement
+  ) >
+  <!ATTLIST listOfValues
+    restrictToList                   (yes | no) "yes"
+  >
+
+<!ELEMENT userParameter (
+  comment?, listOfValues?
+  ) >
+  <!ATTLIST userParameter
+    name                             CDATA   #REQUIRED
+    datatype                         (number | character | date) "number"
+    pluginClass                      CDATA   #IMPLIED
+    width                            CDATA   "20"
+    scale                            CDATA   "0"
+    precision                        CDATA   "0"
+    initialValue                     CDATA   #IMPLIED
+    inputMask                        CDATA   #IMPLIED
+    validationTrigger                CDATA   #IMPLIED
+    label                            CDATA   #IMPLIED
+    defaultWidth                     CDATA   #IMPLIED
+    defaultHeight                    CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+    display                          (yes | no) "yes"
+>
+
+<!ELEMENT systemParameter (
+  comment?
+  ) >
+  <!ATTLIST systemParameter
+    name                             CDATA   #REQUIRED
+    initialValue                     CDATA   #IMPLIED
+    inputMask                        CDATA   #IMPLIED
+    validationTrigger                CDATA   #IMPLIED
+    display                          (yes | no) "yes"
+ >
+
+<!ELEMENT formula (
+  comment?,
+  xmlSettings?,
+  displayInfo?
+  ) >
+  <!ATTLIST formula
+    name                             CDATA   #REQUIRED
+    source                           CDATA   #IMPLIED
+    datatype                         (number | character | date) "number"
+    valueIfNull                      CDATA   #IMPLIED
+    valueIfNullFormatMask            CDATA   #IMPLIED
+    breakOrder                       (none      |
+                                      ascending |
+                                      descending) "ascending"
+    productOrder                     CDATA   #IMPLIED
+    readFromFile                     (yes | no) "no"
+    fileFormat                       (text          |
+                                      image         |
+                                      cgm           |
+                                      oracleDrawing |
+                                      oracleImage   |
+                                      sound         |
+                                      video         |
+                                      ole2          |
+                                      imageURL) "text"
+    width                            CDATA   "10"
+    scale                            CDATA   "0"
+    precision                        CDATA   "0"
+    templateSection                  (none | header | main | trailer) "none"
+    defaultWidth                     CDATA   #IMPLIED
+    defaultHeight                    CDATA   #IMPLIED
+    columnFlags                      CDATA   #IMPLIED
+    defaultLabel                     CDATA   #IMPLIED
+  >
+
+<!ELEMENT placeholder (
+ comment?,
+ xmlSettings?,
+ displayInfo?
+ ) >
+  <!ATTLIST placeholder
+    name                             CDATA   #REQUIRED
+    source                           CDATA   #IMPLIED
+    productOrder                     CDATA   #IMPLIED
+    datatype                         (number | character | date) "number"
+    valueIfNull                      CDATA   #IMPLIED
+    valueIfNullFormatMask            CDATA   #IMPLIED
+    readFromFile                     (yes | no) "no"
+    fileFormat                       (text          |
+                                      image         |
+                                      cgm           |
+                                      oracleDrawing |
+                                      oracleImage   |
+                                      sound         |
+                                      video         |
+                                      ole2          |
+                                      imageURL) "text"
+    width                            CDATA   "10"
+    scale                            CDATA   "0"
+    precision                        CDATA   "0"
+    defaultWidth                     CDATA   #IMPLIED
+    defaultHeight                    CDATA   #IMPLIED
+    columnFlags                      CDATA   #IMPLIED
+    defaultLabel                     CDATA   #IMPLIED
+  >
+
+<!ELEMENT dataSource (
+  (select | plugin | plsqlStatement),
+  comment?,
+  displayInfo?,
+  formula*,
+  group*
+  ) >
+  <!ATTLIST dataSource
+    name                            CDATA   #IMPLIED
+    defaultGroupName                CDATA   #IMPLIED
+    maxRows                         CDATA   #IMPLIED
+  >
+
+<!ELEMENT select (#PCDATA)>
+  <!ATTLIST select
+    canParse                         (yes | no) "yes"
+    externalQueryFile               CDATA   #IMPLIED
+  >
+
+<!ELEMENT plugin (#PCDATA)>
+  <!ATTLIST plugin
+    type                            CDATA   #IMPLIED
+    factoryClass                    CDATA   #IMPLIED
+    majorVersionNumber              CDATA   #IMPLIED
+    minorVersionNumber              CDATA   #IMPLIED
+    signOnParameter                 CDATA   #IMPLIED
+  >
+
+<!ELEMENT plsqlStatement  EMPTY>
+  <!ATTLIST plsqlStatement
+    name                            CDATA   #IMPLIED
+  >
+
+<!ELEMENT link EMPTY>
+  <!ATTLIST link
+    name                             CDATA   #IMPLIED
+    parentGroup                      CDATA   #IMPLIED
+    parentColumn                     CDATA   #IMPLIED
+    childQuery                       CDATA   #IMPLIED
+    childColumn                      CDATA   #IMPLIED
+    condition                        (eq   |
+                                      lt   |
+                                      lteq |
+                                      neq  |
+                                      gt   |
+                                      gteq |
+                                      like |
+                                      notLike) "eq"
+    sqlClause                        (startWith | having | where) "where"
+  >
+
+<!ELEMENT dataItem (
+  xmlSettings      |
+  dataDescriptor   |
+  dataItemPrivate  |
+  comment
+  )* >
+  <!ATTLIST dataItem
+    itemId_READONLY                   CDATA   #IMPLIED
+    name                              CDATA   #REQUIRED
+    datatype                             ( character  |
+                                              number  |
+                                                date  |
+                                             graphic  |
+                                                long  |
+                                                 raw  |
+                                             longRaw  |
+                                              vchar2  |
+                                               vchar  |
+                                               rowid  |
+                                               mlabel |
+                                                 ref  |
+                                              object  |
+                                             collect  |
+                                                blob  |
+                                                clob  |
+                                               nclob  |
+                                                bfile |
+                      unknown ) "number"
+    oracleDatatype                    CDATA   "character"
+    javaDatatype                      CDATA   "null"
+    width                             CDATA   "10"
+    columnOrder                       CDATA   #IMPLIED
+    label                             CDATA   #IMPLIED
+    defaultWidth                      CDATA   #IMPLIED
+    defaultHeight                     CDATA   #IMPLIED
+    valueIfNull                       CDATA   #IMPLIED
+    inputMask                         CDATA   #IMPLIED
+    sourceColumn                      CDATA   #IMPLIED
+    readFromFile                      (yes | no) "no"
+    fileFormat                        (text          |
+                                       image         |
+                                       cgm           |
+                                       oracleDrawing |
+                                       oracleImage   |
+                                       sound         |
+                                       video         |
+                                       ole2          |
+                                       imageURL) "text"
+    breakOrder                        (none      |
+                                       ascending |
+                                       descending) "ascending"
+    plsqlRefId_READONLY               CDATA   #IMPLIED
+    columnFlags                       CDATA   #IMPLIED
+    defaultLabel                      CDATA   #IMPLIED
+  >
+
+<!ELEMENT dataDescriptor EMPTY>
+  <!ATTLIST dataDescriptor
+    alias                                CDATA   #IMPLIED
+    expression                           CDATA   #IMPLIED
+    descriptiveExpression                CDATA   #IMPLIED
+    order                                CDATA   #IMPLIED
+    datatype                             ( character  |
+                                              number  |
+                                                date  |
+                                             graphic  |
+                                                long  |
+                                                 raw  |
+                                             longRaw  |
+                                              vchar2  |
+                                               vchar  |
+                                               rowid  |
+                                               mlabel |
+                                                 ref  |
+                                              object  |
+                                             collect  |
+                                                blob  |
+                                                clob  |
+                                               nclob  |
+                                                bfile |
+                      unknown ) "number"
+    oracleDatatype                       CDATA   "character"
+    width                                CDATA   #IMPLIED
+    scale                                CDATA   #IMPLIED
+    precision                            CDATA   #IMPLIED
+    refDescendant                        (yes | no) "no"
+    relationOperands                     CDATA   #IMPLIED
+  >
+
+<!ELEMENT dataItemPrivate EMPTY>
+  <!ATTLIST dataItemPrivate
+    sqlDatatype                       CDATA   #IMPLIED
+    adtName                           CDATA   #IMPLIED
+    schemaName                        CDATA   #IMPLIED
+    refexpanded                       (yes | no) "no"
+    displayWithParentColumn           (yes | no) "no"
+    parentColumn                      CDATA   #IMPLIED
+  >
+
+<!ELEMENT filter EMPTY>
+  <!ATTLIST filter
+    type                              (plsql | first | last) "first"
+    plsqlFilter                       CDATA   #IMPLIED
+    numberOfRecords                   CDATA   #IMPLIED
+  >
+
+<!ELEMENT crossProduct (
+  xmlSettings  |
+  displayInfo  |
+  dimension    |
+  (formula |  summary | placeholder)*  |
+  comment
+  )* >
+  <!ATTLIST crossProduct
+    itemId_READONLY                   CDATA   #IMPLIED
+    name                              CDATA   #IMPLIED
+    mailText                          CDATA   #IMPLIED
+  >
+
+<!ELEMENT dimension (group*)>
+
+<!ELEMENT displayInfo EMPTY>
+  <!ATTLIST displayInfo
+    x                                 CDATA   #IMPLIED
+    y                                 CDATA   #IMPLIED
+    width                             CDATA   #IMPLIED
+    height                            CDATA   #IMPLIED
+  >
+
+<!ELEMENT comment (#PCDATA)>
+
+<!ELEMENT textSettings EMPTY>
+  <!ATTLIST textSettings
+    justify                          (left   |
+                                      center |
+                                      right  |
+                                      start  |
+                                      end    |
+                                      flush) "start"
+    spacing                          CDATA   #IMPLIED
+  >
+
+<!ELEMENT geometryInfo EMPTY>
+  <!ATTLIST geometryInfo
+    x                                CDATA   #IMPLIED
+    y                                CDATA   #IMPLIED
+    width                            CDATA   #IMPLIED
+    height                           CDATA   #IMPLIED
+  >
+
+<!ELEMENT visualSettings (
+  visualSettingsPrivate
+  )* >
+  <!ATTLIST visualSettings
+    lineWidth                        CDATA   #IMPLIED
+    fillPattern                      CDATA   #IMPLIED
+    fillForegroundColor              CDATA   #IMPLIED
+    fillBackgroundColor              CDATA   #IMPLIED
+    linePattern                      CDATA   #IMPLIED
+    lineForegroundColor              CDATA   #IMPLIED
+    lineBackgroundColor              CDATA   #IMPLIED
+    dash                             (solid     |
+                                      dot       |
+                                      shortDash |
+                                      dashDot   |
+                                      doubleDot |
+                                      longDash  |
+                                      dashDoubleDot) "solid"
+    capStyle                         (butt  |
+                                      round |
+                                      projecting) "butt"
+    joinStyle                        (mitre |
+                                      round |
+                                      bevel ) "mitre"
+    hideLeftBorder                    (yes | no)  "no"
+    hideRightBorder                   (yes | no)  "no"
+    hideTopBorder                     (yes | no)  "no"
+    hideBottomBorder                  (yes | no)  "no"
+  >
+
+<!ELEMENT visualSettingsPrivate EMPTY>
+  <!ATTLIST visualSettingsPrivate
+    extraFlags                       CDATA   #IMPLIED
+    nullFlags                        CDATA   #IMPLIED
+  >
+
+<!ELEMENT webSettings (#PCDATA)*>
+  <!ATTLIST webSettings
+    hyperlink                        CDATA   #IMPLIED
+    hyperlinkDest                    CDATA   #IMPLIED
+    bookmark                         CDATA   #IMPLIED
+    appCommandLine                   CDATA   #IMPLIED
+    tableAttrs                       CDATA   #IMPLIED
+    displayName                      CDATA   #IMPLIED
+    hyperlinkAttrs                   CDATA   #IMPLIED
+    htmlAttrs                        CDATA   #IMPLIED
+    containHTMLTags                  CDATA   #IMPLIED
+    adaID                            CDATA   #IMPLIED
+    cssClass                         CDATA   #IMPLIED
+    cssId                            CDATA   #IMPLIED
+  >
+
+<!ELEMENT xmlSettings (#PCDATA)*>
+  <!ATTLIST xmlSettings
+   xmlTag                      CDATA   #IMPLIED
+   xmlTagAttrs                 CDATA   #IMPLIED
+   excludeFromXmlOutput        (yes | no) "no"
+   OuterXmlTag                 CDATA   #IMPLIED
+   OuterXmlAttrs               CDATA   #IMPLIED
+   containXmlTags              (yes | no) "no"
+   xmlPrologType               CDATA   #IMPLIED
+   xmlPrologFile               CDATA   #IMPLIED
+   xmlPrologText               CDATA   #IMPLIED
+ >
+
+<!ELEMENT cond EMPTY>
+  <!ATTLIST cond
+    name                               CDATA   #IMPLIED
+    column                             CDATA   #IMPLIED
+    exception                          CDATA   #IMPLIED
+    lowValue                           CDATA   #IMPLIED
+    highValue                          CDATA   #IMPLIED
+    conjunction                        CDATA   #IMPLIED
+  >
+
+<!ELEMENT formatVisualSettings EMPTY >
+  <!ATTLIST formatVisualSettings
+    fillPattern                      CDATA   #IMPLIED
+    fillForegroundColor              CDATA   #IMPLIED
+    fillBackgroundColor              CDATA   #IMPLIED
+    borderPattern                    CDATA   #IMPLIED
+    borderForegroundColor            CDATA   #IMPLIED
+    borderBackgroundColor            CDATA   #IMPLIED
+  >
+
+<!ELEMENT formatException (
+  font?,
+  formatVisualSettings?,
+  (cond, (cond, (cond)?)?)?
+  ) >
+  <!ATTLIST formatException
+    label                              CDATA   #IMPLIED
+  >
+
+<!ELEMENT conditionalFormat (
+  formatException?
+  )* >
+
+<!ELEMENT generalLayout (
+  conditionalFormat?
+  ) >
+  <!ATTLIST generalLayout
+    pageBreakBefore                  (yes | no) "no"
+    pageBreakAfter                   (yes | no) "no"
+    pageProtect                      (yes | no) "no"
+    verticalElasticity               (expand   |
+                                      contract |
+                                      variable |
+                                      fixed) #IMPLIED
+    horizontalElasticity             (expand   |
+                                      contract |
+                                      variable |
+                                      fixed) #IMPLIED
+    minimumWindowLines               CDATA   #IMPLIED
+  >
+
+<!ELEMENT advancedLayout (
+  anchor?
+  ) >
+  <!ATTLIST advancedLayout
+    printObjectOnPage                (firstPage        |
+                                      lastPage         |
+                                      allButFirstPage  |
+                                      allButLastPage   |
+                                      allPage          |
+                                      default) "default"
+    basePrintingOn                   (enclosingObject |
+                                      anchoringObject) "enclosingObject"
+    keepWithAnchoringObject          (yes | no) "no"
+    printerCodeBefore                CDATA   #IMPLIED
+    printerCodeAfter                 CDATA   #IMPLIED
+    formatTrigger                    CDATA   #IMPLIED
+  >
+
+<!ELEMENT accessibility EMPTY>
+  <!ATTLIST accessibility
+    id                               CDATA   #IMPLIED
+    alternativeText                  CDATA   #IMPLIED
+    headers                          CDATA   #IMPLIED
+    labelForField                    CDATA   #IMPLIED
+    accessKey                        CDATA   #IMPLIED
+    tableCaption                     CDATA   #IMPLIED
+    reportLanguage                   CDATA   #IMPLIED
+ >
+
+<!ELEMENT pageNumbering EMPTY>
+  <!ATTLIST pageNumbering
+    header                           (yes | no) "yes"
+    main                             (yes | no) "yes"
+    trailer                          (yes | no) "yes"
+    startAt                          CDATA   #IMPLIED
+    incrementBy                      CDATA   #IMPLIED
+    resetAt                          CDATA   #IMPLIED
+ >
+
+<!ELEMENT anchor EMPTY>
+  <!ATTLIST anchor
+    name                             CDATA   #IMPLIED
+    parentObjectName                 CDATA   #IMPLIED
+    childObjectName                  CDATA   #IMPLIED
+    parentEdgeType                   (top | bottom | left | right) "bottom"
+    childEdgeType                    (top | bottom | left | right) "top"
+    parentEdgePercent                CDATA   #IMPLIED
+    childEdgePercent                 CDATA   #IMPLIED
+    collapseVertically               (yes | no) "no"
+    collapseHorizontally             (yes | no) "no"
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT destination EMPTY>
+  <!ATTLIST destination
+    name                             CDATA   #IMPLIED
+    copies                           CDATA   #IMPLIED
+    spool                            (yes | no) "no"
+    desname                          CDATA   #IMPLIED
+    destype                          (file | mail | printer) "file"
+    desformat                        (bitmap  |
+                                      html    |
+                                      htmlcss |
+                                      pdf     |
+                                      ascii   |
+                                      rtf     |
+                                      xml     |
+                                      delimiteddata) "html"
+  >
+
+<!ELEMENT font EMPTY>
+  <!ATTLIST font
+    face                             CDATA   #IMPLIED
+    size                             CDATA   #IMPLIED
+    bold                             (yes | no) "no"
+    italic                           (yes | no) "no"
+    underline                        (yes | no) "no"
+    strikeout                        (yes | no) "no"
+    textColor                        CDATA   #IMPLIED
+  >
+
+<!ELEMENT point EMPTY>
+  <!ATTLIST point
+    x                                CDATA   #IMPLIED
+    y                                CDATA   #IMPLIED
+  >
+
+<!ELEMENT binaryData (#PCDATA)>
+  <!ATTLIST binaryData
+    dataId                           CDATA   #IMPLIED
+    encoding                         CDATA   #IMPLIED
+  >
+
+<!ELEMENT image (
+  comment           |
+  geometryInfo      |
+  visualSettings    |
+  points            |
+  webSettings       |
+  generalLayout     |
+  advancedLayout    |
+  accessibility     |
+  binaryData
+  )* >
+  <!ATTLIST image
+    name                             CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+    pageNumber                       CDATA   #IMPLIED
+  >
+
+<!ELEMENT points (
+  point
+  )* >
+
+<!ELEMENT polyline (
+  comment        |
+  geometryInfo   |
+  visualSettings |
+  points         |
+  webSettings    |
+  generalLayout  |
+  advancedLayout |
+  accessibility
+  )* >
+  <!ATTLIST polyline
+    name                             CDATA   #IMPLIED
+    pageNumber                       CDATA   #IMPLIED
+    rotationAngle                    CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT polygon (
+  comment         |
+  geometryInfo    |
+  visualSettings  |
+  points          |
+  webSettings     |
+  generalLayout   |
+  advancedLayout  |
+  accessibility
+  )* >
+  <!ATTLIST polygon
+    name                             CDATA   #IMPLIED
+    pageNumber                       CDATA   #IMPLIED
+    rotationAngle                    CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT line (
+  comment            |
+  geometryInfo       |
+  visualSettings     |
+  points             |
+  webSettings        |
+  generalLayout      |
+  advancedLayout     |
+  accessibility
+  )* >
+  <!ATTLIST line
+    name                             CDATA   #IMPLIED
+    pageNumber                       CDATA   #IMPLIED
+    rotationAngle                    CDATA   #IMPLIED
+    stretchWithFrame                 CDATA   #IMPLIED
+    arrow                            (none            |
+                                      atStart         |
+                                      atEnd           |
+                                      atBothEnds      |
+                                      inMiddleToStart |
+                                      inMiddleToEnd) "none"
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT rectangle (
+  comment        |
+  geometryInfo   |
+  visualSettings |
+  points         |
+  webSettings    |
+  generalLayout  |
+  advancedLayout |
+  accessibility
+  )* >
+  <!ATTLIST rectangle
+    name                             CDATA   #IMPLIED
+    pageNumber                       CDATA   #IMPLIED
+    rotationAngle                    CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT roundedRectangle (
+  comment        |
+  geometryInfo   |
+  visualSettings |
+  points         |
+  webSettings    |
+  generalLayout  |
+  advancedLayout |
+  accessibility
+  )* >
+  <!ATTLIST roundedRectangle
+    name                             CDATA   #IMPLIED
+    pageNumber                       CDATA   #IMPLIED
+    rotationAngle                    CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT arc (
+  comment         |
+  geometryInfo    |
+  visualSettings  |
+  points          |
+  webSettings     |
+  generalLayout   |
+  advancedLayout  |
+  accessibility
+  )* >
+  <!ATTLIST arc
+    name                             CDATA   #IMPLIED
+    pageNumber                       CDATA   #IMPLIED
+    isClosed                         (yes | no) "yes"
+    rotationAngle                    CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT linkFile (
+  comment        |
+  geometryInfo   |
+  visualSettings |
+  webSettings    |
+  generalLayout  |
+  advancedLayout |
+  accessibility  |
+  points         |
+  textSettings   |
+  font
+  )* >
+  <!ATTLIST linkFile
+    name                             CDATA   #IMPLIED
+    pageNumber                       CDATA   #IMPLIED
+    minWidowLines                    CDATA   #IMPLIED
+    sourceFileName                   CDATA   #IMPLIED
+    sourceFileFormat                 CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT graphDefinition (#PCDATA)>
+
+<!ELEMENT graph (
+  comment        |
+  geometryInfo   |
+  visualSettings |
+  webSettings    |
+  generalLayout  |
+  advancedLayout |
+  accessibility  |
+  graphDefinition
+  )* >
+  <!ATTLIST graph
+    name                             CDATA   #IMPLIED
+    graphHyperlink                   CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT string (#PCDATA)>
+
+<!ELEMENT textSegment (
+  font |
+  string
+  )* >
+
+<!ELEMENT text (
+  comment        |
+  textSettings   |
+  geometryInfo   |
+  visualSettings |
+  webSettings    |
+  generalLayout  |
+  advancedLayout |
+  accessibility  |
+  points         |
+  textSegment
+  )* >
+  <!ATTLIST text
+    name                             CDATA   #IMPLIED
+    pageNumber                       CDATA   #IMPLIED
+    minWidowLines                    CDATA   #IMPLIED
+    rotationAngle                    CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT rulers (#PCDATA)>
+  <!ATTLIST rulers
+    gridSpacing                       CDATA   #IMPLIED
+    numberOfSnapPoints                CDATA   #IMPLIED
+  >
+
+
+<!ELEMENT parameterForm (
+  field            |
+  text             |
+  polyline         |
+  polygon          |
+  rectangle        |
+  line             |
+  linkFile         |
+  arc              |
+  roundedRectangle |
+  webSettings      |
+  accessibility    |
+  image            |
+  rulers
+  )* >
+  <!ATTLIST parameterForm
+    width                            CDATA   #IMPLIED
+    height                           CDATA   #IMPLIED
+    pages                            CDATA   #IMPLIED
+  >
+
+<!ELEMENT layout (
+  layoutPrivate |
+  section       |
+  rulers
+  )* >
+  <!ATTLIST layout
+    panelPrintOrder                  (downAcross | acrossDown) "acrossDown"
+    direction                        (leftToRight |
+                                      rightToLeft |
+                                      default) "default"
+    formatOrder                      (header-main-trailer |
+                                      header-trailer-main |
+                                      main-header-trailer |
+                                      main-trailer-header |
+                                      trailer-header-main |
+                                      trailer-main-header) "header-main-trailer"
+    styleSheets						            CDATA   #IMPLIED
+    cssClass						              CDATA   #IMPLIED
+  >
+
+<!ELEMENT layoutPrivate (#PCDATA)>
+  <!ATTLIST layoutPrivate
+    displaySettings                  CDATA   #IMPLIED
+    maxNumOfHorizontalBodyPages      CDATA   #IMPLIED
+    maxNumOfVerticalBodyPages        CDATA   #IMPLIED
+  >
+
+<!ELEMENT section (
+  (tabular            |
+   groupAbove         |
+   groupLeftInsideGroupAbove |
+   groupLeft          |
+   matrix             |
+   formLike           |
+   field)*,
+  destination*,
+  body?,
+  margin?
+  ) >
+  <!ATTLIST section
+    name                            CDATA   #IMPLIED
+    width                           CDATA   #IMPLIED
+    height                          CDATA   #IMPLIED
+    widthInChar                     CDATA   #IMPLIED
+    heightInChar                    CDATA   #IMPLIED
+    horizontalPanelPerPage          CDATA   #IMPLIED
+    verticalPanelPerPage            CDATA   #IMPLIED
+    orientation                     (portrait | landscape | default) "default"
+    repeatOn                        CDATA   #IMPLIED
+  >
+
+<!ELEMENT rowDelimiter EMPTY>
+  <!ATTLIST rowDelimiter
+    name                           CDATA   #IMPLIED
+    formatTrigger                  CDATA   #IMPLIED
+  >
+
+<!ELEMENT tabular (
+  labelAttribute?,
+  group*,
+  field*,
+  rowDelimiter*
+  ) >
+  <!ATTLIST tabular
+    name                           CDATA   #IMPLIED
+    hideLabel                      CDATA   #IMPLIED
+    width                          CDATA   #IMPLIED
+    height                         CDATA   #IMPLIED
+    template                       CDATA   #IMPLIED
+    fillColor                      CDATA   #IMPLIED
+    lineColor                      CDATA   #IMPLIED
+    addPageToFit                   (yes | no) "no"
+  >
+
+<!ELEMENT groupAbove (
+  labelAttribute?,
+  group*,
+  field*,
+  rowDelimiter*
+  ) >
+  <!ATTLIST groupAbove
+    name                           CDATA   #IMPLIED
+    hideLabel                      CDATA   #IMPLIED
+    width                          CDATA   #IMPLIED
+    height                         CDATA   #IMPLIED
+    template                       CDATA   #IMPLIED
+    fillColor                      CDATA   #IMPLIED
+    lineColor                      CDATA   #IMPLIED
+    addPageToFit                   (yes | no) "no"
+  >
+
+<!ELEMENT groupLeftInsideGroupAbove (
+  labelAttribute?,
+  group*,
+  groupLeft
+  ) >
+  <!ATTLIST groupLeftInsideGroupAbove
+    name                           CDATA   #IMPLIED
+    hideLabel                      CDATA   #IMPLIED
+    width                          CDATA   #IMPLIED
+    height                         CDATA   #IMPLIED
+    template                       CDATA   #IMPLIED
+    fillColor                      CDATA   #IMPLIED
+    lineColor                      CDATA   #IMPLIED
+    addPageToFit                   (yes | no) "no"
+  >
+
+<!ELEMENT groupLeft (
+  labelAttribute?,
+  group*,
+  field*,
+  rowDelimiter*
+  ) >
+  <!ATTLIST groupLeft
+    name                           CDATA   #IMPLIED
+    hideLabel                      CDATA   #IMPLIED
+    width                          CDATA   #IMPLIED
+    height                         CDATA   #IMPLIED
+    template                       CDATA   #IMPLIED
+    fillColor                      CDATA   #IMPLIED
+    lineColor                      CDATA   #IMPLIED
+    addPageToFit                   (yes | no) "no"
+  >
+
+<!ELEMENT group (
+  field        |
+  exception    |
+  rowDelimiter  |
+  xmlSettings  |
+  displayInfo  |
+  dataItem      |
+  formula      |
+  summary      |
+  placeholder  |
+  filter        |
+  comment
+  )* >
+  <!ATTLIST group
+    name                         CDATA  #IMPLIED
+    fillColor                    CDATA  #IMPLIED
+    lineColor                    CDATA  #IMPLIED
+    formatTrigger                CDATA  #IMPLIED
+  >
+
+<!ELEMENT matrix (
+  (labelAttribute?,
+   group*,
+   ((matrixCol+, matrixRow+) |
+    (matrixRow+, matrixCol+)),
+   matrixCell) |
+  (comment        |
+   webSettings    |
+   generalLayout  |
+   advancedLayout |
+   accessibility  |
+   geometryInfo   |
+   visualSettings)*
+  ) >
+  <!ATTLIST matrix
+    name                           CDATA   #IMPLIED
+    horizontalFrame                CDATA   #IMPLIED
+    verticalFrame                  CDATA   #IMPLIED
+    xProductGroup                  CDATA   #IMPLIED
+    hideLabel                      CDATA   #IMPLIED
+    width                          CDATA   #IMPLIED
+    height                         CDATA   #IMPLIED
+    template                       CDATA   #IMPLIED
+    fillColor                      CDATA   #IMPLIED
+    lineColor                      CDATA   #IMPLIED
+    addPageToFit                   (yes | no) "no"
+  >
+
+<!ELEMENT matrixCol (
+  field*
+  ) >
+  <!ATTLIST matrixCol
+    name                          CDATA   #IMPLIED
+    fillColor                     CDATA   #IMPLIED
+    lineColor                     CDATA   #IMPLIED
+  >
+
+<!ELEMENT matrixRow (
+  field*
+  ) >
+  <!ATTLIST matrixRow
+    name                          CDATA   #IMPLIED
+    fillColor                     CDATA   #IMPLIED
+    lineColor                     CDATA   #IMPLIED
+  >
+
+<!ELEMENT matrixCell (
+  field*
+  ) >
+  <!ATTLIST matrixCell
+    name                          CDATA   #IMPLIED
+    fillColor                     CDATA   #IMPLIED
+    lineColor                     CDATA   #IMPLIED
+  >
+
+<!ELEMENT formLike (
+  labelAttribute?,
+  field*
+  ) >
+  <!ATTLIST formLike
+    name                           CDATA   #IMPLIED
+    hideLabel                      CDATA   #IMPLIED
+    width                          CDATA   #IMPLIED
+    height                         CDATA   #IMPLIED
+    template                       CDATA   #IMPLIED
+    fillColor                      CDATA   #IMPLIED
+    lineColor                      CDATA   #IMPLIED
+    addPageToFit                   (yes | no) "no"
+  >
+
+<!ELEMENT field (
+  (labelAttribute?, exception*) |
+  ((font            |
+   comment          |
+   geometryInfo     |
+   visualSettings   |
+   webSettings      |
+   generalLayout    |
+   advancedLayout   |
+   accessibility)*,
+   pageNumbering?)
+  ) >
+  <!ATTLIST field
+    name                          CDATA   #REQUIRED
+    source                        CDATA   #IMPLIED
+    pageNumber                    CDATA   #IMPLIED
+    minWidowLines                 CDATA   #IMPLIED
+    label                         CDATA   #IMPLIED
+    display                       CDATA   #IMPLIED
+    width                         CDATA   #IMPLIED
+    visible                       (yes | no) "yes"
+    hyperlink                     CDATA   #IMPLIED
+    formatMask                    CDATA   #IMPLIED
+    nullValue                     CDATA   #IMPLIED
+    spacing                       CDATA   #IMPLIED
+    currency                      CDATA   #IMPLIED
+    tsep                          CDATA   #IMPLIED
+    linkdest                      CDATA   #IMPLIED
+    breakOrder                    (none | ascending | descending) #IMPLIED
+    font                          CDATA   #IMPLIED
+    fontSize                      CDATA   #IMPLIED
+    fontStyle                     (regular |
+                                   italic  |
+                                   bold    |
+                                   boldItalic) "regular"
+    fontEffect                    (regular   |
+                                   strikeout |
+                                   underline |
+                                   strikeoutUnderline) "regular"
+    lineColor                     CDATA   #IMPLIED
+    fillColor                     CDATA   #IMPLIED
+    textColor                     CDATA   #IMPLIED
+    alignment                     (start  |
+                                   left   |
+                                   center |
+                                   right  |
+                                   end    |
+                                   flush) "start"
+    formatTrigger                 CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT labelAttribute EMPTY>
+  <!ATTLIST labelAttribute
+    font                          CDATA   #IMPLIED
+    fontSize                      CDATA   #IMPLIED
+    fontStyle                     (regular |
+                                   italic  |
+                                   bold    |
+                                   boldItalic) "regular"
+    fontEffect                    (regular   |
+                                   strikeout |
+                                   underline |
+                                   strikeoutUnderline) "regular"
+    lineColor                     CDATA   #IMPLIED
+    fillColor                     CDATA   #IMPLIED
+    textColor                     CDATA   #IMPLIED
+    alignment                     (start  |
+                                   left   |
+                                   center |
+                                   right  |
+                                   end) "start"
+  >
+
+<!ELEMENT exception (
+  (condition, (condition, (condition)?)?)?
+  ) >
+  <!ATTLIST exception
+    font                         CDATA   #IMPLIED
+    fontSize                     CDATA   #IMPLIED
+    fontStyle                    (regular |
+                                  italic  |
+                                  bold    |
+                                  boldItalic) "regular"
+    fontEffect                   (regular   |
+                                  strikeout |
+                                  underline |
+                                  strikeoutUnderline) "regular"
+    lineColor                    CDATA   #IMPLIED
+    fillColor                    CDATA   #IMPLIED
+    textColor                    CDATA   #IMPLIED
+    display                      CDATA   #IMPLIED
+    alignment                    (start  |
+                                  left   |
+                                  center |
+                                  right  |
+                                  end) "start"
+  >
+
+<!ELEMENT condition EMPTY>
+  <!ATTLIST condition
+    source                     CDATA   #IMPLIED
+    operator                   (eq      |
+                                lt      |
+                                lteq    |
+                                neq     |
+                                gt      |
+                                gteq    |
+                                btw     |
+                                notBtw  |
+                                like    |
+                                notLike |
+                                null    |
+                                notNull) #IMPLIED
+    operand1                   CDATA   #IMPLIED
+    operand2                   CDATA   #IMPLIED
+    relation                   (and | or) "and"
+  >
+
+<!ELEMENT location EMPTY>
+  <!ATTLIST location
+    x                                CDATA   #IMPLIED
+    y                                CDATA   #IMPLIED
+  >
+
+<!ELEMENT body (
+  location         |
+  frame            |
+  repeatingFrame   |
+  field            |
+  text             |
+  polygon          |
+  polyline         |
+  rectangle        |
+  line             |
+  linkFile         |
+  arc              |
+  roundedRectangle |
+  image            |
+  graph            |
+  matrix           |
+  formField
+  )* >
+  <!ATTLIST body
+    width                              CDATA   #IMPLIED
+    height                             CDATA   #IMPLIED
+  >
+
+<!ELEMENT margin (
+  frame            |
+  repeatingFrame   |
+  field            |
+  text             |
+  polyline         |
+  polygon          |
+  rectangle        |
+  line             |
+  linkFile         |
+  arc              |
+  image            |
+  roundedRectangle |
+  graph            |
+  matrix           |
+  formField
+  )* >
+
+<!ELEMENT frame (
+  comment           |
+  geometryInfo      |
+  visualSettings    |
+  webSettings       |
+  generalLayout     |
+  advancedLayout    |
+  accessibility     |
+  frame             |
+  repeatingFrame    |
+  field             |
+  text              |
+  polyline          |
+  polygon           |
+  rectangle         |
+  line              |
+  linkFile          |
+  arc               |
+  roundedRectangle  |
+  graph             |
+  image             |
+  formField
+  )* >
+  <!ATTLIST frame
+    name                               CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT repeatingFrame (
+  comment          |
+  geometryInfo     |
+  visualSettings   |
+  webSettings      |
+  generalLayout    |
+  advancedLayout   |
+  accessibility    |
+  frame            |
+  repeatingFrame   |
+  field            |
+  text             |
+  polyline         |
+  polygon          |
+  rectangle        |
+  line             |
+  linkFile         |
+  arc              |
+  roundedRectangle |
+  graph            |
+  image
+  )* >
+  <!ATTLIST repeatingFrame
+    name                               CDATA   #IMPLIED
+    source                             CDATA   #IMPLIED
+    printDirection                     CDATA   #IMPLIED
+    maxRecordsPerPage                  CDATA   #IMPLIED
+    minWidowRecords                    CDATA   #IMPLIED
+    columnMode                         CDATA   #IMPLIED
+    horizSpaceBetweenFrames            CDATA   #IMPLIED
+    vertSpaceBetweenFrames             CDATA   #IMPLIED
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT programUnits (
+  function*
+  ) >
+
+<!ELEMENT function (textSource | encodedPlsql)*>
+  <!ATTLIST function
+    name                               CDATA   #REQUIRED
+    returnType                         CDATA   #IMPLIED
+    type                             (default     |
+                                      packageSpec |
+                                      packageBody) "default"
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT textSource (#PCDATA)>
+
+<!ELEMENT encodedPlsql (binaryData)*>
+
+
+<!ELEMENT attachedLibrary (#PCDATA)>
+  <!ATTLIST attachedLibrary
+    name                               CDATA   #REQUIRED
+    templateSection                  (none | header | main | trailer) "none"
+  >
+
+<!ELEMENT reportPrivate (#PCDATA)>
+  <!ATTLIST reportPrivate
+    defaultReportType                   CDATA    #IMPLIED
+    versionFlags                        CDATA    #IMPLIED
+    versionFlags2                       CDATA    #IMPLIED
+    lastModified                        CDATA    #IMPLIED
+    charPromptMustSplit                 CDATA    #IMPLIED
+    charPromptMaySplit                  CDATA    #IMPLIED
+    minFieldResizeRate                  CDATA    #IMPLIED
+    minFontPoints                       CDATA    #IMPLIED
+    templateName                        CDATA    #IMPLIED
+    isCustomName                        CDATA    #IMPLIED
+    mailText                            CDATA    #IMPLIED
+    textTokenfile                       CDATA    #IMPLIED
+    imageTokenfile                      CDATA    #IMPLIED
+    sectionTitle                        CDATA    #IMPLIED
+  >
+
+<!ELEMENT customize (
+  object
+  )* >
+
+<!ELEMENT object (
+  properties?,
+  objects?
+  ) >
+  <!ATTLIST object
+    name                               CDATA   #REQUIRED
+    type                               CDATA   #IMPLIED
+  >
+
+<!ELEMENT properties (
+  property
+  )* >
+
+<!ELEMENT property (#PCDATA)>
+  <!ATTLIST property
+    name                              CDATA   #REQUIRED
+    type                              (number | character | date) #IMPLIED
+  >
+
+<!ELEMENT objects (
+  object
+  )* >
+
+<!ELEMENT webSource (#PCDATA)>
+
+<!ELEMENT color EMPTY>
+  <!ATTLIST color
+    index                           CDATA   #REQUIRED
+    displayName                     CDATA   #IMPLIED
+    value                           CDATA   #IMPLIED
+  >
+
+<!ELEMENT colorPalette (
+  color*
+  ) >
+
+<!ELEMENT documentTaxonomy EMPTY>
+  <!ATTLIST documentTaxonomy
+    title                      CDATA   #IMPLIED
+    author                     CDATA   #IMPLIED
+    subject                    CDATA   #IMPLIED
+    keywords                   CDATA   #IMPLIED
+  >
+
+<!ELEMENT userStyle EMPTY>
+  <!ATTLIST userStyle
+    styleSheets                CDATA   #IMPLIED
+    cssClass                   CDATA   #IMPLIED
+  >
+
+<!ELEMENT reportWebSettings (#PCDATA)*>
+  <!ATTLIST reportWebSettings
+    tableAttrs                 CDATA   #IMPLIED
+  >
+
+<!ELEMENT characterMode EMPTY>
+  <!ATTLIST characterMode
+    usePreviewerHintLine       (yes | no)  "no"
+    previewerHintLineText      CDATA       #IMPLIED
+    usePreviewerStatusLine     (yes | no)  "no"
+    previewerStatusLineText    CDATA       #IMPLIED
+    includeBitmappedObjects    (yes | no)  "no"
+    includeBorders             (yes | no)  "no"
+    disableHostMenuItem        (yes | no)  "no"
+    disableSplitScreenKey      (yes | no)  "no"
+    disableZoomKey             (yes | no)  "no"
+    startInZoom                (yes | no)  "no"
+    suppressPreviewerTitle     (yes | no)  "yes"
+  >
+
+<!ELEMENT formField (
+  textBox         |
+  checkBox        |
+  button          |
+  radioButton     |
+  comboBox        |
+  action          |
+  geometryInfo    |
+  font            |
+  visualSettings
+  )* >
+  <!ATTLIST formField
+    name                              CDATA       #REQUIRED
+    description                       CDATA       #IMPLIED
+    tabOrder                          CDATA       #IMPLIED
+  >
+
+<!ENTITY % appearance
+  '
+  readOnly                            (yes | no)  "no"
+  visibility                          (visibleNonPrinting |
+                                       hiddenPrintable    |
+                                       visible            |
+                                       hidden)    "visible"
+  required                            (yes | no)  "no"
+  orientation                         CDATA       #IMPLIED
+ '>
+
+<!ELEMENT value (#PCDATA)>
+
+<!ELEMENT action (
+  value
+  ) >
+  <!ATTLIST action
+    event                             (mouseUp    |
+                                       mouseDown  |
+                                       mouseEnter |
+                                       mouseExit  |
+                                       onFocus    |
+                                       onBlur
+                                      )           #REQUIRED
+    type                              (javaScript      |
+                                       resetForm       |
+                                       submitForm      |
+                                       wwwLink)   #REQUIRED
+>
+
+<!ELEMENT textBox (
+  formatAndTreatment?
+  ) >
+  <!ATTLIST textBox
+    %appearance;
+    defaultText                       CDATA       #IMPLIED
+    alignment                         (left   |
+                                       center |
+                                       right)     "left"
+    multiLine                         (yes | no)  "no"
+    scroll                            (yes | no)  "yes"
+    maxCharacters                     CDATA       #IMPLIED
+    checkSpelling                     (yes | no)  "no"
+  >
+
+<!ELEMENT checkBox EMPTY>
+  <!ATTLIST checkBox
+  %appearance;
+  checkStyle                          (check    |
+                                       circle   |
+                                       cross    |
+                                       diamond  |
+                                       square   |
+                                       star)      "check"
+  exportValue                         CDATA       #REQUIRED
+  isChecked                           (yes | no)  "no"
+  >
+
+<!ELEMENT button (
+  nonPushText          |
+  nonPushIcon          |
+  nonPushTextAndIcon   |
+  pushText             |
+  pushIcon             |
+  pushTextAndIcon
+  )* >
+  <!ATTLIST button
+    %appearance;
+  >
+
+<!ENTITY % buttonHighlightStyle
+  '
+  highlightStyle                      (none   |
+                                       invert |
+                                       outline)   "outline"
+  '>
+
+<!ELEMENT nonPushText EMPTY>
+  <!ATTLIST nonPushText
+    %buttonHighlightStyle;
+    upText                            CDATA       #IMPLIED
+  >
+
+<!ELEMENT nonPushTextAndIcon (
+  upAdvanced
+  ) >
+  <!ATTLIST nonPushTextAndIcon
+    %buttonHighlightStyle;
+    upText                            CDATA       #IMPLIED
+    upIcon                            CDATA       #REQUIRED
+  >
+
+<!ELEMENT nonPushIcon (
+  upAdvanced
+  ) >
+  <!ATTLIST nonPushIcon
+    %buttonHighlightStyle;
+    upIcon                            CDATA       #REQUIRED
+  >
+
+<!ELEMENT pushText EMPTY>
+  <!ATTLIST pushText
+    upText                            CDATA       #IMPLIED
+    downText                          CDATA       #IMPLIED
+    rolloverText                      CDATA       #IMPLIED
+  >
+
+<!ELEMENT pushTextAndIcon (
+  upAdvanced?       |
+  downAdvanced?     |
+  rolloverAdvanced?
+  ) >
+  <!ATTLIST pushTextAndIcon
+    upText                            CDATA       #IMPLIED
+    downText                          CDATA       #IMPLIED
+    rolloverText                      CDATA       #IMPLIED
+    upIcon                            CDATA       #REQUIRED
+    downIcon                          CDATA       #REQUIRED
+    rolloverIcon                      CDATA       #REQUIRED
+  >
+
+<!ELEMENT pushIcon (
+  upAdvanced?       |
+  downAdvanced?     |
+  rolloverAdvanced?
+  ) >
+  <!ATTLIST pushIcon
+    upIcon                            CDATA       #REQUIRED
+    downIcon                          CDATA       #REQUIRED
+    rolloverIcon                      CDATA       #REQUIRED
+  >
+
+<!ELEMENT upAdvanced (buttonAdvanced)>
+<!ELEMENT downAdvanced (buttonAdvanced)>
+<!ELEMENT rolloverAdvanced (buttonAdvanced)>
+<!ELEMENT buttonAdvanced EMPTY>
+  <!ATTLIST buttonAdvanced
+    horizontalOffset                  CDATA       #IMPLIED
+    verticalOffset                    CDATA       #IMPLIED
+    scaleWhen                         (never   |
+                                       always  |
+                                       tooBig  |
+                                       tooSmall)  "always"
+    scaleHow                          (proportionally |
+                                       nonProportionally) "proportionally"
+  >
+
+<!ELEMENT comboBox (
+ items  |
+ formatAndTreatment?
+ )* >
+  <!ATTLIST comboBox
+    %appearance;
+    sortItems                         (yes | no)  "no"
+    editable                          (yes | no)  "yes"
+  >
+<!ELEMENT items (
+  item+
+  ) >
+
+<!ELEMENT item EMPTY>
+  <!ATTLIST item
+    value                             CDATA       #REQUIRED
+    exportValue                       CDATA       #REQUIRED
+    isDefaultItem                     (yes | no)  "no"
+  >
+
+<!ELEMENT radioButton EMPTY>
+  <!ATTLIST radioButton
+  %appearance;
+  radioStyle                          (check    |
+                                       circle   |
+                                       cross    |
+                                       diamond  |
+                                       square   |
+                                       star)      "circle"
+  exportValue                         CDATA       #REQUIRED
+  defaultIsChecked                    (yes | no)  "no"
+  >
+
+<!ELEMENT formatAndTreatment (
+  nonNumericFormat
+  ) >
+
+<!ELEMENT nonNumericFormat (
+  (none     |
+   date     |
+   time)    |
+   validateNonNumber
+ )* >
+
+<!ELEMENT none EMPTY>
+
+<!ELEMENT date EMPTY>
+  <!ATTLIST date
+    dateFormat                        CDATA       #IMPLIED
+  >
+
+<!ELEMENT time EMPTY>
+  <!ATTLIST time
+    timeFormat                        (HH24MI   |
+                                       HHMI     |
+                                       HH24MISS |
+                                       HHMISS)    "HHMISS"
+  >
+
+<!ELEMENT validateNonNumber (
+  customValidationScript
+  ) >
+
+<!ELEMENT customValidationScript (#PCDATA)>

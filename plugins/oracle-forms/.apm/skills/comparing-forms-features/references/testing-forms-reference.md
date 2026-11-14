@@ -4,6 +4,13 @@ Comprehensive operational guide for verifying and testing Oracle Forms modules a
 
 ---
 
+## Contents
+
+- [1. Environment & Prerequisites](#1-environment--prerequisites)
+- [2. Testing on Oracle Fusion Middleware 14c (Desktop FSAL)](#2-testing-on-oracle-fusion-middleware-14c-desktop-fsal)
+- [3. Testing on Native Pure-Rust Oracle Forms Workbench](#3-testing-on-native-pure-rust-oracle-forms-workbench)
+- [4. Parity Verification Checklist](#4-parity-verification-checklist)
+
 ## 1. Environment & Prerequisites
 
 Ensure the reference containers are active:

@@ -6,6 +6,14 @@
 
 ---
 
+## Contents
+
+- [1. Executive Summary](#1-executive-summary)
+- [2. What Was Built (Implemented Architecture)](#2-what-was-built-implemented-architecture)
+- [3. Comparison: Implemented vs. What Should Be Built](#3-comparison-implemented-vs-what-should-be-built)
+- [4. Phase Roadmap & Milestones](#4-phase-roadmap--milestones)
+- [Addendum: Menus, Browse and Entity Decoding](#addendum-menus-browse-and-entity-decoding)
+
 ## 1. Executive Summary
 
 The Oracle Forms Workbench is a **pure-native, standalone Rust application** that parses, inspects, extracts, queries live databases, and visually renders legacy Oracle Forms (`.fmb`, `.mmb`, `.olb`, Forms2XML exports, `.pld`). 
@@ -53,7 +61,7 @@ flowchart TD
     SERVER --> FRONTEND
 ```
 
-*(A detailed, styled version of this diagram is maintained in [docs/rust-workbench-architecture.mmd](rust-workbench-architecture.mmd)).*
+*(A detailed, styled version of this diagram is maintained in [rust-workbench-architecture.mmd](rust-workbench-architecture.mmd)).*
 
 ---
 

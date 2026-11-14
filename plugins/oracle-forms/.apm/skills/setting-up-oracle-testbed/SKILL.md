@@ -5,92 +5,62 @@ description: "Provisions and configures the complete Oracle Forms 14c and Databa
 
 # Setting Up Oracle Testbed
 
-Provisions and configures the complete Oracle Forms 14c and Database 23ai Free container testbed on macOS or on Windows 11. On Windows, **everything runs inside WSL2**: Podman and the containers, Python, Java 21, and the Rust workbench itself. Use when setting up the database, building the Forms 14c container, relinking runtime libraries, provisioning WebLogic domains, running the Rust workbench next to the testbed, or troubleshooting container errors.
+Sets up and runs the Oracle Forms 14c and Oracle Database Free testbed in Podman containers, plus the Rust workbench, on macOS or Windows 11. On Windows **everything runs inside the Ubuntu WSL2 distro**: Podman and the containers, Python, Java 21, the Rust app, and your coding agent. The reference pages are the single source of truth; this file only routes.
 
-## Choose your platform first
-
-| Host | Runbook | Notes |
-| :--- | :--- | :--- |
-| macOS (Apple Silicon) | [references/podman-setup-guide.md](references/podman-setup-guide.md) | Podman machine with Rosetta 2 (`linux/amd64`) |
-| Windows 11 | [references/windows-podman-setup.md](references/windows-podman-setup.md) | **Everything inside Ubuntu on WSL2** (x86-64, no emulation): Podman, the containers, Python, Java 21, and the Rust app. No Visual Studio needed. Use `Linux x86-64` Oracle installers, not the Windows `.exe`. Full status log: [docs/WINDOWS-PODMAN-SETUP.md](../../../../../../docs/WINDOWS-PODMAN-SETUP.md) |
-
-Complete log of every repo change, every error with its fix, and every configuration adjustment: [references/windows-wsl-change-log.md](references/windows-wsl-change-log.md). Read it before changing the setup, and add to it as you work.
-
-### Windows runbook (everything inside WSL2)
-
-Run every command below from the Ubuntu shell (`wsl -d Ubuntu`), from the repo root, with `.env` loaded. The commands are the same as on macOS. This is the verified setup; [references/windows-podman-setup.md](references/windows-podman-setup.md) has the detail for each step, section 10 lists every fix a fresh install needs, and section 11 covers the Rust app.
-
-1. **Host:** WSL2 with Ubuntu 24.04, `/etc/wsl.conf` `[automount] options = "metadata,umask=22,fmask=11"` (then `wsl --shutdown`), Podman 4.9 in Ubuntu, and `sudo mkdir -p /run/user/$(id -u)` once (repeat after every `wsl --shutdown`). Section 2 and 3 of the reference.
-2. **`.env`:** `python3 scripts/create_env.py` (step 0 below).
-3. **Installers and images:** Oracle Linux x86-64 installers in `oracle-reference-stack/installer/`; build `forms-converter-14c`; run the two silent installs. Sections 4 to 6 of the reference.
-4. **Database:** start `oracle23ai-lite` and seed the schema (step 2 below). Section 7.
-5. **Forms server:** create the WebLogic domain, then the domain hooks (`setUserOverrides.sh`, `boot.properties`, `instances/forms1` symlink, `fmrweb` resources), `tnsnames.ora`, and the runtime libraries (`genshlib` for 16 `frmweb` libraries; Oracle's makefile for `libfrmjapi.so.0`). Start `forms-server-14c`; it takes 15 to 45 minutes to reach RUNNING. Sections 8 and 10.
-6. **Rust app, inside WSL too:** install Rust with `rustup`, then `cargo run -p oracle-forms-server` with `CARGO_TARGET_DIR=$HOME/ofw-target` (build output on WSL's own disk). Section 11 and `HOW-TO-RUN.md` section 6.
-7. **Launch a form:** **Save & launch in Oracle** in the app (it updates the one file `samples/<form>_fmb.xml`; no copies), or the manual FSAL steps in `HOW-TO-RUN.md` section 7.5, or `python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scripts/launch_fsal.py <form>.fmx --interactive`.
-8. **Restart later:** `python3 start_testbed.py` (step 7 of the workflow below), or the restart steps in `HOW-TO-RUN.md` section 6.
-
-Windows rules:
-- Never run the Rust app as a native Windows build. It was tried first (Visual Studio and the C++ requirements) and was a red herring; WSL worked much better. The record is in `references/windows-podman-setup.md` section 12 and `docs/DEPENDENCIES.md` section 3.1.
-- Use Java 17 or 21. WSL's OpenJDK 21 works. Windows Java 26 fails with `NoClassDefFoundError: java/applet/AppletStub`.
-- Keep `.sh`, `.rsp`, and `.loc` files LF-only; do not write them with PowerShell heredocs.
-- Container commands that write files on the Windows drive run as `root` (rootless Podman maps the container user to another UID).
-- Do not trigger **Save & launch in Oracle** to test things; every click rewrites the form's XML. Use the manual FSAL steps.
-- Keep the status log in `docs/WINDOWS-PODMAN-SETUP.md` current as steps run, and mark anything not run as not verified.
-
-Verified in WSL: `health_check.py`, `compile_form.py`, `convert_fmb.py --check`, `ofw_sales.fmb`, the `frmbld` GUI (WSLg), and a cold stop and start with `start_testbed.py`. Not verified: whether the root `exec` rule is needed inside WSL, and `oracle-reference-stack/apply_forms14c_config.sh` on a clean Oracle Home (it was written from the verified manual steps and has not been run end to end).
-
-After the domain is created, run `bash oracle-reference-stack/apply_forms14c_config.sh` (with `.env` loaded) to apply every adjustment in one step: domain hooks, `boot.properties`, `tnsnames.ora` alias, terminal resources, the `frmweb` and `libfrmjapi` libraries, and the sample compiles. The adjustments live in the mounted `oracle_home_14c/` folder, so a rebuilt image or a recreated container does not lose them.
-
-Host prerequisites a Windows setup must check (full list: [docs/DEPENDENCIES.md](../../../../../docs/DEPENDENCIES.md) sections 2.1, 2.4-2.6):
-- WSL 2 current (`wsl --version`, verified 3.0.5.0) and an Ubuntu 24.04 distro with Python 3.12, `gcc`, and OpenJDK 21.
-- Podman inside Ubuntu (`podman --version`, verified 4.9.3). Create `/run/user/$(id -u)` with sudo once and after every `wsl --shutdown`. Without it, every `podman build` and `podman run` fails.
-- `metadata` in the `[automount]` options of `/etc/wsl.conf`, so `chmod +x` works on `/mnt/c` (verified: it fails without it).
-- Rust in Ubuntu (`rustup`, minimal profile; 1.100.0 verified) for the app. No Visual Studio.
-- Oracle installers in `oracle-reference-stack/installer/` (Linux x86-64 zips, JDK 17 tarball). Never commit them.
-- Optional: `%USERPROFILE%\.wslconfig` with `memory=12GB` (applies to all distros; needs `wsl --shutdown`). Not required; the default worked.
 ## Contents
 
+- [Constraints](#constraints)
 - [Quick start](#quick-start)
 - [Workflow](#workflow)
+- [Choose your platform](#choose-your-platform)
 - [Verification](#verification)
+
+## Constraints
+
+1. **Windows means the Ubuntu WSL shell.** Never PowerShell, never a native Windows build (Visual Studio and C++ were a red herring). Use Ubuntu's `podman`, not the Windows one or `podman-machine-default`.
+2. **Credentials only from the git-ignored `.env`.** Never type or commit passwords. `git check-ignore -v .env` must match.
+3. **The Oracle Home is a host folder** (5.4 GB) mounted into containers. Updating images or containers never touches it. Where it lives is a setting (`OFW_ORACLE_HOME`). **On Windows install it on Ubuntu's disk from the start; never into the repo folder** (`oracle-reference-stack/oracle_home_14c`, on the slow Windows drive), and never copy it with Windows Explorer.
+4. **Never remove or replace the owner's containers or images**, or rebuild an image, without saying what will happen first. `start_testbed.py` needs the owner's sudo password on Windows; ask the owner to run it.
+5. **Do not test with Save & launch in Oracle**; each click rewrites the form's XML. Use `launch_fsal.py`.
+6. **Document every step**: a change-log row and the reference that owns the topic (`.agent/rules/document-every-step.md`). Mark anything not run as not verified.
 
 ## Quick start
 
-Run from this skill's root. The first step creates the git-ignored `.env` that every later command reads:
+From the repo root, in the Ubuntu shell on Windows:
 
 ```bash
-python3 scripts/create_env.py
+python3 plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/scripts/create_env.py   # once: creates the git-ignored .env
+set -a; source .env; set +a
+python3 start_testbed.py --status        # read-only: what is up
+python3 start_testbed.py                 # start everything and confirm each part
 ```
-
-After the first setup, bring the whole stack up (or back after a reboot) from the repo root with `python3 start_testbed.py` (`python` from Windows PowerShell). It starts the database and Forms (Fusion Middleware) server containers and starts the Rust app if it is not already running. See step 7 below.
 
 ## Workflow
 
-Every step reads its credentials from `.env` at the repo root. Create that file first, and never type passwords into commands, docs, or commits.
+1. Read [references/clean-clone-checklist.md](references/clean-clone-checklist.md): the ordered steps from a fresh clone, per platform.
+2. Do the host setup for your platform (below), then the shared steps it links: Forms 14c install, database, Rust app.
+3. Start and confirm with `python3 start_testbed.py` ([references/starting-the-stack.md](references/starting-the-stack.md)).
+4. Verify with `scripts/health_check.py` and the testing guide; fix errors with [references/troubleshooting.md](references/troubleshooting.md).
+5. Record what you did in [references/windows-wsl-change-log.md](references/windows-wsl-change-log.md) and the owning reference.
 
-0. **Create `.env`** (once per machine): `python3 scripts/create_env.py`. It copies `example.env` to `.env`, prompts for the values with hidden input for passwords, and checks that git ignores `.env`. Variables: `ORACLE_PWD` (database admin), `DB_USER`, `DB_PASSWORD`, `DB_SERVICE` (test schema), `OFW_DB_USER` and `OFW_DB_PASSWORD` (read by the Rust server and CLI), `WLS_ADMIN_USER` and `WLS_ADMIN_PASSWORD` (WebLogic admin).
-1. **Load `.env`** in every shell before the commands below: `set -a; source .env; set +a`. Windows PowerShell does not read `.env`; set the variables by hand.
-2. **Database and schema:** start the database container, then seed the test schema. The seed script takes the schema owner and password from `DB_USER` and `DB_PASSWORD`:
-   ```bash
-   (printf 'DEFINE db_user=%s\nDEFINE db_password=%s\n' "$DB_USER" "$DB_PASSWORD"; cat oracle-reference-stack/sql/seed_test_schema.sql) | podman exec -i oracle23ai-lite sqlplus -s system/$ORACLE_PWD@localhost/FREEPDB1
-   ```
-3. **WebLogic domain:** pass `.env` to the throwaway container so `create_forms_domain.py` can read `WLS_ADMIN_PASSWORD`. Then add the domain hooks, `tnsnames.ora`, and runtime libraries (Windows: `references/windows-podman-setup.md` sections 8 and 10):
-   ```bash
-   podman run --rm --platform linux/amd64 --network oracle-net --env-file .env -v "$PWD/oracle-reference-stack/oracle_home_14c:/oracle_home_14c:Z" -v "$PWD:/work:Z" forms-converter-14c:latest /oracle_home_14c/oracle_common/common/bin/wlst.sh /work/plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/scripts/create_forms_domain.py
-   ```
-4. **Health check:** `python3 scripts/health_check.py` reads `DB_USER`, `DB_PASSWORD`, and `DB_SERVICE` itself. It does not need `source .env`, but it does need the `.env` file at or above the script folder.
-5. **Launch a form:** the FSAL logon uses the same values: user `DB_USER`, password `DB_PASSWORD`, service `DB_SERVICE`. The `compile_form.py`, `run_form.py`, `launch_fsal.py`, and `test_parity.py` scripts read them from `.env` as well.
-6. Check that the file is ignored before any commit: `git check-ignore -v .env` must print a match. Never copy `.env` values into docs, logs, or scripts.
+## Choose your platform
 
-7. **Start and restart later:** once the containers exist, run `python start_testbed.py` from the repo root. It recreates the Podman runtime directory (Windows/WSL: asks for the WSL `sudo` password), starts `oracle23ai-lite`, waits for the database, starts `forms-server-14c` (15 to 45 minutes to reach RUNNING), builds and starts the Rust app if it is not already running, and prints the status. It never stops a running Rust app unless you pass `--restart-rust`. Run inside WSL it builds in WSL (`CARGO_TARGET_DIR=~/ofw-target`). Options: `--no-forms` (database and Rust app only), `--no-wait-forms`, `--no-rust`, `--no-containers`, `--restart-rust`, `--launch <form>.fmx`, `--status`, `--stop-rust`. It never creates or replaces containers. Do not run it on your own initiative: it starts the user's containers, and on Windows it needs the user's password.
+| Host | Runbook |
+|---|---|
+| macOS (Apple Silicon) | [references/podman-setup-guide.md](references/podman-setup-guide.md): Podman machine with Rosetta 2 |
+| Windows 11 | [references/windows-podman-setup.md](references/windows-podman-setup.md): WSL2 + Ubuntu, Podman in Ubuntu, the 16 fixes a fresh install needs. Status: [references/windows-podman-status-log.md](references/windows-podman-status-log.md) |
 
-Verify the output of each step before reporting success.
+All references, linked directly (grouped list: [references/index.md](references/index.md)):
+
+- Setup: [installing-forms-14c.md](references/installing-forms-14c.md), [database-23ai.md](references/database-23ai.md), [rust-workbench-setup.md](references/rust-workbench-setup.md), [dependencies.md](references/dependencies.md), [oracle-home-location.md](references/oracle-home-location.md), [oracle-reference-stack-map.md](references/oracle-reference-stack-map.md), [legacy-12c.md](references/legacy-12c.md)
+- Running and testing: [starting-the-stack.md](references/starting-the-stack.md), [forms-and-reports-testing-guide.md](references/forms-and-reports-testing-guide.md), [forms-builder-gui.md](references/forms-builder-gui.md), [reports-conversion.md](references/reports-conversion.md), [troubleshooting.md](references/troubleshooting.md)
+- Reference and history: [native-rust-workbench-architecture.md](references/native-rust-workbench-architecture.md), [podman-architecture.mmd](references/podman-architecture.mmd), [windows-wsl-change-log.md](references/windows-wsl-change-log.md)
+
 ## Verification
 
-Create at least three representative task scenarios and compare against a baseline.
-Keep routing outcomes in `evals/evals.json` and task-success cases separately.
-Report executed checks and any missing model coverage.
+```bash
+python3 plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/scripts/health_check.py   # containers, servlet, database
+python3 start_testbed.py --status
+```
 
-<!-- Author: implement the canonical script before publishing; --help alone is not a
-task-success check. Put critical constraints early, name required dependencies and
-link task-specific references directly. -->
+Verified in WSL (2026-11-14): `health_check.py`, `compile_form.py`, `convert_fmb.py --check`, `ofw_sales.fmb`, the `frmbld` GUI (WSLg), a cold stop and start. **Not verified:** `apply_forms14c_config.sh` and `provision_oracle_home.sh` on a clean Oracle Home, and the whole checklist end to end on a clean machine. Eval cases: `evals/evals.json`.

@@ -145,9 +145,7 @@ Done in **one dedicated PR**: `git mv`, plus fixing paths in `Cargo.toml`, `AGEN
 
 Files that still contain the old repo name `oracle-forms-fmb-research`:
 - `HOW-TO-RUN.md`
-- `docs/DEPENDENCIES.md`
-- `docs/PODMAN-CONVERTER-SETUP-AND-HISTORY.md`
-- `docs/FORMS-AND-REPORTS-14C-TESTING-GUIDE.md`
+- `DEPENDENCIES.md`, `plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/dependencies.md`
 - `plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/podman-setup-guide.md`
 - `plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/forms-and-reports-testing-guide.md`
 

@@ -5,89 +5,48 @@ description: "Produces side-by-side feature comparison reports between Oracle Fu
 
 # Comparing Oracle Forms Features
 
-Produces automated side-by-side feature comparison, compatibility scoring, and latency benchmarks between Oracle Fusion Middleware 14c Forms Server and the native pure-Rust Oracle Forms Workbench (OFW).
+Produces an automated side-by-side feature comparison, compatibility score, and latency benchmark between Oracle Fusion Middleware 14c and the native pure-Rust Oracle Forms Workbench (OFW) for a form module (`.xml` or `.fmb`).
 
 ## Contents
 
-- [Overview](#overview)
-- [Quick Start](#quick-start)
+- [Constraints](#constraints)
+- [Quick start](#quick-start)
 - [Workflow](#workflow)
-- [Side-by-Side Architectural Matrix](#side-by-side-architectural-matrix)
-- [Verification & Evals](#verification--evals)
+- [Verification](#verification)
 - [References](#references)
 
----
+## Constraints
 
-## Overview
+1. Reads the module with `oracle-forms-cli inspect --json`, so the Rust workspace must build (`cargo check`).
+2. `--benchmark` needs the database container up (`python3 start_testbed.py --status`) and `.env` credentials; on Windows run from the Ubuntu WSL shell.
+3. The score is a heuristic over declared features and built-ins, not a behavioral test. Runtime parity is the `testing-forms-parity` skill; compiling and running is `compiling-and-running-oracle-forms`.
 
-Audits an Oracle Forms module (`.xml` or `.fmb`) against the runtime feature catalogs of both engines:
-1. **Oracle Fusion Middleware 14c**: The enterprise baseline (Motif/Java applet via FSAL, WebLogic 14.1.2, OCI client).
-2. **Native Rust Workbench**: The zero-JVM modern stack (`oracle-forms-core`, `oracle-forms-runtime`, `oracle-forms-db` via pure-Rust `oracle-thin` wire protocol, vanilla HTML5 web client).
+## Quick start
 
-Calculates a 0–100% parity score based on data blocks, widgets, canvases, event triggers, and PL/SQL built-in subprograms.
-
----
-
-## Quick Start
-
-Run the comparison CLI from workspace root:
+From the repo root:
 
 ```bash
-# Print side-by-side summary table:
 python3 plugins/oracle-forms/.apm/skills/comparing-forms-features/scripts/compare_features.py samples/ofw_demo_employees_fmb.xml
-
-# Generate full Markdown comparison report:
 python3 plugins/oracle-forms/.apm/skills/comparing-forms-features/scripts/compare_features.py samples/ofw_sales_fmb.xml --format markdown -o report.md
-
-# Output structured JSON audit:
 python3 plugins/oracle-forms/.apm/skills/comparing-forms-features/scripts/compare_features.py samples/orders_fmb.xml --format json
-
-# Run with live database wire latency benchmark:
 python3 plugins/oracle-forms/.apm/skills/comparing-forms-features/scripts/compare_features.py samples/ofw_demo_employees_fmb.xml --benchmark
 ```
 
----
-
 ## Workflow
 
-1. **Parse Module AST**: Calls `oracle-forms-cli inspect --json` to extract blocks, items, canvases, windows, alerts, triggers, and program units.
-2. **Audit PL/SQL Subprograms**: Scans all trigger and program unit bodies for standard Oracle Forms built-ins (`EXECUTE_QUERY`, `SET_ITEM_PROPERTY`, `SHOW_ALERT`, etc.).
-3. **Classify Compatibility**: Categorizes each detected built-in as `SUPPORTED`, `PARTIAL`, or `UNSUPPORTED`.
-4. **Compute Parity Score**: Weighted metric factoring blocks (20%), items (25%), canvases (15%), triggers (25%), and built-ins (15%).
-5. **Output Comparison**: Emits side-by-side summary, widget distributions, and implementation recommendations.
-6. **Optional Benchmark**: Executes multi-run query against Oracle 23ai measuring async wire latency.
+1. Parse the module AST (blocks, items, canvases, windows, alerts, triggers, program units).
+2. Scan trigger and program unit bodies for Oracle Forms built-ins (`EXECUTE_QUERY`, `SET_ITEM_PROPERTY`, `SHOW_ALERT`, and others).
+3. Classify each built-in `SUPPORTED`, `PARTIAL`, or `UNSUPPORTED`.
+4. Compute the weighted parity score ([references/architecture-matrix.md](references/architecture-matrix.md) has the weights).
+5. Emit the side-by-side summary, widget distributions, and implementation recommendations; optionally benchmark query latency against Oracle 23ai.
 
----
+## Verification
 
-## Side-by-Side Architectural Matrix
-
-| Feature Dimension | Oracle Fusion Middleware 14c | Native Rust Oracle Forms Workbench |
-| :--- | :--- | :--- |
-| **Server Footprint** | ~5 GB container, WebLogic AdminServer 14.1.2 | ~25 MB standalone native executable |
-| **Client Requirement** | Host Java 17+ & Forms Standalone Launcher | Zero-install modern web browser |
-| **Database Driver** | Oracle Net / OCI C libraries | Pure-Rust async Tokio wire protocol (`oracle-thin`) |
-| **Query Latency** | ~3,000–5,000 ms (applet startup) | 1–5 ms direct wire queries |
-| **Trigger Execution** | Server-side C/Forms engine | AST tree-walking interpreter with package state |
-| **Alerts & Modals** | Modal dialog window in Java applet | Resumable 3-button HTML modal continuations |
-
----
-
-## Verification & Evals
-
-Trigger evals are registered in [`evals/evals.json`](evals/evals.json).
-
-Verify the skill locally:
-```bash
-python3 plugins/oracle-forms/.apm/skills/comparing-forms-features/scripts/compare_features.py samples/ofw_demo_employees_fmb.xml
-python3 plugins/oracle-forms/.apm/skills/comparing-forms-features/scripts/compare_features.py samples/ofw_sales_fmb.xml
-```
-
----
+Eval cases are in [evals/evals.json](evals/evals.json). Run `compare_features.py` on the two demo forms (`samples/ofw_demo_employees_fmb.xml`, `samples/ofw_sales_fmb.xml`). **Not re-run in the 2026-11-14 Windows sessions.**
 
 ## References
 
-- Testing Forms (14c FSAL vs Native Rust): [testing-forms-reference.md](references/testing-forms-reference.md)
-- Testing Reports (14c Server vs Native Rust Reports Engine): [testing-reports-reference.md](references/testing-reports-reference.md)
-- Feature Catalog & Built-in Mapping: [feature-catalog.md](references/feature-catalog.md)
-- End-to-End Runtime Parity Testing: [testing-forms-parity](../testing-forms-parity/SKILL.md)
-- Forms Batch Compilation: [compiling-and-running-oracle-forms](../compiling-and-running-oracle-forms/SKILL.md)
+- [architecture-matrix.md](references/architecture-matrix.md): engines compared and the score weights
+- [testing-forms-reference.md](references/testing-forms-reference.md): Forms, 14c FSAL vs native Rust
+- [testing-reports-reference.md](references/testing-reports-reference.md): Reports, 14c server vs native engine
+- [feature-catalog.md](references/feature-catalog.md): feature catalog and built-in mapping
