@@ -12,7 +12,7 @@ services:
     ports:
       - "1521:1521"
     environment:
-      - ORACLE_PWD=Welcome1
+      - ORACLE_PWD=${ORACLE_PWD:?set ORACLE_PWD in .env (load it first: set -a; source .env; set +a)}
     networks:
       - oracle-net
     restart: unless-stopped

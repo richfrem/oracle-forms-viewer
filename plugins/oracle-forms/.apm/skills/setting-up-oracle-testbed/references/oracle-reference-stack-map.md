@@ -31,7 +31,7 @@ What every file and folder in the repo's `oracle-reference-stack/` is for, and w
 It describes five services: `oracle-db-23ai` (the database, container `oracle23ai-lite`, port 1521), `forms-converter-12c`, `infra-install-14c` and `forms-install-14c` (the two 14c silent installs), and `forms-server-14c` (WebLogic, ports 7001 and 9001). The Oracle Home mount source is `${OFW_ORACLE_HOME:-./oracle_home_14c}`.
 
 **The verified Windows procedure does not use it; the original macOS procedure did.** The Windows setup uses plain `podman run` commands (and `start_testbed.py` to start the containers), because Podman Compose is not installed there and the commands are the same on both platforms. The compose route (`podman compose ... run --rm infra-install-14c`, `forms-install-14c`, `up -d forms-server-14c`) is described in [installing-forms-14c.md](installing-forms-14c.md) and was **not verified** in the Windows sessions. Known problems in the file, not fixed:
-- A literal database password is written in the file, which breaks the rule that credentials come only from `.env`.
+- Fixed: `ORACLE_PWD` is read from `.env` (load it first, see the stack map's compose notes).
 - `version: '3.8'` is obsolete.
 - `DISPLAY=host.containers.internal:0` is the macOS (XQuartz) setting; WSLg uses `DISPLAY=:0` with a socket mount ([forms-builder-gui.md](forms-builder-gui.md)).
 - Compose would name the network with a project prefix, not `oracle-net`; **not verified**.

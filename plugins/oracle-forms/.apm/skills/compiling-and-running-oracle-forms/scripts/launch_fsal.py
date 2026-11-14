@@ -22,7 +22,7 @@ Supported Object Types:
 CLI Arguments:
     form                  : Name or path of the form to run (e.g., test_db.fmx).
     -p, --port <int>      : WebLogic AdminServer port (default: 7001).
-    -u, --userid <str>    : Database logon string (default: forms_user/Welcome123#@FREEPDB1).
+    -u, --userid <str>    : Database logon string (default: DB_USER/DB_PASSWORD from .env, service FREEPDB1; if unset, the client prompts).
     --interactive         : Omit credentials and show the native GUI Logon dialog.
     --frmsal-jar <path>   : Custom path to frmsal.jar (optional).
 
@@ -69,6 +69,14 @@ def resolve_workspace_root() -> Path:
 
 
 # Constructs the complete Forms Listener Servlet URL with safe parameter encoding.
+def default_userid() -> str:
+    """Logon string built from DB_USER and DB_PASSWORD in the environment (load .env first).
+    No password is written in this file. Returns "none" when they are not set, so the FSAL client asks for the logon."""
+    user = os.environ.get("DB_USER", "")
+    password = os.environ.get("DB_PASSWORD", "")
+    return f"{user}/{password}@FREEPDB1" if user and password else "none"
+
+
 def build_fsal_url(form_name: str, port: int, userid: str, interactive: bool) -> str:
     """Construct the HTTP URL for the standaloneapp configuration.
 
@@ -124,7 +132,7 @@ def parse_cli_args(argv: List[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Oracle Forms Standalone Launcher (FSAL) Runner")
     parser.add_argument("form", help="Name or path of the form to run (e.g., test_db.fmx or simple_module.fmx)")
     parser.add_argument("-p", "--port", default=7001, type=int, help="WebLogic AdminServer port (default: 7001)")
-    parser.add_argument("-u", "--userid", default="forms_user/Welcome123#@FREEPDB1", help="Database logon string")
+    parser.add_argument("-u", "--userid", default=default_userid(), help="Database logon string (default: DB_USER/DB_PASSWORD from .env; if unset, the FSAL client prompts)")
     parser.add_argument("--interactive", action="store_true", help="Omit credentials and show native GUI Logon dialog")
     parser.add_argument("--frmsal-jar", default=None, help="Custom path to frmsal.jar (optional)")
     return parser.parse_args(argv)
