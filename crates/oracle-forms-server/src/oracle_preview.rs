@@ -140,3 +140,68 @@ pub async fn readiness() -> serde_json::Value {
             { "label": "Oracle Free container running (needed for the local database workflow)", "ready": database, "required": false }
         ], "note": "Checks run on the Rust server's computer. Container availability does not verify database credentials, schema contents, compiler success or visual parity." })
 }
+
+/// Converts a binary Oracle artifact (.fmb, .mmb, .olb, .rdf, .rex, .pll) into XML (or .pld)
+/// using the optional containerized Oracle 14c converter scripts.
+pub async fn convert_to_xml(source_path: &std::path::Path) -> Result<(PathBuf, String), String> {
+    let abs_source = source_path.canonicalize().map_err(|e| format!("Source file not found: {}", e))?;
+    let ext = abs_source
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    let stem = abs_source
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| "Invalid source file name".to_string())?;
+    let parent = abs_source
+        .parent()
+        .ok_or_else(|| "Invalid source file directory".to_string())?;
+
+    let (script_name, expected_name) = match ext.as_str() {
+        "fmb" | "mmb" | "olb" => ("convert_fmb.py", format!("{}_{}.xml", stem, ext)),
+        "rdf" | "rex" => ("convert_rpt.py", format!("{}_rdf.xml", stem)),
+        "pll" => ("convert_pll.py", format!("{}.pld", stem)),
+        _ => return Err(format!("Unsupported binary extension '.{}' for Oracle XML conversion", ext)),
+    };
+
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let script = root
+        .join("plugins/oracle-forms/.apm/skills/converting-oracle-artifacts/scripts")
+        .join(script_name);
+    if !script.is_file() {
+        return Err(format!("Converter script missing: {}", script.display()));
+    }
+
+    let mut command = tokio::process::Command::new(python_program());
+    #[cfg(windows)]
+    {
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let output = command
+        .arg("-u")
+        .arg(&script)
+        .arg(&abs_source)
+        .current_dir(&root)
+        .output()
+        .await
+        .map_err(|e| format!("Failed to launch converter: {}", e))?;
+
+    let log = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let expected_path = parent.join(&expected_name);
+    if !output.status.success() || !expected_path.is_file() {
+        return Err(format!(
+            "Oracle conversion failed (exit {:?}):\n{}",
+            output.status.code(),
+            log.trim()
+        ));
+    }
+    Ok((expected_path, log))
+}

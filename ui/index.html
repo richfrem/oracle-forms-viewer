@@ -492,6 +492,7 @@
             <div class="xml-toolbar">
               <span id="xmlTitle" class="xml-title">Source XML slice</span>
               <span id="xmlLinesBadge" class="badge"></span>
+              <button id="convertArtifactXmlBtn" class="btn btn-sm btn-primary" style="margin-left:auto;" title="Convert binary .fmb/.mmb/.olb/.rdf/.pll via Oracle 14c container">⚡ Convert via Oracle (XML/PLD)</button>
             </div>
             <div class="xml-editor-container">
               <pre id="xmlSliceDisplay" class="code-pre"><code>&lt;!-- Select an object in the tree to inspect its XML source --&gt;</code></pre>
@@ -698,11 +699,12 @@
           </div>
 
           <div class="modal-section" style="margin-bottom: 4px;">
-            <p class="modal-hint" style="margin-bottom: 8px;">Pick any Oracle Forms or Reports file directly from your computer disk:</p>
+            <p class="modal-hint" style="margin-bottom: 8px;">Pick any Oracle Forms or Reports file (<code>.fmb</code>, <code>.mmb</code>, <code>.olb</code>, <code>.pll</code>, <code>.pld</code>, <code>.rdf</code>, <code>.rpt</code>, <code>.xml</code>) from disk:</p>
             <label class="btn btn-primary modal-upload-label" style="width:100%; justify-content:center; padding: 10px 14px; font-size: 13px;">
-              💻 Choose File from Computer (.fmb, .mmb, .olb, .pll, .pld, .rdf, .rpt, .xml)...
+              💻 Choose File from Computer...
               <input type="file" id="fileInput" accept=".fmb,.fmx,.xml,.mmb,.mmx,.olb,.pll,.pld,.rdf,.rpt,.rex" style="display:none;">
             </label>
+            <p class="modal-hint" style="margin-top:6px; margin-bottom:0;">Uploaded files are staged in the server temp folder (e.g. <code>/tmp/forms-upload/</code>); workspace or server paths convert in place next to the source file.</p>
           </div>
 
           <div class="modal-divider" style="margin: 8px 0;"></div>
@@ -730,25 +732,25 @@
         </div>
 
         <!-- Right Column: Server & Workspace File Browser -->
-        <div class="wizard-card">
-          <div class="wizard-step-header" style="justify-content: space-between;">
-            <div style="display:flex; align-items:center; gap:8px;">
+        <div class="wizard-card" style="min-width: 0;">
+          <div class="wizard-step-header" style="justify-content: space-between; gap: 10px;">
+            <div style="display:flex; align-items:center; gap:8px; min-width: 0;">
               <span class="wizard-step-badge">Repository</span>
-              <h4>Browse Workspace Artifacts (.fmb, .mmb, .olb, .pld, .rdf, .xml)</h4>
+              <h4 style="white-space: nowrap;">Workspace Artifacts</h4>
             </div>
-            <input type="text" id="browseFilterInput" placeholder="Filter files..." style="width: 150px; padding: 3px 8px; font-size: 11px;">
+            <input type="text" id="browseFilterInput" placeholder="Filter files..." style="width: 170px; padding: 4px 8px; font-size: 11.5px;">
           </div>
 
-          <div class="tree-Quick-filters" id="browseCategoryPills" style="padding: 2px 0;">
-            <button class="filter-pill active" data-browse-cat="ALL">All</button>
-            <button class="filter-pill" data-browse-cat="FORM">Forms (.fmb/.xml)</button>
-            <button class="filter-pill" data-browse-cat="MENU">Menus (.mmb)</button>
-            <button class="filter-pill" data-browse-cat="OBJECT_LIB">Object Libs (.olb)</button>
-            <button class="filter-pill" data-browse-cat="PLSQL_LIB">PL/SQL (.pld)</button>
-            <button class="filter-pill" data-browse-cat="REPORT">Reports (.rdf/.xml)</button>
+          <div class="tree-quick-filters" id="browseCategoryPills" style="display:flex; flex-wrap:wrap; gap:6px; padding: 4px 0 6px;">
+            <button type="button" class="cat-pill active" data-bcat="ALL">All</button>
+            <button type="button" class="cat-pill" data-bcat="FORM">Forms</button>
+            <button type="button" class="cat-pill" data-bcat="MENU">Menus</button>
+            <button type="button" class="cat-pill" data-bcat="OBJECT_LIB">Object Libs</button>
+            <button type="button" class="cat-pill" data-bcat="PLSQL_LIB">PL/SQL</button>
+            <button type="button" class="cat-pill" data-bcat="REPORT">Reports</button>
           </div>
 
-          <div id="workspaceFilesBrowserList" class="wiz-columns-list" style="max-height: 265px;">
+          <div id="workspaceFilesBrowserList" class="wiz-columns-list" style="max-height: 290px;">
             <div class="empty-state">Loading workspace files...</div>
           </div>
         </div>
