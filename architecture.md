@@ -41,6 +41,8 @@ flowchart TD
 
 **Track 1, the optional reference environment**, uses Oracle tools in Podman containers for conversion, compilation, and actual Oracle execution. Python automation and host Java/FSAL are explicit optional dependencies. The server bridge invokes this tooling only for requested reference actions; it is not a prerequisite for native parsing or editing. The optional SQL*Plus testbed database driver also belongs to this integration boundary.
 
+The Track 1 stack has been validated on two hosts. On macOS, Podman runs in a machine VM with Rosetta 2 for the `linux/amd64` images. On Windows 11, Podman runs inside an Ubuntu WSL2 distribution on x86-64, with no emulation. Host Java and the FSAL launcher run on the same host as the Rust server (Windows: the launcher runs inside WSL, with WSLg for the window). See [docs/WINDOWS-PODMAN-SETUP.md](docs/WINDOWS-PODMAN-SETUP.md) for the Windows boundary.
+
 ## Rust workspace boundaries
 
 The root Cargo workspace contains eight crates:
@@ -135,6 +137,8 @@ The bridge uses fixed repository tooling and isolated `temp/oracle-preview/<job>
 Database-connected compilation is the default UI choice and requires a username/password. Offline compilation requires explicit selection and can fail when PL/SQL references database objects. Compile credentials travel through the child environment and compiler stdin rather than host command-line arguments; they must not be retained in saved artifacts, browser storage, or displayed logs. FSAL then uses a separate interactive Logon dialog.
 
 Readiness probes check Python, Java 17+, Podman, the Forms container, the servlet, the FSAL JAR, and the launcher script. The local database container is also reported. These checks do not install software, start containers, validate schema privileges, or certify compiler/visual success. The Java window opens on the Rust server's host, not a remote browser user's computer.
+
+Validation status for the readiness probes: the Windows path has been run manually (container start, servlet check, FSAL launch of a sample form). The automated probes listed above have not yet been run on Windows, so their Windows results are unverified.
 
 The current local development reference path uses the AdminServer Forms servlet on port **7001** with `config=standaloneapp`. Managed-server port **9001** is available when configured/running, and must not be assumed active. FSAL connects to the Forms service, which connects to the database. This is development publication to the configured reference environment, rather than a general production deployment manager.
 

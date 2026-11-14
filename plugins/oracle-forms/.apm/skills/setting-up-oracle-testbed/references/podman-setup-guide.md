@@ -1,5 +1,7 @@
 # Podman Oracle Forms Converter: Setup, Architecture & Build History
 
+> **Platform: macOS (Apple Silicon).** For Windows 11 (Podman inside Ubuntu on WSL2, x86-64 with no emulation), use [windows-podman-setup.md](windows-podman-setup.md). Both platforms run the same `oracle-reference-stack/` containers and the same silent-install response files.
+
 **Location:** `oracle-reference-stack/`  
 **Host Machine:** macOS (Apple Silicon M1 / ARM64)  
 **Container Architecture:** `linux/amd64` (Rosetta 2 translation under Apple Virtualization Framework)  

@@ -61,6 +61,13 @@ The **Preview in Oracle** button launches the current saved form through the con
 
 This optional path needs Python 3, Podman, a provisioned and running Forms 14c/WebLogic installation, host Java 17+, the FSAL launcher JAR, and access to any referenced database schema, menus, or libraries. Oracle installers must be supplied separately. The dialog includes a dependency checklist and setup/startup instructions; it does not install the stack automatically. See the [Oracle automation plugin](plugins/oracle-forms/README.md) and [Forms & Reports testing guide](docs/FORMS-AND-REPORTS-14C-TESTING-GUIDE.md).
 
+**Validated platforms.** The reference stack has been run on two hosts:
+
+- **macOS (Apple Silicon):** Podman machine with Rosetta 2 for the `linux/amd64` Forms image. This is the original path, documented in [PODMAN-CONVERTER-SETUP-AND-HISTORY.md](docs/PODMAN-CONVERTER-SETUP-AND-HISTORY.md) and [the Mac setup guide](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/podman-setup-guide.md).
+- **Windows 11 (x86-64):** Podman inside an Ubuntu WSL2 distribution, with no emulation. Verified: Forms 14.1.2 installed, Oracle Database 23ai Free running with seeded data, the WebLogic Forms server running on port 7001, and a sample form (`ofw_demo_employees`) opened through FSAL from WSL with live database rows. The ordered steps are in [HOW-TO-RUN.md](HOW-TO-RUN.md) section 7.5, the setup log is in [WINDOWS-PODMAN-SETUP.md](docs/WINDOWS-PODMAN-SETUP.md), and the skill runbook is [windows-podman-setup.md](plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-podman-setup.md).
+
+Not yet verified on Windows: the **Preview in Oracle** dialog, the skill's `run_form.py`, `compile_form.py`, `launch_fsal.py`, and `health_check.py` scripts, `convert_fmb.py --check`, and the Rust gate (`cargo check` and `cargo test`), which is blocked by a Visual Studio install missing C headers.
+
 Use database-connected compilation for PL/SQL that references schema objects. Offline compilation is an explicit option and can fail on unresolved database objects. A successful compile or launch establishes a pipeline result; visual and behavioral comparison is still required.
 
 The same pipeline can be driven from the terminal once the reference environment is configured:
@@ -248,6 +255,7 @@ Node is only used here for frontend regression tests; the native application has
 ## Key Documentation Links
 
 - **[How to Run Native Viewer & CLI](HOW-TO-RUN.md)**: Server configuration, custom ports, CLI commands, and desktop FSAL runner.
+- **[Windows Podman Setup (WSL2)](docs/WINDOWS-PODMAN-SETUP.md)**: Verified Windows path for the Oracle Forms 14c and Database 23ai reference stack, with status log and troubleshooting.
 - **[Oracle Forms APM Plugin](plugins/oracle-forms/README.md)**: APM skills for setup, conversion, compilation, and live desktop execution.
 - **[Native Rust Workbench Architecture](docs/NATIVE-RUST-WORKBENCH-ARCHITECTURE.md)**: Active system architecture, delivered capabilities, and technical roadmap.
 - **[System Dependencies & SBOM](docs/DEPENDENCIES.md)**: Complete dependency audit for Rust workspace, Podman container, and host systems.
