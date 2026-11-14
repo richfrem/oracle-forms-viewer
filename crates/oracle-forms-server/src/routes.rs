@@ -31,6 +31,7 @@ pub fn app_router_with_security(service: FormsService, security_cfg: SecurityCon
         .route("/api/db/describe", post(describe_table))
         .route("/api/forms/query-block", post(query_form_block))
         .route("/api/forms/export-xml", post(export_form_xml))
+        .route("/api/artifacts/convert-to-xml", post(convert_artifact_to_xml))
         .route("/api/forms/save", post(save_form_file))
         .route("/api/forms/oracle-preview", post(start_oracle_preview))
         .route("/api/forms/oracle-preview/{id}", get(oracle_preview_status))
@@ -529,6 +530,54 @@ async fn export_form_xml(
             Json(serde_json::json!({ "error": "Either 'moduleName' or 'module' must be provided" })),
         )
             .into_response()
+    }
+}
+
+#[derive(Deserialize)]
+struct ConvertArtifactRequest {
+    #[serde(rename = "moduleName")]
+    module_name: Option<String>,
+    #[serde(rename = "fileName")]
+    file_name: Option<String>,
+}
+
+async fn convert_artifact_to_xml(
+    State(service): State<FormsService>,
+    Json(payload): Json<ConvertArtifactRequest>,
+) -> Response {
+    let source_path = if let Some(ref fname) = payload.file_name {
+        if !crate::security::is_plain_file_name(fname) {
+            return session_error(400, format!("Invalid file name '{}'", fname));
+        }
+        match crate::security::safe_join(&FormsService::samples_dir(), fname) {
+            Some(p) if p.is_file() => p,
+            _ => return session_error(404, format!("File '{}' not found in samples", fname)),
+        }
+    } else if let Some(ref mname) = payload.module_name {
+        match service.get_source_file(mname) {
+            Some(p) if p.is_file() => p,
+            _ => return session_error(404, format!("Source binary for '{}' not found", mname)),
+        }
+    } else {
+        return session_error(400, "Either 'moduleName' or 'fileName' must be provided".into());
+    };
+
+    match crate::oracle_preview::convert_to_xml(&source_path).await {
+        Ok((output_path, log)) => {
+            let output_file = output_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string();
+            let _ = service.load_module(&output_path);
+            Json(serde_json::json!({
+                "ok": true,
+                "outputFile": output_file,
+                "log": log,
+            }))
+            .into_response()
+        }
+        Err(err) => session_error(500, err),
     }
 }
 

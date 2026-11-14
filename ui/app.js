@@ -866,6 +866,47 @@
       });
     }
 
+    const convertArtifactXmlBtn = document.getElementById('convertArtifactXmlBtn');
+    if (convertArtifactXmlBtn) {
+      convertArtifactXmlBtn.addEventListener('click', async () => {
+        if (!currentPayload || !currentPayload.moduleIndex || !currentPayload.moduleIndex.key) {
+          showBanner('Open a form, menu, library, or report first.');
+          return;
+        }
+        const moduleName = currentPayload.moduleIndex.key.name;
+        const originalText = convertArtifactXmlBtn.textContent;
+        convertArtifactXmlBtn.disabled = true;
+        convertArtifactXmlBtn.textContent = 'Converting via Oracle...';
+        showBanner(`Converting ${moduleName} via Oracle 14c container...`);
+        try {
+          const res = await fetch('/api/artifacts/convert-to-xml', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ moduleName })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            showBanner(`Oracle conversion failed: ${data.error || res.statusText}`);
+            return;
+          }
+          await loadSampleList();
+          if (data.outputFile) {
+            await loadSample(data.outputFile);
+            switchTab('xmlTab');
+          } else {
+            await loadFullXml(moduleName);
+          }
+          showBanner(`Converted ${moduleName} -> ${data.outputFile || 'XML'}.`);
+          setTimeout(hideBanner, 5000);
+        } catch (err) {
+          showBanner('Oracle conversion failed: ' + err.message);
+        } finally {
+          convertArtifactXmlBtn.disabled = false;
+          convertArtifactXmlBtn.textContent = originalText;
+        }
+      });
+    }
+
     const comparisonFiles = new Map();
     document.getElementById('diffFilesInput')?.addEventListener('change', async event => {
       for (const file of event.target.files) {

@@ -12,6 +12,7 @@ use crate::security::{is_plain_file_name, safe_join};
 struct ServiceState {
     modules: HashMap<String, ModuleIndex>,
     converted_files: HashMap<String, PathBuf>,
+    source_files: HashMap<String, PathBuf>,
     cache_dirs: HashMap<String, PathBuf>,
     /// Edits made in the layout editor, applied to the original XML on export.
     item_edits: HashMap<String, Vec<oracle_forms_xml::ItemPatch>>,
@@ -170,6 +171,7 @@ impl FormsService {
         let mut st = self.state.write().unwrap();
         let key_name = key.name.to_ascii_uppercase();
         st.modules.insert(key_name.clone(), index.clone());
+        st.source_files.insert(key_name.clone(), file_path.to_path_buf());
         st.converted_files.insert(key_name.clone(), effective_path.clone());
         if let Some(base) = lower_name.strip_suffix("_report.xml") {
             st.converted_files.insert(base.to_ascii_uppercase(), effective_path);
@@ -358,6 +360,11 @@ impl FormsService {
         }
 
         None
+    }
+
+    pub fn get_source_file(&self, module_name: &str) -> Option<PathBuf> {
+        let key = module_name.to_ascii_uppercase();
+        self.state.read().unwrap().source_files.get(&key).cloned()
     }
 
     pub fn read_xml_slice(&self, module_name: &str, start_line: usize, end_line: usize) -> Option<String> {
