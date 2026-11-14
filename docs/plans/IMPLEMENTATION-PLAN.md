@@ -101,7 +101,7 @@
      - Scan `WhereClause` for `:BLOCK.ITEM`, `:GLOBAL.X`, `:PARAMETER.X`, rewrite them to dialect binds, and return unresolved references as a typed error.
      - Add Query-By-Example (QBE) criteria input: `Vec<(item, operator, SqlValue)>`.
 - **Verification Gates**:
-  - `grep -rn "Welcome123" crates/` returns zero matches.
+  - `grep -rn "$DB_PASSWORD" crates/` returns zero matches.
   - Driver trait compiles across SQLite, Mock, and TestbedSqlplus drivers with `BoundSql`.
   - Generator unit tests cover `ROWID` selection, bind extraction, string literal preservation (`':not_a_bind'`), and no `SELECT *`.
 

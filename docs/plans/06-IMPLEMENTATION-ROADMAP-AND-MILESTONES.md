@@ -62,7 +62,7 @@
   7. Add `BoundSql` to `DatabaseDriver::query` trait method.
   8. Update `SqlGenerator` to select `ROWID`, eliminate `SELECT *`, and rewrite binds in `WhereClause`.
 - **Verification Gate**:
-  - `grep -rn "Welcome123" crates/` returns zero matches.
+  - `grep -rn "$DB_PASSWORD" crates/` returns zero matches.
   - Driver trait unit tests compile and pass with `BoundSql`.
 
 ---
