@@ -1,0 +1,7 @@
+[ENGINE]
+Response File Version=1.0.0.0.0
+
+[GENERIC]
+DECLINE_AUTO_UPDATES=true
+ORACLE_HOME=/oracle_home_14c
+INSTALL_TYPE=Fusion Middleware Infrastructure

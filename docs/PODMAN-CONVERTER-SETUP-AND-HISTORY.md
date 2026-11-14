@@ -1,7 +1,7 @@
 # Podman Oracle Forms Converter: Setup, Architecture & Build History
 
 **Location:** `oracle-reference-stack/`  
-**Host Machine:** macOS (Apple Silicon M1 / ARM64)  
+**Host Machines:** macOS (Apple Silicon M1 / ARM64) and Windows 11 (Podman inside Ubuntu on WSL2, x86-64). Windows steps: [WINDOWS-PODMAN-SETUP.md](WINDOWS-PODMAN-SETUP.md)  
 **Container Architecture:** `linux/amd64` (Rosetta 2 translation under Apple Virtualization Framework)  
 **Target Output Image:** `forms-converter:latest` (Image ID: `acf660e52b02`)  
 **Date:** November 7, 2026  
@@ -712,67 +712,25 @@ curl -I http://localhost:7001/console
 
 ---
 
-## 13. Windows Reproduction Runbook (Podman on Windows 11 / WSL2 / Podman Desktop)
+## 13. Windows Reproduction Runbook (Podman inside WSL2)
 
-This section provides the exact step-by-step instructions to reproduce the entire environment (Oracle DB 23ai Free, Forms 12c, and Forms 14c) on **Windows 11 or Windows 10** using Podman.
+Windows is supported through **Podman running inside an Ubuntu WSL2 distribution**, not Podman for Windows or Podman Desktop. This matches the macOS commands in this document. Both use the same containers and the same silent-install response files.
 
-### 13.1 Prerequisites on Windows
-1. **Enable WSL2**:
-   ```powershell
-   wsl --install
-   ```
-2. **Install Podman for Windows**:
-   - Download the Windows installer from [podman.io](https://podman.io) or install via `winget`:
-     ```powershell
-     winget install RedHat.Podman
-     ```
-   - Initialize and start the Podman machine:
-     ```powershell
-     podman machine init
-     podman machine start
-     ```
-3. **Native Execution Speed**:
-   Because most Windows PCs are x86_64, `--platform linux/amd64` runs **natively with zero CPU translation overhead** (unlike Apple Silicon which uses Rosetta 2).
+- **Full guide with status log and troubleshooting:** [WINDOWS-PODMAN-SETUP.md](WINDOWS-PODMAN-SETUP.md)
+- **Skill runbook:** `plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-podman-setup.md`
 
-### 13.2 Display Forwarding on Windows (Forms Builder GUI)
-- **Windows 11**: Includes **WSLg** natively. X11 display forwarding works out of the box with `DISPLAY=:0`. No third-party X-server is needed!
-- **Windows 10**: Install **VcXsrv Windows X Server**, launch with *"Disable access control"* checked, and forward display via `DISPLAY=host.docker.internal:0` or your host IP.
+Verified on Windows 11 (WSL 3.0.5.0, Podman 4.9.3, x86-64 with no emulation):
 
-### 13.3 Windows PowerShell Execution Commands
-Run from the repository root in PowerShell:
+- Forms 14c image built (`forms-converter-14c:latest`, 798 MB).
+- Stage 1 (FMW Infrastructure 14.1.2.0.0) and Stage 2 (Forms & Reports 14.1.2.0.0) completed. `frmsal.jar` and `frmcmp_batch` are in the Oracle Home.
+- Database image pulled. Container start, the WebLogic domain, FSAL, and the workbench gate are not yet verified on Windows.
 
-```powershell
-# 1. Start Oracle Database 23ai Free
-podman run -d `
-  --name oracle23ai-lite `
-  -p 1521:1521 `
-  -e ORACLE_PWD=Welcome1 `
-  container-registry.oracle.com/database/free:latest-lite
+Windows-specific differences from macOS:
 
-# 2. Build the Forms 14c image
-podman build -t forms-converter-14c:latest -f oracle-reference-stack/Containerfile.14c oracle-reference-stack
-
-# 3. Stage 1: Install FMW Infrastructure 14c
-podman run --rm `
-  -v ${PWD}/oracle-reference-stack/installer:/installer:Z `
-  -v ${PWD}/oracle-reference-stack/oracle_home_14c:/oracle_home_14c:Z `
-  forms-converter-14c:latest `
-  java -jar /installer/fmw_14.1.2.0.0_infrastructure.jar `
-    -silent -ignoreSysPrereqs `
-    -responseFile /installer/infra14c_silent.rsp `
-    -invPtrLoc /installer/oraInst.loc
-
-# 4. Stage 2: Install Forms and Reports 14c
-podman run --rm `
-  -v ${PWD}/oracle-reference-stack/installer:/installer:Z `
-  -v ${PWD}/oracle-reference-stack/oracle_home_14c:/oracle_home_14c:Z `
-  forms-converter-14c:latest `
-  /installer/fmw_14.1.2.0.0_fr_linux64.bin `
-    -silent -ignoreSysPrereqs `
-    -responseFile /installer/forms14c_silent.rsp `
-    -invPtrLoc /installer/oraInst.loc
-```
-
-*Tip for Windows: You can also open Ubuntu in WSL2 (`wsl`) and execute the exact same Linux bash commands as macOS.*
+- Run container commands from the Ubuntu shell (`wsl -d Ubuntu`). Use Linux installers, not the Windows `.exe`.
+- `/mnt/c` needs `metadata` in `/etc/wsl.conf` for `chmod +x` to work.
+- Rootless Podman needs `/run/user/<uid>`. Recreate it after every `wsl --shutdown`.
+- The Forms `.bin` has no execute bit after unzip. Run `chmod +x` on the staged copy.
+- Display forwarding for Forms Builder (WSLg) is **not yet verified** on Windows.
 
 

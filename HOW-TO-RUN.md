@@ -262,12 +262,55 @@ python3 plugins/oracle-forms/.apm/skills/compiling-and-running-oracle-forms/scri
 
 When prompted by the native Forms **Logon** dialog:
 - **Username**: `forms_user`
-- **Password**: `Welcome123#`
+- **Password**: `Welcome1` (the `forms_user` password from `oracle-reference-stack/sql/seed_forms_user.sql`; `Welcome123#` is the WebLogic admin password)
 - **Database**: `FREEPDB1`
 
 Click **Connect** to load the form and execute live PL/SQL triggers against Oracle Database 23ai.
 
 
+### 5. Windows (Podman inside WSL2): verified end-to-end
+
+On Windows, Podman runs inside an Ubuntu WSL2 distribution. Run every container command from the Ubuntu shell (`wsl -d Ubuntu`). The launcher runs in WSL too, using WSLg for the window. Verified on Windows 11 with a sample form: the Employee Directory form (`ofw_demo_employees`) opened with live rows from `forms_user` in FREEPDB1.
+
+Run from `oracle-reference-stack/` in the Ubuntu shell, in this order. Steps 1 to 4 are one-time per machine. Steps 5 and 6 are needed after a `wsl --shutdown`.
+
+1. **Runtime directory** (after every `wsl --shutdown`):
+   ```bash
+   sudo mkdir -p /run/user/$(id -u) && sudo chown $(id -un): /run/user/$(id -u) && chmod 700 /run/user/$(id -u)
+   mkdir -p /run/user/$(id -u)/containers/networks
+   export XDG_RUNTIME_DIR=/run/user/$(id -u)
+   ```
+2. **Database** (`oracle23ai-lite` on `oracle-net`) and demo data:
+   ```bash
+   podman exec -i oracle23ai-lite sqlplus -s system/Welcome1@localhost/FREEPDB1 < sql/seed_forms_user.sql
+   podman exec -i oracle23ai-lite sqlplus -s forms_user/Welcome1@localhost/FREEPDB1 < ../samples/ofw_demo_employees.sql
+   ```
+3. **Forms server domain hooks** (one-time): `oracle_home_14c/user_projects/domains/base_domain/bin/setUserOverrides.sh` (exports `LD_LIBRARY_PATH`, `FORMS_PATH`, `FORMS_INSTANCE`, `ORACLE_PATH`, `TNS_ADMIN`, `-Dforms.instance=forms1`), `servers/AdminServer/security/boot.properties`, and an `instances/forms1 -> ../forms1` symlink under `config/fmwconfig/components/FORMS/`. The full contents are in `plugins/oracle-forms/.apm/skills/setting-up-oracle-testbed/references/windows-podman-setup.md`, section 8.
+4. **Forms runtime libraries** (one-time): build the 16 `lib*.so.0` files that `frmweb` needs with `genshlib`. Check with `ldd` first; it lists the missing names.
+5. **Database alias** (one-time): add a `FREEPDB1` entry to `config/fmwconfig/tnsnames.ora` that points at host `oracle-db-23ai`, port 1521, service `FREEPDB1`. Without it the logon fails with `ORA-12154`.
+6. **Start the Forms server**:
+   ```bash
+   podman run -d --name forms-server-14c --platform linux/amd64 --network oracle-net -p 7001:7001 -p 9001:9001 \
+     -v "$PWD/oracle_home_14c:/oracle_home_14c:Z" -v "$PWD/..:/work:Z" \
+     -e ORACLE_HOME=/oracle_home_14c -e DOMAIN_HOME=/oracle_home_14c/user_projects/domains/base_domain \
+     -e DB_URL=oracle-db-23ai:1521/FREEPDB1 -e DISPLAY=:0 -e JAVA_HOME=/usr/lib/jvm/jdk-17.0.12 \
+     forms-converter-14c:latest /oracle_home_14c/user_projects/domains/base_domain/bin/startWebLogic.sh
+   podman logs -f forms-server-14c   # wait for "Server state changed to RUNNING"
+   ```
+   On a `/mnt/c` mount this took 15 to 25 minutes to reach RUNNING. Confirm with `curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:7001/forms/frmservlet` (expect `200`).
+7. **Compile the sample form and menu** in a job directory. Compiling into `/work` or the Oracle Home `forms/` folder fails with `FRM-10044`:
+   ```bash
+   podman exec -u oracle forms-server-14c sh -c 'mkdir -p /tmp/job && cp /work/samples/ofw_demo_employees.fmb /work/samples/ofw_emp_menu.mmb /tmp/job/ && cd /tmp/job && export ORACLE_HOME=/oracle_home_14c LD_LIBRARY_PATH=/oracle_home_14c/lib:/oracle_home_14c/oracle_common/lib ORACLE_TERM=vt220 TERM=vt220 FORMS_PATH=/tmp/job:/work/samples:/oracle_home_14c/forms && /oracle_home_14c/bin/frmcmp_batch module=ofw_emp_menu.mmb module_type=menu logon=no compile_all=yes && /oracle_home_14c/bin/frmcmp_batch module=ofw_demo_employees.fmb module_type=form logon=no compile_all=yes && cp /tmp/job/ofw_demo_employees.fmx /tmp/job/ofw_emp_menu.mmx /oracle_home_14c/forms/'
+   ```
+   Each step prints `No compilation errors`. The shipped `.fmx` and `.mmx` in `samples/` are stale and fail with `FRM-40010` and `FRM-10221`.
+8. **Launch the form** from the Ubuntu shell, at the repo root. The launcher stays open while the form runs:
+   ```bash
+   java -jar oracle-reference-stack/oracle_home_14c/forms/java/frmsal.jar \
+     -url "http://localhost:7001/forms/frmservlet?config=standaloneapp&form=ofw_demo_employees.fmx&userid=forms_user/Welcome1@FREEPDB1"
+   ```
+   The Employee Directory window opens with the demo rows. If the logon dialog appears instead, use `forms_user` / `Welcome1` / `FREEPDB1`.
+
+**Still unverified on Windows:** `run_form.py`, `compile_form.py`, and `launch_fsal.py` in the skill scripts. They were written for the Mac layout. Use the steps above until they're checked. `ofw_sales.fmb` has not been run yet. The Rust workbench gate (`cargo check` and `cargo test`) is still blocked by the Visual Studio headers issue, as recorded in `docs/WINDOWS-PODMAN-SETUP.md`.
 ## Menus, Browse/Open and Reports (new)
 
 - Use **Browse / Open...** in the header to open any `.fmb`, `.xml`, `.olb`, `.mmb` or report file (samples list or upload).

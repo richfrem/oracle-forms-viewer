@@ -35,10 +35,16 @@ The repository maintains an intentional, strict boundary between its two operati
 | :--- | :--- | :--- | :--- |
 | **Python** | 3.8+ | Host runner and APM automation scripts (`run_form.py`, `compile_form.py`, `launch_fsal.py`, `convert_fmb.py`, `health_check.py`). Uses **standard library only** (zero PyPI packages). | System Python or Homebrew |
 | **Java Runtime (JRE/JDK)** | 8, 11, 17, or 21+ | Host runtime executing Forms Standalone Launcher client (`frmsal.jar`) for live desktop form rendering. | System Java or `brew install openjdk` |
-| **Podman** | 4.0+ | Container virtualization engine. | `brew install podman` or Podman Desktop |
-| **Rosetta 2** | macOS 11+ | Binary translation allowing Apple Silicon ARM64 machines to execute `linux/amd64` container images. | Built-in macOS (`softwareupdate --install-rosetta`) |
-| **XQuartz** | 2.8+ | Host X11 window server on macOS for rendering the visual Oracle Forms Builder IDE (`frmbld`). | `brew install --cask xquartz` |
-| **X11 / Xorg** | Any modern | Native X11 server on Linux for Forms Builder display forwarding. | Native Linux distribution package |
+| **Podman** | 4.0+ | Container virtualization engine. | macOS: `brew install podman`. Linux: distro package. Windows: install inside Ubuntu WSL2 with `sudo apt-get install -y podman` (see [WINDOWS-PODMAN-SETUP.md](WINDOWS-PODMAN-SETUP.md)) |
+| **Rosetta 2** | macOS 11+ (Apple Silicon only) | Binary translation allowing Apple Silicon ARM64 machines to execute `linux/amd64` container images. | macOS only: `softwareupdate --install-rosetta`. Not needed on Windows x86-64 |
+| **XQuartz** | 2.8+ (macOS only) | Host X11 window server on macOS for rendering the visual Oracle Forms Builder IDE (`frmbld`). | macOS only: `brew install --cask xquartz` |
+| **X11 / Xorg** | Any modern | Native X11 server on Linux for Forms Builder display forwarding. | Native Linux distribution package. Windows: WSLg (Windows 11) |
+| **WSL2** | WSL 2.x (verified: 3.0.5.0) | Linux VM that runs Podman and the containers on Windows. | Windows 11: `wsl --install`; update with `wsl --update` from an elevated PowerShell |
+| **Ubuntu WSL distro** | 24.04 (verified) | Linux shell where Podman, `podman build`, and the container commands run on Windows. | `wsl --install -d Ubuntu` |
+| **`.wslconfig`** | n/a | Sets the WSL VM memory and CPU limits. Location: `%USERPROFILE%\.wslconfig`. Applies to all distros. Changes need `wsl --shutdown` | Created by hand. Recommended `memory=12GB` (see the Windows guide) |
+| **WSLg** | Built into Windows 11 | X11 display for Linux GUI apps, including `frmbld` (not yet verified for this stack). | Included with Windows 11 WSL |
+| **Java (host, FSAL client)** | JDK 17 or 21 | Runs `frmsal.jar`, the desktop Forms Standalone Launcher. Host Java 26 is unverified with FSAL. | Windows: `winget install EclipseAdoptium.Temurin.17.JDK` (or 21). macOS: `brew install openjdk@17` |
+| **Python (host runner)** | 3.8+ | Runs the skill scripts. Windows: use `python` or `py -3` (the examples in this repo use `python3`). | Windows: `winget install Python.Python.3.12` or Python.org. macOS: Homebrew |
 
 ### 2.2 Container Images
 
@@ -87,6 +93,32 @@ Mounted on-demand into `/oracle_home:Z`:
 | **Oracle Common JARs**| `oracle_common/jlib/ewt3.jar`, `share.jar`, `jewt4.jar`, `ohj.jar`, `help-share.jar`, `oracle_ice.jar` | Oracle Extended Windowing Toolkit (EWT) and help system. |
 | **Forms2XML JARs** | `jlib/frmxmltools.jar`, `jlib/frmjdapi.jar` | Oracle JDAPI object model and XML serializer. |
 
+### 2.4 Oracle Installers Staged for the 14c Build (`oracle-reference-stack/installer/`)
+
+Gitignored. Never commit. Source: Oracle eDelivery (Oracle sign-in required) and Oracle JDK archive.
+
+| File | Source | Used by | Platform |
+| :--- | :--- | :--- | :--- |
+| `V1045135-01.zip` → `fmw_14.1.2.0.0_infrastructure.jar` | eDelivery, Linux x86-64 | Stage 1 WebLogic/FMW Infrastructure | Linux x86-64 on Windows and macOS (use Linux files for the container, never the Windows `.exe`) |
+| `V1045121-01.zip` → `fmw_14.1.2.0.0_fr_linux64.bin` | eDelivery, Linux x86-64 | Stage 2 Forms & Reports | Same as above. Part number to be re-confirmed against the eDelivery listing |
+| `jdk-17.0.12_linux-x64_bin.tar.gz` | Oracle JDK 17 archive | `Containerfile.14c` (container JDK) | Same as above (Linux x64, not the host JDK) |
+| Response files (`oraInst.loc`, `infra14c_silent.rsp`, `forms14c_silent.rsp`) | Committed as templates in `oracle-reference-stack/installer-templates/`; copied into `installer/` | Stage 1 and 2 silent installs | Verified: both installs accepted these files |
+
+Verified on Windows (WSL, Podman) 2026-11-13: Stage 1 (FMW Infrastructure 14.1.2.0.0) and Stage 2 (Forms & Reports 14.1.2.0.0) both logged success into `oracle_home_14c/` (2.8 GB after Stage 1). Stage 2's `.bin` needs `chmod +x` on the staged copy; the extracted zip does not keep the execute bit.
+
+### 2.5 Container Image Versions (verified or pending)
+
+| Image | Tag | Status |
+| :--- | :--- | :--- |
+| `forms-converter-14c:latest` (built here) | Local build from `Containerfile.14c` | Built on Windows WSL (798 MB). Stage 1 and Stage 2 installs ran in containers from this image |
+| `container-registry.oracle.com/database/free` | `latest-lite` | Verified on Windows WSL (2026-11-13): starts, `forms_user` schema and sample queries work on port 1521. The banner says "Oracle AI Database 26ai Free", version `23.0.0.0.0`. The repo docs say 23ai. Needs `XDG_RUNTIME_DIR` and `containers/networks` (see WINDOWS-PODMAN-SETUP §3) |
+| `oracle-reference-stack/sql/seed_forms_user.sql` | Committed | Creates `forms_user` (dev password `Welcome1`), tablespace `FORMS_DATA`, tables and sample rows |
+| `container-registry.oracle.com/os/oraclelinux` | `8-slim` | Base image for both Containerfiles |
+
+### 2.6 Windows Filesystem Limits (verified)
+
+- The Windows drive is mounted into WSL over 9p (`/mnt/c`). Bind-mounting `oracle-reference-stack/oracle_home_14c` from `/mnt/c` **does not support `chmod +x`**. The container (UID 1000) got `Operation not permitted`. Install targets need Linux metadata (exec bits, symlinks, ownership). Options: a WSL ext4 path or a named Podman volume. The metadata mount option is not yet tested.
+
 ---
 
 ## 3. Track 2: Pure-Native Rust Workspace (`oracle-forms-workbench`)
@@ -97,6 +129,33 @@ Mounted on-demand into `/oracle_home:Z`:
 | :--- | :--- | :--- | :--- |
 | **Rust Compiler (`rustc`)** | 1.75.0+ | Stable (Edition 2021) | **Zero JVM, zero Node.js, zero Oracle Client runtime required.** |
 | **Cargo** | 1.75.0+ | Stable | Workspace manager. |
+| **MSVC linker and Windows SDK** (Windows only) | Visual Studio 2022/18 "Desktop development with C++" workload; Windows SDK 10.0.19041+ | Stable | Required by `link.exe` for build scripts. Verified on this machine: `rustc 1.94.1`, Windows SDK 10.0.19041.0, MSVC 14.51.36231. `msvcrt.lib` is in `VC\Tools\MSVC\<ver>\lib\onecore\x64`, which the default linker path does not search. The install here lacks `vcvarsall.bat`, so `vcvars64.bat` cannot load the environment. Setting `LIB` to the onecore, ucrt, and um x64 folders fixes the link (see below). |
+
+Windows link-environment workaround: set `LIB` to `...\VC\Tools\MSVC\<ver>\lib\onecore\x64;...\Windows Kits\10\Lib\<sdk>\ucrt\x64;...\Windows Kits\10\Lib\<sdk>\um\x64`. With that set, the link succeeds, but the C compile of `aws-lc-sys` (jitterentropy) fails with `Cannot open include file: 'stdint.h'`. The VS install is also missing the C/C++ headers (`vcruntime.h` is not under `VC\Tools\MSVC\<ver>\include`) and the SDK UCRT headers (`Windows Kits\10\Include\<sdk>\ucrt\stdint.h` is absent). Environment variables cannot fix that. Repair the install in Visual Studio Installer ("Modify" → "Desktop development with C++" plus a Windows 11 SDK component), then rerun `cargo check` and `cargo test` from a clean `vcvars64.bat` environment. Status: **blocked on the VS repair**, pending the elevated repair below.
+
+**Why the Windows build needs Visual Studio.** The default Rust target on Windows is `x86_64-pc-windows-msvc`. Rust links with `link.exe` and uses the MSVC C runtime and Windows SDK. The `aws-lc-sys` crate (pulled in by the TLS stack) also compiles C code with `cl.exe`, which needs the MSVC and SDK headers (`stdint.h`, `vcruntime.h`). Visual Studio is therefore required for the native Windows build. The alternative that avoids it is building inside WSL Ubuntu with a Linux Rust toolchain (rustup), which has gcc already installed.
+
+**Repair command (run PowerShell as Administrator).** A passive or quiet installer run must be elevated from the start. Running it unelevated exits with code 5007:
+
+```powershell
+& "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vs_installer.exe" modify `
+  --installPath "C:\Program Files\Microsoft Visual Studio\18\Community" `
+  --add Microsoft.VisualStudio.Workload.NativeDesktop `
+  --add Microsoft.VisualStudio.Component.Windows10SDK.19041 `
+  --includeRecommended --passive --norestart
+```
+
+After the repair, confirm `stdint.h` exists under the SDK `ucrt` include folder and `vcruntime.h` under `VC\Tools\MSVC\<ver>\include`, then run `cargo check` and `cargo test` from the repo root.
+
+**WSL alternative (no admin rights, no Visual Studio):**
+
+```bash
+curl https://sh.rustup.rs -sSf | sh -s -- -y
+source "$HOME/.cargo/env"
+cd /mnt/c/Users/<user>/source/repos/oracle-forms-workbench && cargo check && cargo test
+```
+
+The first build is slow. Use a clone under the WSL home directory if `/mnt/c` builds are slow.
 
 ### 3.2 Cargo Dependency Bill of Materials
 
